@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- 1. ACESSO & SEGURANÇA ---
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  password        String
+  role            String
+  twoFactorSecret String?
+  storeId         String?
+  store           Store?   @relation(fields: [storeId], references: [id])
+  createdAt       DateTime @default(now())
+}
+
+model Store {
+  id              String   @id @default(uuid())
+  name            String
+  cnpj            String?
+  cityNormalized  String?
+  whatsappNumbers StoreWhatsappNumber[]
+  goals           StoreGoal[]
+  users           User[]
+  customers       Customer[]
+  transactions    Transaction[]
+  campaigns       Campaign[]
+}
+
+// --- 2. CLIENTES ---
+model Customer {
+  id              String   @id @default(uuid())
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id])
+  externalId      String?
+  name            String
+  
+  // AQUI ESTAVA O ERRO. ADICIONE O @unique NO FINAL
+  email           String?  @unique 
+  
+  phone           String?
+  cpf             String?
+  birthDate       DateTime?
+  age             Int?
+  city            String?
+  rfmScoreId      String?
+  rfmScore        RfmScore? @relation(fields: [rfmScoreId], references: [id])
+  propensityScore Float?
+  propensityLabel String?
+  isRegistrationComplete Boolean @default(false)
+  dataQualityIssues      Json?
+  events          CustomerEvent[]
+  transactions    Transaction[]
+  rfmHistory      RfmHistory[]
+  responses       SurveyResponse[]
+  conversations   Conversation[]
+}
+
+model CustomerEvent {
+  id          String   @id @default(uuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  eventType   String
+  payload     Json?
+  createdAt   DateTime @default(now())
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id])
+  salespersonId String?
+  totalValue    Decimal
+  items         Json
+  date          DateTime
+}
+
+// --- 3. SEGMENTAÇÃO ---
+model Segment {
+  id          String   @id @default(uuid())
+  name        String
+  logic       String
+  rules       Json
+  isDynamic   Boolean  @default(true)
+}
+
+// --- 4. CAMPANHAS ---
+model Campaign {
+  id                String   @id @default(uuid())
+  storeId           String
+  store             Store    @relation(fields: [storeId], references: [id])
+  name              String
+  channel           String
+  status            String
+  attributionWindow Int      @default(7)
+  conversionTrigger String
+  schedules         CampaignSchedule[]
+  metrics           CampaignMetric?
+  contents          CampaignContent[]
+}
+
+model CampaignSchedule {
+  id          String   @id @default(uuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  sendDate    DateTime
+}
+
+model CampaignContent {
+  id          String   @id @default(uuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  subject     String?
+  body        String
+  mediaUrl    String?
+}
+
+model CampaignMetric {
+  id                String   @id @default(uuid())
+  campaignId        String   @unique
+  campaign          Campaign @relation(fields: [campaignId], references: [id])
+  sentCount         Int      @default(0)
+  revenueInfluenced Decimal  @default(0.0)
+  repurchaseRate    Float    @default(0.0)
+}
+
+// --- 5. RFM ---
+model RfmScore {
+  id           String   @id @default(uuid())
+  name         String
+  minRecency   Int
+  maxRecency   Int
+  customers    Customer[]
+}
+
+model RfmHistory {
+  id           String   @id @default(uuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  oldScoreId   String?
+  newScoreId   String
+  changedAt    DateTime @default(now())
+}
+
+// --- 6. WHATSAPP ---
+model StoreWhatsappNumber {
+  id             String   @id @default(uuid())
+  storeId        String
+  store          Store    @relation(fields: [storeId], references: [id])
+  number         String
+  provider       String
+  routingRules   Json?
+}
+
+model Conversation {
+  id             String   @id @default(uuid())
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id])
+  storeId        String
+  status         String
+  messages       Json
+}
+
+// --- 7. PESQUISAS ---
+model SurveyResponse {
+  id             String   @id @default(uuid())
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id])
+  salespersonId  String?
+  score          Int
+  comment        String?
+  channel        String
+  createdAt      DateTime @default(now())
+}
+
+// --- 8. METAS ---
+model StoreGoal {
+  id             String   @id @default(uuid())
+  storeId        String
+  store          Store    @relation(fields: [storeId], references: [id])
+  month          Int
+  year           Int
+  whatsappLimit  Int
+  emailLimit     Int
+}

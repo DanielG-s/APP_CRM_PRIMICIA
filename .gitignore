@@ -1,0 +1,20 @@
+# Dependências Pesadas
+node_modules
+/backend/node_modules
+/frontend/node_modules
+
+# Arquivos de Build
+.next
+dist
+build
+
+# Arquivos de Sistema
+.DS_Store
+Thumbs.db
+
+# Segredos e Senhas (MUITO IMPORTANTE)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
