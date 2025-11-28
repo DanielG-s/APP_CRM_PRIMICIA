@@ -157,9 +157,8 @@ export default function RetailResultsPage() {
   };
   const toggleChannelDraft = (channel: string) => {
     setDraftChannelFilters((prev) => {
-      const next = prev.includes(channel) ? prev.filter((f) => f !== channel) : [...prev, channel];
-      setActiveFilters(next);
-      return next;
+      if (prev.includes(channel)) return prev.filter((f) => f !== channel);
+      return [...prev, channel];
     });
   };
   const applyChannelFilter = () => {
