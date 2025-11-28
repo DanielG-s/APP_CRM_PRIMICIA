@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, 
   ShoppingBag, TrendingUp, DollarSign, ArrowUp, RefreshCw, Activity, Wallet, 
@@ -11,16 +11,6 @@ import Link from 'next/link';
 import { 
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Area, AreaChart 
 } from 'recharts';
-
-function useDebounce(value: string, delay = 120) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const h = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(h);
-  }, [value, delay]);
-  return debounced;
-}
-
 
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
@@ -71,11 +61,12 @@ export default function RetailResultsPage() {
 
   // Paginação e Busca
   const [storeSearch, setStoreSearch] = useState("");
+  const deferredStoreSearch = useDeferredValue(storeSearch);
   const [storePage, setStorePage] = useState(1);
   const [storesPerPage, setStoresPerPage] = useState(5);
-  const [staticStores, setStaticStores] = useState<any[]>([]); 
+  const [staticStores, setStaticStores] = useState<any[]>([]);
   const [channelSearchTerm, setChannelSearchTerm] = useState("");
-  const channelSearch = useDebounce(channelSearchTerm, 120);
+  const deferredChannelSearch = useDeferredValue(channelSearchTerm);
 
 
   // Refs
@@ -160,9 +151,9 @@ export default function RetailResultsPage() {
   }
 
   // --- ACTIONS CANAIS ---
-  const openChannelFilter = () => { 
-      setDraftChannelFilters([...activeFilters]); 
-      setIsChannelFilterOpen(!isChannelFilterOpen); 
+  const openChannelFilter = () => {
+      setDraftChannelFilters([...activeFilters]);
+      setIsChannelFilterOpen(!isChannelFilterOpen);
   };
   const toggleChannelDraft = (channel: string) => {
     setDraftChannelFilters((prev) => {
@@ -170,10 +161,16 @@ export default function RetailResultsPage() {
       return [...prev, channel];
     });
   };
-  const applyChannelFilter = () => { 
-      setActiveFilters(draftChannelFilters); 
-      setIsChannelFilterOpen(false); 
+  const applyChannelFilter = () => {
+      setActiveFilters(draftChannelFilters);
+      setIsChannelFilterOpen(false);
   };
+
+  useEffect(() => {
+    if (isChannelFilterOpen) {
+      setDraftChannelFilters(activeFilters);
+    }
+  }, [isChannelFilterOpen, activeFilters]);
   
   const handleExportCSV = () => {
     if (!allTableData.length) return;
@@ -278,23 +275,23 @@ export default function RetailResultsPage() {
     
     // Lista da Tabela
     let tableList = [...eligibleChannels].sort((a: any, b: any) => b.value - a.value);
-    if (channelSearch) {
-        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(channelSearch.toLowerCase()));
+    if (deferredChannelSearch) {
+        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(deferredChannelSearch.toLowerCase()));
     }
 
     return { visibleCards: renderList, othersCard: finalOthersCard, allTableData: tableList };
-  }, [data, activeFilters, channelSearch]);
+  }, [data, activeFilters, deferredChannelSearch]);
 
   // Lógica Paginação Lojas
   const { paginatedStores, totalStores, totalStorePages } = useMemo(() => {
     let filteredStores = staticStores;
-    if (storeSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase()));
+    if (deferredStoreSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(deferredStoreSearch.toLowerCase()));
     const totalStores = filteredStores.length;
     const totalStorePages = Math.ceil(totalStores / storesPerPage);
     const startIndex = (storePage - 1) * storesPerPage;
     const paginatedStores = filteredStores.slice(startIndex, startIndex + storesPerPage);
     return { paginatedStores, totalStores, totalStorePages };
-  }, [staticStores, storeSearch, storePage, storesPerPage]);
+  }, [staticStores, deferredStoreSearch, storePage, storesPerPage]);
 
   if (loading) return <div className="flex h-screen items-center justify-center text-slate-400 bg-[#f8fafc]">Carregando dados...</div>;
   if (!data) return <div className="flex h-screen items-center justify-center text-slate-500 bg-[#f8fafc]">Erro ao carregar.</div>;
