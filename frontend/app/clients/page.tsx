@@ -5,11 +5,14 @@ import {
   Home, Users, BarChart2, MessageCircle, Target, 
   Calendar, Bell, LogOut, Search, Filter 
 } from 'lucide-react';
-import Link from 'next/link'; // Importante para navegação
+import Link from 'next/link';
 
 export default function ClientsPage() {
   const [clientes, setClientes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // 1. Estado para guardar o texto da busca
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     async function fetchClientes() {
@@ -26,54 +29,39 @@ export default function ClientsPage() {
     fetchClientes();
   }, []);
 
+  // 2. A Lógica Mágica do Filtro
+  const clientesFiltrados = clientes.filter(cliente => {
+    const texto = searchTerm.toLowerCase(); // Transforma tudo em minúsculo para facilitar
+    
+    // Verifica se o texto digitado existe no nome, email ou cpf
+    return (
+      cliente.name.toLowerCase().includes(texto) ||
+      (cliente.email && cliente.email.toLowerCase().includes(texto)) ||
+      (cliente.cpf && cliente.cpf.includes(texto))
+    );
+  });
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-slate-900">
       
-      {/* --- SIDEBAR (Idêntica à Dashboard) --- */}
+      {/* SIDEBAR */}
       <aside className="w-64 bg-[#1e2336] text-white flex flex-col shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-gray-700">
           <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white mr-3">P</div>
           <span className="font-bold text-lg tracking-wide">PRIMÍCIA</span>
         </div>
-
         <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-          {/* Usamos Link para navegar entre as páginas */}
-          <Link href="/">
-            <NavItem icon={<Home size={20}/>} label="Visão Geral" />
-          </Link>
-          
-          <Link href="/clients">
-            <NavItem icon={<Users size={20}/>} label="Clientes" active />
-          </Link>
-
-          {/* Link para a tela de Relatórios */}
-          <Link href="/reports">
-            <NavItem icon={<BarChart2 size={20}/>} label="Relatórios" />
-          </Link>
-          
+          <Link href="/"><NavItem icon={<Home size={20}/>} label="Visão Geral" /></Link>
+          <Link href="/clients"><NavItem icon={<Users size={20}/>} label="Clientes" active /></Link>
+          <Link href="/reports"><NavItem icon={<BarChart2 size={20}/>} label="Relatórios" /></Link>
           <div className="pt-4 pb-2 pl-3 text-xs font-semibold text-gray-500 uppercase">Marketing</div>
-
-          {/* Link para a tela de Capmanhas */}
-          <Link href="/campaigns">
-          <NavItem icon={<MessageCircle size={20}/>} label="Campanhas" />
-          </Link>
-
+          <Link href="/campaigns"><NavItem icon={<MessageCircle size={20}/>} label="Campanhas" /></Link>
           <NavItem icon={<Calendar size={20}/>} label="Agenda" />
           <NavItem icon={<Target size={20}/>} label="Metas" />
         </nav>
-
-        <div className="p-4 border-t border-gray-700 bg-[#151926]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gray-600 flex items-center justify-center text-xs">DA</div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium truncate">Daniel Admin</p>
-              <p className="text-xs text-gray-500 truncate">Master</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
-      {/* --- ÁREA PRINCIPAL --- */}
+      {/* ÁREA PRINCIPAL */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
           <div className="text-sm text-gray-500">
@@ -86,15 +74,18 @@ export default function ClientsPage() {
 
         <div className="flex-1 p-8 overflow-auto">
           
-          {/* Cabeçalho da Tabela + Busca */}
+          {/* Cabeçalho + Busca */}
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Meus Clientes</h1>
             <div className="flex gap-3">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    {/* 3. O Input agora atualiza o estado */}
                     <input 
                         type="text" 
-                        placeholder="Buscar por nome ou CPF..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Buscar por nome, email ou CPF..." 
                         className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm w-64"
                     />
                 </div>
@@ -104,7 +95,7 @@ export default function ClientsPage() {
             </div>
           </div>
 
-          {/* TABELA DE DADOS */}
+          {/* TABELA */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold">
@@ -119,10 +110,10 @@ export default function ClientsPage() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                     <tr><td colSpan={5} className="text-center py-8 text-gray-500">Carregando clientes...</td></tr>
-                ) : clientes.length === 0 ? (
+                ) : clientesFiltrados.length === 0 ? ( // Usa a lista filtrada
                     <tr><td colSpan={5} className="text-center py-8 text-gray-500">Nenhum cliente encontrado.</td></tr>
                 ) : (
-                    clientes.map((cliente) => (
+                    clientesFiltrados.map((cliente) => ( // Mapeia a lista filtrada
                         <tr key={cliente.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                             <div className="font-medium text-gray-900">{cliente.name}</div>

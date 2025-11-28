@@ -6,6 +6,7 @@ import { PrismaService } from './prisma/prisma.service';
 import { SalesModule } from 'src/modules/erp/sales/sales.module'; 
 import { CustomersModule } from './modules/erp/customers/customers.module';
 import { IntelligenceModule } from './modules/crm/intelligence/intelligence.module';
+import { CampaignsModule } from './modules/marketing/campaigns/campaigns.module';
 
 @Global()
 @Module({
@@ -13,6 +14,7 @@ import { IntelligenceModule } from './modules/crm/intelligence/intelligence.modu
     SalesModule, 
     CustomersModule,
     IntelligenceModule,
+    CampaignsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

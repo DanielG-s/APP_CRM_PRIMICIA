@@ -2,12 +2,55 @@
 
 import React, { useState } from 'react';
 import { 
-  Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, LogOut, Send, Smartphone, Mail 
+  Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, Send, Smartphone, Mail 
 } from 'lucide-react';
 import Link from 'next/link';
 
+// ⚠️ IMPORTANTE: Cole aqui o ID da sua Loja Matriz (que pegamos no Prisma Studio)
+const STORE_ID = "7921d645-a2f8-4301-b892-0c1a12cbb6e0"; 
+
 export default function CampaignsPage() {
-  const [channel, setChannel] = useState('whatsapp'); // 'whatsapp' ou 'email'
+  const [channel, setChannel] = useState('whatsapp');
+  const [name, setName] = useState('');
+  const [segment, setSegment] = useState('Todos os Clientes');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSend() {
+    if (!name || !message) {
+      alert("Por favor, preencha o nome e a mensagem.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3000/webhook/marketing/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          channel,
+          segment,
+          message,
+          storeId: STORE_ID
+        })
+      });
+
+      if (response.ok) {
+        alert("✅ Campanha Agendada com Sucesso!");
+        setName(''); // Limpa o formulário
+        setMessage('');
+      } else {
+        alert("❌ Erro ao agendar campanha.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Erro de conexão com o servidor.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-slate-900">
@@ -22,10 +65,8 @@ export default function CampaignsPage() {
           <Link href="/"><NavItem icon={<Home size={20}/>} label="Visão Geral" /></Link>
           <Link href="/clients"><NavItem icon={<Users size={20}/>} label="Clientes" /></Link>
           <Link href="/reports"><NavItem icon={<BarChart2 size={20}/>} label="Relatórios" /></Link>
-          
           <div className="pt-4 pb-2 pl-3 text-xs font-semibold text-gray-500 uppercase">Marketing</div>
           <Link href="/campaigns"><NavItem icon={<MessageCircle size={20}/>} label="Campanhas" active /></Link>
-          
           <NavItem icon={<Calendar size={20}/>} label="Agenda" />
           <NavItem icon={<Target size={20}/>} label="Metas" />
         </nav>
@@ -49,7 +90,7 @@ export default function CampaignsPage() {
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
               
-              {/* 1. Escolha do Canal */}
+              {/* Escolha do Canal */}
               <div className="mb-8">
                 <label className="block text-sm font-medium text-gray-700 mb-3">Canal de Envio</label>
                 <div className="flex gap-4">
@@ -70,20 +111,29 @@ export default function CampaignsPage() {
                 </div>
               </div>
 
-              {/* 2. Configurações */}
+              {/* Campos do Formulário */}
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Campanha</label>
-                  <input type="text" placeholder="Ex: Promoção de Inverno - VIPs" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <input 
+                    type="text" 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Promoção de Inverno - VIPs" 
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" 
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Público Alvo (Segmento)</label>
-                  <select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Público Alvo</label>
+                  <select 
+                    value={segment}
+                    onChange={(e) => setSegment(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                  >
                     <option>Todos os Clientes</option>
                     <option>⭐ Clientes VIP (RFM)</option>
                     <option>⚠️ Clientes em Risco</option>
-                    <option>🎂 Aniversariantes do Mês</option>
                   </select>
                 </div>
 
@@ -92,22 +142,24 @@ export default function CampaignsPage() {
                   <div className="relative">
                     <textarea 
                       rows={5} 
-                      placeholder={channel === 'whatsapp' ? "Olá! Temos uma oferta especial..." : "Assunto: Oferta Especial..."}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Escreva sua mensagem aqui..."
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     ></textarea>
-                    <span className="absolute bottom-3 right-3 text-xs text-gray-400">0 / 160 caracteres</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Dica: Use <strong>{`{nome}`}</strong> para personalizar com o nome do cliente.
-                  </p>
                 </div>
               </div>
 
-              {/* Botão de Ação */}
+              {/* Botão de Envio */}
               <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
-                <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all">
+                <button 
+                  onClick={handleSend}
+                  disabled={loading}
+                  className={`bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
                   <Send size={18} />
-                  Agendar Disparo
+                  {loading ? 'Agendando...' : 'Agendar Disparo'}
                 </button>
               </div>
 
