@@ -56,8 +56,7 @@ export default function RetailResultsPage() {
   // Filtros Canais
   const [isChannelFilterOpen, setIsChannelFilterOpen] = useState(false);
   const PRIMITIVE_CHANNELS = ['Agenda', 'SMS', 'E-mail', 'WhatsApp', 'Mobile Push'];
-  const [activeFilters, setActiveFilters] = useState<string[]>(['Agenda', 'SMS', 'E-mail', 'WhatsApp', 'Mobile Push']);
-  const [draftChannelFilters, setDraftChannelFilters] = useState<string[]>([]);
+  const [activeFilters, setActiveFilters] = useState<string[]>([...PRIMITIVE_CHANNELS]);
 
   // Paginação e Busca
   const [storeSearch, setStoreSearch] = useState("");
@@ -66,7 +65,6 @@ export default function RetailResultsPage() {
   const [storesPerPage, setStoresPerPage] = useState(5);
   const [staticStores, setStaticStores] = useState<any[]>([]);
   const [channelSearchTerm, setChannelSearchTerm] = useState("");
-  const deferredChannelSearch = useDeferredValue(channelSearchTerm);
 
 
   // Refs
@@ -116,8 +114,8 @@ export default function RetailResultsPage() {
         setIsChannelFilterOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
   // --- ACTIONS GLOBAIS ---
@@ -152,25 +150,14 @@ export default function RetailResultsPage() {
 
   // --- ACTIONS CANAIS ---
   const openChannelFilter = () => {
-      setDraftChannelFilters([...activeFilters]);
-      setIsChannelFilterOpen(!isChannelFilterOpen);
+      setIsChannelFilterOpen((prev) => !prev);
   };
-  const toggleChannelDraft = (channel: string) => {
-    setDraftChannelFilters((prev) => {
-      if (prev.includes(channel)) return prev.filter((f) => f !== channel);
-      return [...prev, channel];
-    });
+  const toggleChannelFilter = (channel: string) => {
+    setActiveFilters((prev) =>
+      prev.includes(channel) ? prev.filter((f) => f !== channel) : [...prev, channel]
+    );
   };
-  const applyChannelFilter = () => {
-      setActiveFilters(draftChannelFilters);
-      setIsChannelFilterOpen(false);
-  };
-
-  useEffect(() => {
-    if (isChannelFilterOpen) {
-      setDraftChannelFilters(activeFilters);
-    }
-  }, [isChannelFilterOpen, activeFilters]);
+  const closeChannelFilter = () => setIsChannelFilterOpen(false);
   
   const handleExportCSV = () => {
     if (!allTableData.length) return;
@@ -275,17 +262,19 @@ export default function RetailResultsPage() {
     
     // Lista da Tabela
     let tableList = [...eligibleChannels].sort((a: any, b: any) => b.value - a.value);
-    if (deferredChannelSearch) {
-        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(deferredChannelSearch.toLowerCase()));
+    const normalizedChannelSearch = channelSearchTerm.trim().toLowerCase();
+    if (normalizedChannelSearch) {
+        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(normalizedChannelSearch));
     }
 
     return { visibleCards: renderList, othersCard: finalOthersCard, allTableData: tableList };
-  }, [data, activeFilters, deferredChannelSearch]);
+  }, [data, activeFilters, channelSearchTerm]);
 
   // Lógica Paginação Lojas
   const { paginatedStores, totalStores, totalStorePages } = useMemo(() => {
     let filteredStores = staticStores;
-    if (deferredStoreSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(deferredStoreSearch.toLowerCase()));
+    const normalizedStoreSearch = storeSearch.trim().toLowerCase();
+    if (normalizedStoreSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(normalizedStoreSearch));
     const totalStores = filteredStores.length;
     const totalStorePages = Math.ceil(totalStores / storesPerPage);
     const startIndex = (storePage - 1) * storesPerPage;
@@ -410,9 +399,9 @@ export default function RetailResultsPage() {
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                             e.stopPropagation();
-                            toggleChannelDraft(ch);
+                            toggleChannelFilter(ch);
                         }}
-                      ><div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${draftChannelFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{draftChannelFilters.includes(ch) && <Check size={14} className="text-white" />}</div><span className="text-sm text-slate-700 font-medium">{ch}</span></div>))}</div><div className="border-t mt-3 pt-3 flex justify-end gap-2"><button className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2" onClick={() => setIsChannelFilterOpen(false)}>Cancelar</button><button className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg w-full transition-colors" onClick={applyChannelFilter}>Aplicar</button></div></div>)}
+                      ><div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${activeFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{activeFilters.includes(ch) && <Check size={14} className="text-white" />}</div><span className="text-sm text-slate-700 font-medium">{ch}</span></div>))}</div><div className="border-t mt-3 pt-3 flex justify-end gap-2"><button className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2" onClick={closeChannelFilter}>Fechar</button></div></div>)}
                 </div>
             </div>
             <div className={`grid gap-6 mb-8 ${getGridClass(visibleCards.length)}`}>
