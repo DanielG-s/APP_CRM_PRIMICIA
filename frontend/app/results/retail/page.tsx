@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, 
   ShoppingBag, TrendingUp, DollarSign, ArrowUp, RefreshCw, Activity, Wallet, 
@@ -60,6 +60,7 @@ export default function RetailResultsPage() {
 
   // Paginação e Busca
   const [storeSearch, setStoreSearch] = useState("");
+  const deferredStoreSearch = useDeferredValue(storeSearch);
   const [storePage, setStorePage] = useState(1);
   const [storesPerPage, setStoresPerPage] = useState(5);
   const [staticStores, setStaticStores] = useState<any[]>([]);
@@ -279,7 +280,7 @@ export default function RetailResultsPage() {
     const startIndex = (storePage - 1) * storesPerPage;
     const paginatedStores = filteredStores.slice(startIndex, startIndex + storesPerPage);
     return { paginatedStores, totalStores, totalStorePages };
-  }, [staticStores, storeSearch, storePage, storesPerPage]);
+  }, [staticStores, deferredStoreSearch, storePage, storesPerPage]);
 
   if (loading) return <div className="flex h-screen items-center justify-center text-slate-400 bg-[#f8fafc]">Carregando dados...</div>;
   if (!data) return <div className="flex h-screen items-center justify-center text-slate-500 bg-[#f8fafc]">Erro ao carregar.</div>;
