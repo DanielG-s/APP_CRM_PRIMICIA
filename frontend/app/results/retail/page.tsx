@@ -235,7 +235,7 @@ export default function RetailResultsPage() {
     // 1. Filtro Permissivo (Lógica "OU")
     const eligibleChannels = channels.filter((ch: any) => {
         if (ch.name === 'Outros') return true;
-        const parts = ch.name.split(' + ').map(p => p.trim());
+        const parts = ch.name.split(' + ').map((p: string) => p.trim());
         const isVisible = parts.some((part: string) => activeFilters.includes(part));
         return isVisible;
     });
@@ -384,7 +384,7 @@ export default function RetailResultsPage() {
             </div>
           </section>
 
-          {/* 6. IMPACTO POR CANAL (SMART GRID) - VERSÃO CORRIGIDA */}
+          {/* 6. IMPACTO POR CANAL (SMART GRID)*/}
           <section>
               <div className="flex justify-between items-center mt-8 mb-6 relative z-50">
                   <SectionTitle title="Impacto por canal" tooltip={TEXTS.impacto_canal} />
@@ -477,56 +477,12 @@ export default function RetailResultsPage() {
                           <Download size={18} /> Exportar CSV
                       </button>
                   </div>
-                  
-                  <table className="w-full text-sm text-left text-slate-600">
-                      <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          <tr>
-                              <th className="px-6 py-4">Canal</th>
-                              <th className="px-6 py-4">Valor</th>
-                              <th className="px-6 py-4 text-right">% Infl.</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                          {allTableData
-                              .filter((ch:any) => 
-                                  channelSearchTerm === "" || 
-                                  ch.name.toLowerCase().includes(channelSearchTerm.toLowerCase())
-                              )
-                              .map((ch: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
-                                  <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
-                                      <div className="p-1.5 rounded bg-slate-100 text-slate-500">
-                                          {CHANNEL_ICONS[ch.name] || <Target size={16} />}
-                                      </div> 
-                                      {ch.name}
-                                  </td>
-                                  <td className="px-6 py-4 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td>
-                                  <td className="px-6 py-4 text-right">
-                                      <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">{ch.percent}%</span>
-                                  </td>
-                              </tr>
-                          ))}
-                          {allTableData.filter((ch:any) => channelSearchTerm === "" || ch.name.toLowerCase().includes(channelSearchTerm.toLowerCase())).length === 0 && (
-                              <tr>
-                                  <td colSpan={3} className="px-6 py-8 text-center text-slate-400">
-                                      Nenhum canal encontrado para "{channelSearchTerm}"
-                                  </td>
-                              </tr>
-                          )}
-                      </tbody>
-                  </table>
+                  <ChannelsTable data={allTableData} />
               </div>
           </section>
 
           {/* 7. LISTA DE LOJAS */}
-          <section>
-            <SectionTitle title="Lista de lojas" />
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 relative"><Search className="absolute left-10 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" value={storeSearch} onChange={(e) => {setStoreSearch(e.target.value); setStorePage(1)}} placeholder="Buscar por loja..." className="pl-12 pr-4 py-3 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" /></div>
-                <table className="w-full text-sm text-left"><thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider"><tr><th className="px-6 py-4">Nome da Loja</th><th className="px-6 py-4">Receita</th><th className="px-6 py-4">Influência</th><th className="px-6 py-4">Transações</th><th className="px-6 py-4">Ticket Médio</th></tr></thead><tbody className="divide-y divide-slate-100">{paginatedStores.map((store: any) => (<tr key={store.id} className="hover:bg-indigo-50/30 transition-colors group"><td className="px-6 py-4"><div className="font-bold text-slate-800">{store.name}</div><div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {store.code}</div></td><td className="px-6 py-4 font-mono text-slate-600">R$ {store.revenue.toLocaleString('pt-BR', {maximumFractionDigits:0})}</td><td className="px-6 py-4"><div className="flex items-center gap-2"><span className="font-mono text-slate-600">R$ {store.revenueInfluenced.toLocaleString('pt-BR', {maximumFractionDigits:0})}</span><span className="text-[10px] font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full">{store.percentInfluenced}%</span></div></td><td className="px-6 py-4 text-slate-500">{store.transactions}</td><td className="px-6 py-4 font-mono text-slate-500">R$ {store.ticket.toFixed(2)}</td></tr>))}</tbody></table>
-                <div className="p-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500 bg-slate-50"><div className="flex items-center gap-2"><span>Lojas por página:</span><select value={storesPerPage} onChange={(e) => { setStoresPerPage(Number(e.target.value)); setStorePage(1); }} className="border rounded p-1 bg-white outline-none cursor-pointer hover:border-indigo-300"><option value="5">5</option><option value="10">10</option></select></div><div className="flex items-center gap-4"><span>{(storePage-1)*storesPerPage+1}-{Math.min(storePage*storesPerPage, totalStores)} de {totalStores}</span><div className="flex gap-1"><button disabled={storePage===1} onClick={()=>handleStorePageChange(storePage-1)} className="p-1.5 rounded bg-white border hover:bg-slate-100 disabled:opacity-50"><ChevronLeft size={14}/></button><span className="px-2 py-1.5 font-bold bg-indigo-600 text-white rounded">{storePage}</span><button disabled={storePage===totalStorePages} onClick={()=>handleStorePageChange(storePage+1)} className="p-1.5 rounded bg-white border hover:bg-slate-100 disabled:opacity-50"><ChevronRight size={14}/></button></div></div></div>
-            </div>
-          </section>
+          <StoresTableSection stores={staticStores} />
 
         </div>
       </main>
@@ -555,3 +511,176 @@ function SectionTitle({title, tooltip}: {title: string, tooltip?: string}) { ret
 const CustomTooltip = ({ active, payload, label, type }: any) => { if (active && payload && payload.length) { return (<div className="bg-slate-900/95 backdrop-blur text-white p-4 shadow-2xl rounded-xl text-sm z-50 border border-slate-800"><p className="font-bold text-slate-300 mb-2 text-xs uppercase tracking-wider">{label}</p>{payload.map((entry: any, index: number) => { let displayValue = entry.value; const isCurrency = type === 'currency' || (type !== 'number' && typeof entry.value === 'number' && entry.value > 100 && !entry.name.includes('Frequência') && !entry.name.includes('Peças') && !entry.name.includes('Transações') && !entry.name.includes('Consumidores')); if (typeof entry.value === 'number') displayValue = isCurrency ? `R$ ${entry.value.toLocaleString('pt-BR')}` : entry.value.toLocaleString('pt-BR'); return <div key={index} className="flex items-center gap-3 mb-1.5 last:mb-0"><div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" style={{ backgroundColor: entry.color }}></div><span className="text-slate-300">{entry.name}:</span><span className="font-bold text-white ml-auto">{displayValue}</span></div> })}</div>); } return null; };
 function MiniFilterButton({ label, active, onClick }: any) { return <button onClick={onClick} className={`px-4 py-2 text-xs font-bold rounded-full transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{label}</button> }
 function NavItem({ icon, label, active }: any) { return <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-gray-800 hover:text-white'}`}>{icon}<span className="text-sm font-medium">{label}</span></div> }
+function StoresTableSection({ stores }: { stores: any[] }) {
+    // Estado local - Ao digitar aqui, SÓ esse pedaço re-renderiza
+    const [search, setSearch] = useState("");
+    // useDeferredValue ajuda a interface responder rápido antes de filtrar
+    const deferredSearch = useDeferredValue(search);
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(5);
+
+    // Lógica de filtro e paginação isolada
+    const { paginatedStores, totalStores, totalPages } = useMemo(() => {
+        let filtered = stores;
+        const term = deferredSearch.trim().toLowerCase();
+        
+        if (term) {
+            filtered = stores.filter(s => s.name.toLowerCase().includes(term));
+        }
+
+        const total = filtered.length;
+        const pages = Math.ceil(total / perPage);
+        const start = (page - 1) * perPage;
+        const pagedData = filtered.slice(start, start + perPage);
+
+        return { paginatedStores: pagedData, totalStores: total, totalPages: pages };
+    }, [stores, deferredSearch, page, perPage]);
+
+    // Resetar página ao pesquisar
+    useEffect(() => { setPage(1); }, [deferredSearch]);
+
+    return (
+        <section>
+            <SectionTitle title="Lista de lojas" />
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
+                <div className="p-6 border-b border-slate-100 relative">
+                    <Search className="absolute left-10 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                        type="text" 
+                        value={search} 
+                        onChange={(e) => setSearch(e.target.value)} 
+                        placeholder="Buscar por loja..." 
+                        className="pl-12 pr-4 py-3 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" 
+                    />
+                </div>
+                
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        <tr>
+                            <th className="px-6 py-4">Nome da Loja</th>
+                            <th className="px-6 py-4">Receita</th>
+                            <th className="px-6 py-4">Influência</th>
+                            <th className="px-6 py-4">Transações</th>
+                            <th className="px-6 py-4">Ticket Médio</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {paginatedStores.map((store: any) => (
+                            <tr key={store.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                <td className="px-6 py-4">
+                                    <div className="font-bold text-slate-800">{store.name}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {store.code}</div>
+                                </td>
+                                <td className="px-6 py-4 font-mono text-slate-600">R$ {store.revenue.toLocaleString('pt-BR', {maximumFractionDigits:0})}</td>
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-slate-600">R$ {store.revenueInfluenced.toLocaleString('pt-BR', {maximumFractionDigits:0})}</span>
+                                        <span className="text-[10px] font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full">{store.percentInfluenced}%</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-slate-500">{store.transactions}</td>
+                                <td className="px-6 py-4 font-mono text-slate-500">R$ {store.ticket.toFixed(2)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {/* Footer da Tabela */}
+                <div className="p-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500 bg-slate-50">
+                    <div className="flex items-center gap-2">
+                        <span>Lojas por página:</span>
+                        <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className="border rounded p-1 bg-white outline-none cursor-pointer hover:border-indigo-300">
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <span>{(page-1)*perPage+1}-{Math.min(page*perPage, totalStores)} de {totalStores}</span>
+                        <div className="flex gap-1">
+                            <button disabled={page===1} onClick={()=>setPage(page-1)} className="p-1.5 rounded bg-white border hover:bg-slate-100 disabled:opacity-50"><ChevronLeft size={14}/></button>
+                            <span className="px-2 py-1.5 font-bold bg-indigo-600 text-white rounded">{page}</span>
+                            <button disabled={page===totalPages} onClick={()=>setPage(page+1)} className="p-1.5 rounded bg-white border hover:bg-slate-100 disabled:opacity-50"><ChevronRight size={14}/></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
+function ChannelsTable({ data }: { data: any[] }) {
+    // Estado local isolado
+    const [search, setSearch] = useState("");
+    const deferredSearch = useDeferredValue(search);
+
+    // Lógica de filtro local (super rápida)
+    const filteredData = useMemo(() => {
+        const term = deferredSearch.trim().toLowerCase();
+        if (!term) return data;
+        return data.filter(ch => ch.name.toLowerCase().includes(term));
+    }, [data, deferredSearch]);
+
+    // Função de exportar movida para cá (para exportar o que está sendo visto)
+    const handleExportCSV = () => {
+        if (!filteredData.length) return;
+        const headers = "Canal;Valor;Influencia\n";
+        const rows = filteredData.map((c:any) => `${c.name};${c.value};${c.percent}%`).join("\n");
+        const blob = new Blob([headers + rows], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = "canais.csv"; a.click();
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                        type="text" 
+                        placeholder="Buscar na tabela..." 
+                        value={search} 
+                        onChange={(e) => setSearch(e.target.value)} 
+                        className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" 
+                    />
+                </div>
+                <button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors">
+                    <Download size={18} /> Exportar CSV
+                </button>
+            </div>
+            
+            <table className="w-full text-sm text-left text-slate-600">
+                <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <tr>
+                        <th className="px-6 py-4">Canal</th>
+                        <th className="px-6 py-4">Valor</th>
+                        <th className="px-6 py-4 text-right">% Infl.</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {filteredData.map((ch: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                            <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
+                                <div className="p-1.5 rounded bg-slate-100 text-slate-500">
+                                    {CHANNEL_ICONS[ch.name] || <Target size={16} />}
+                                </div> 
+                                {ch.name}
+                            </td>
+                            <td className="px-6 py-4 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td>
+                            <td className="px-6 py-4 text-right">
+                                <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">{ch.percent}%</span>
+                            </td>
+                        </tr>
+                    ))}
+                    
+                    {filteredData.length === 0 && (
+                        <tr>
+                            <td colSpan={3} className="px-6 py-8 text-center text-slate-400">
+                                Nenhum canal encontrado para "{search}"
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+}
