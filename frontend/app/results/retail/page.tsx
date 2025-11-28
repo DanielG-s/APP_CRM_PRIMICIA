@@ -102,21 +102,23 @@ export default function RetailResultsPage() {
 
   useEffect(() => { fetchData(dateRange.start, dateRange.end, selectedStores); }, []);
 
-  // --- CLICK OUTSIDE ---
+  // --- CLICK OUTSIDE (CORRIGIDO PARA MOUSEDOWN) ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
+      // Filtros Globais
       if (dateRef.current && !dateRef.current.contains(event.target as Node)) setIsDateOpen(false);
       if (globalFilterRef.current && !globalFilterRef.current.contains(event.target as Node)) setIsFilterMenuOpen(false);
-      if (
-        channelFilterRef.current &&
-        !channelFilterRef.current.contains(event.target as Node)
-      ) {
+      
+      // Filtro de Canais (Lógica Blindada)
+      if (isChannelFilterOpen && channelFilterRef.current && !channelFilterRef.current.contains(event.target as Node)) {
         setIsChannelFilterOpen(false);
       }
     }
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, []);
+    
+    // Usar mousedown ao invés de click previne conflitos de renderização
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isChannelFilterOpen, isDateOpen, isFilterMenuOpen]); // Dependências adicionadas para garantir atualização
 
   // --- ACTIONS GLOBAIS ---
   const handleApplyGlobalFilters = () => {
@@ -149,15 +151,11 @@ export default function RetailResultsPage() {
   }
 
   // --- ACTIONS CANAIS ---
-  const openChannelFilter = () => {
-      setIsChannelFilterOpen((prev) => !prev);
-  };
   const toggleChannelFilter = (channel: string) => {
     setActiveFilters((prev) =>
       prev.includes(channel) ? prev.filter((f) => f !== channel) : [...prev, channel]
     );
   };
-  const closeChannelFilter = () => setIsChannelFilterOpen(false);
   
   const handleExportCSV = () => {
     if (!allTableData.length) return;
@@ -168,7 +166,7 @@ export default function RetailResultsPage() {
     const a = document.createElement('a'); a.href = url; a.download = "canais.csv"; a.click();
   };
   
-  // Paginação Lojas (Dentro do componente)
+  // Paginação Lojas
   const handleStorePageChange = (newPage: number) => { 
       if (newPage >= 1 && newPage <= totalStorePages) setStorePage(newPage); 
   };
@@ -386,35 +384,138 @@ export default function RetailResultsPage() {
             </div>
           </section>
 
-          {/* 6. IMPACTO POR CANAL (SMART GRID) */}
+          {/* 6. IMPACTO POR CANAL (SMART GRID) - VERSÃO CORRIGIDA */}
           <section>
-             <div className="flex justify-between items-center mt-8 mb-6 relative z-20">
-                <SectionTitle title="Impacto por canal" tooltip={TEXTS.impacto_canal} />
-                <div className="relative" ref={channelFilterRef} onMouseDown={(e) => e.stopPropagation()}>
-                    <button onClick={openChannelFilter} onMouseDown={(e) => e.stopPropagation()} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all shadow-sm"><Filter size={16}/> Filtrar Canais <ChevronDown size={16}/></button>
-                    {isChannelFilterOpen && (<div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 p-4" onMouseDown={(e) => e.stopPropagation()}><p className="text-xs font-bold text-slate-400 uppercase mb-3">Exibir Canais</p><div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">{PRIMITIVE_CHANNELS.map(ch => (
-                      <div
-                        key={ch}
-                        className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            toggleChannelFilter(ch);
-                        }}
-                      ><div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${activeFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{activeFilters.includes(ch) && <Check size={14} className="text-white" />}</div><span className="text-sm text-slate-700 font-medium">{ch}</span></div>))}</div><div className="border-t mt-3 pt-3 flex justify-end gap-2"><button className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2" onClick={closeChannelFilter}>Fechar</button></div></div>)}
-                </div>
-            </div>
-            <div className={`grid gap-6 mb-8 ${getGridClass(visibleCards.length)}`}>
-                {visibleCards.map((card: any, idx: number) => (
-                    <div key={idx} className={getSlotClass(idx, visibleCards.length)}>
-                        <ModernChannelCard data={card} isBig={idx === 0 && visibleCards.length >= 3} />
-                    </div>
-                ))}
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Buscar na tabela..." value={channelSearchTerm} onChange={(e) => setChannelSearchTerm(e.target.value)} className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" /></div><button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors"><Download size={18}/> Exportar CSV</button></div>
-                <table className="w-full text-sm text-left text-slate-600"><thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider"><tr><th className="px-6 py-4">Canal</th><th className="px-6 py-4">Valor</th><th className="px-6 py-4 text-right">% Infl.</th></tr></thead><tbody className="divide-y divide-slate-100">{allTableData.map((ch:any, idx:number) => (<tr key={idx} className="hover:bg-indigo-50/30 transition-colors"><td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3"><div className="p-1.5 rounded bg-slate-100 text-slate-500">{CHANNEL_ICONS[ch.name] || <Target size={16}/>}</div> {ch.name}</td><td className="px-6 py-4 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td><td className="px-6 py-4 text-right"><span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">{ch.percent}%</span></td></tr>))}</tbody></table>
-            </div>
+              <div className="flex justify-between items-center mt-8 mb-6 relative z-50">
+                  <SectionTitle title="Impacto por canal" tooltip={TEXTS.impacto_canal} />
+                  
+                  <div className="relative" ref={channelFilterRef}>
+                      <button
+                          onClick={(e) => {
+                              e.stopPropagation();
+                              setIsChannelFilterOpen(!isChannelFilterOpen); 
+                          }}
+                          className={`flex items-center gap-2 border px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${
+                              isChannelFilterOpen || activeFilters.length > 0 
+                              ? 'bg-indigo-50 border-indigo-300 text-indigo-600' 
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
+                          }`}
+                      >
+                          <Filter size={16} /> 
+                          {activeFilters.length > 0 ? `${activeFilters.length} Canais` : 'Filtrar Canais'} 
+                          <ChevronDown size={16} className={`transition-transform ${isChannelFilterOpen ? 'rotate-180' : ''}`}/>
+                      </button>
+
+                      {isChannelFilterOpen && (
+                          <div 
+                              className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 p-4" 
+                              onClick={(e) => e.stopPropagation()} 
+                          >
+                              <div className="flex justify-between items-center mb-3">
+                                  <p className="text-xs font-bold text-slate-400 uppercase">Exibir Canais</p>
+                                  {activeFilters.length > 0 && (
+                                      <button 
+                                          onClick={(e) => {
+                                              e.stopPropagation(); 
+                                              setActiveFilters([]);
+                                          }}
+                                          className="text-[10px] text-indigo-600 font-bold hover:underline"
+                                      >
+                                          LIMPAR
+                                      </button>
+                                  )}
+                              </div>
+                              
+                              <div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">
+                                  {PRIMITIVE_CHANNELS.map(ch => (
+                                      <div
+                                          key={ch}
+                                          className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors group select-none"
+                                          onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation(); 
+                                              toggleChannelFilter(ch);
+                                          }}
+                                      >
+                                          <div className={`pointer-events-none w-5 h-5 rounded border flex items-center justify-center transition-colors ${activeFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white group-hover:border-indigo-300'}`}>
+                                              {activeFilters.includes(ch) && <Check size={14} className="text-white" />}
+                                          </div>
+                                          <span className={`pointer-events-none text-sm font-medium ${activeFilters.includes(ch) ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                              {ch}
+                                          </span>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              </div>
+
+              {/* Z-INDEX 0 + Relative: Garante que o grid fique atrás do menu */}
+              <div className={`grid gap-6 mb-8 relative z-0 ${getGridClass(visibleCards.length)}`}>
+                  {visibleCards.map((card: any, idx: number) => (
+                      <div key={idx} className={getSlotClass(idx, visibleCards.length)}>
+                          <ModernChannelCard data={card} isBig={idx === 0 && visibleCards.length >= 3} />
+                      </div>
+                  ))}
+              </div>
+
+              {/* Tabela de Dados com Busca Corrigida */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                      <div className="relative">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                          <input 
+                              type="text" 
+                              placeholder="Buscar na tabela..." 
+                              value={channelSearchTerm} 
+                              onChange={(e) => setChannelSearchTerm(e.target.value)} 
+                              className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" 
+                          />
+                      </div>
+                      <button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors">
+                          <Download size={18} /> Exportar CSV
+                      </button>
+                  </div>
+                  
+                  <table className="w-full text-sm text-left text-slate-600">
+                      <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          <tr>
+                              <th className="px-6 py-4">Canal</th>
+                              <th className="px-6 py-4">Valor</th>
+                              <th className="px-6 py-4 text-right">% Infl.</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {allTableData
+                              .filter((ch:any) => 
+                                  channelSearchTerm === "" || 
+                                  ch.name.toLowerCase().includes(channelSearchTerm.toLowerCase())
+                              )
+                              .map((ch: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                                  <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
+                                      <div className="p-1.5 rounded bg-slate-100 text-slate-500">
+                                          {CHANNEL_ICONS[ch.name] || <Target size={16} />}
+                                      </div> 
+                                      {ch.name}
+                                  </td>
+                                  <td className="px-6 py-4 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td>
+                                  <td className="px-6 py-4 text-right">
+                                      <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">{ch.percent}%</span>
+                                  </td>
+                              </tr>
+                          ))}
+                          {allTableData.filter((ch:any) => channelSearchTerm === "" || ch.name.toLowerCase().includes(channelSearchTerm.toLowerCase())).length === 0 && (
+                              <tr>
+                                  <td colSpan={3} className="px-6 py-8 text-center text-slate-400">
+                                      Nenhum canal encontrado para "{channelSearchTerm}"
+                                  </td>
+                              </tr>
+                          )}
+                      </tbody>
+                  </table>
+              </div>
           </section>
 
           {/* 7. LISTA DE LOJAS */}
@@ -433,7 +534,7 @@ export default function RetailResultsPage() {
   );
 }
 
-// --- COMPONENTES AUXILIARES (AGORA COM FUNÇÕES DE GRID MOVIDAS PARA CÁ) ---
+// --- COMPONENTES AUXILIARES ---
 
 function getGridClass(count: number) {
     if (count <= 2) return "grid-cols-1 lg:grid-cols-2 h-[300px]";
