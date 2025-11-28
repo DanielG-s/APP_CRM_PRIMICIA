@@ -461,24 +461,7 @@ export default function RetailResultsPage() {
               </div>
 
               {/* Tabela de Dados com Busca Corrigida */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                      <div className="relative">
-                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                          <input 
-                              type="text" 
-                              placeholder="Buscar na tabela..." 
-                              value={channelSearchTerm} 
-                              onChange={(e) => setChannelSearchTerm(e.target.value)} 
-                              className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" 
-                          />
-                      </div>
-                      <button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors">
-                          <Download size={18} /> Exportar CSV
-                      </button>
-                  </div>
-                  <ChannelsTable data={allTableData} />
-              </div>
+              <ChannelsTable data={allTableData} />
           </section>
 
           {/* 7. LISTA DE LOJAS */}
