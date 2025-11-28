@@ -12,16 +12,6 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Area, AreaChart 
 } from 'recharts';
 
-function useDebounce(value: string, delay = 120) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const h = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(h);
-  }, [value, delay]);
-  return debounced;
-}
-
-
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
   blue: "#2563eb", green: "#10b981", purple: "#8b5cf6", gray: "#d1d5db", red: "#ef4444", warning: "#f59e0b", darkTooltip: "#1e2336",
@@ -66,16 +56,14 @@ export default function RetailResultsPage() {
   // Filtros Canais
   const [isChannelFilterOpen, setIsChannelFilterOpen] = useState(false);
   const PRIMITIVE_CHANNELS = ['Agenda', 'SMS', 'E-mail', 'WhatsApp', 'Mobile Push'];
-  const [activeFilters, setActiveFilters] = useState<string[]>(['Agenda', 'SMS', 'E-mail', 'WhatsApp', 'Mobile Push']);
-  const [draftChannelFilters, setDraftChannelFilters] = useState<string[]>([]);
+  const [activeFilters, setActiveFilters] = useState<string[]>([...PRIMITIVE_CHANNELS]);
 
   // Paginação e Busca
   const [storeSearch, setStoreSearch] = useState("");
   const [storePage, setStorePage] = useState(1);
   const [storesPerPage, setStoresPerPage] = useState(5);
-  const [staticStores, setStaticStores] = useState<any[]>([]); 
+  const [staticStores, setStaticStores] = useState<any[]>([]);
   const [channelSearchTerm, setChannelSearchTerm] = useState("");
-  const channelSearch = useDebounce(channelSearchTerm, 120);
 
 
   // Refs
@@ -125,8 +113,8 @@ export default function RetailResultsPage() {
         setIsChannelFilterOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
   // --- ACTIONS GLOBAIS ---
@@ -160,18 +148,15 @@ export default function RetailResultsPage() {
   }
 
   // --- ACTIONS CANAIS ---
-  const openChannelFilter = () => { 
-      setDraftChannelFilters([...activeFilters]); 
-      setIsChannelFilterOpen(!isChannelFilterOpen); 
+  const openChannelFilter = () => {
+      setIsChannelFilterOpen((prev) => !prev);
   };
-  const toggleChannelDraft = (channel: string) => {
-    if (draftChannelFilters.includes(channel)) setDraftChannelFilters(draftChannelFilters.filter(f => f !== channel));
-    else setDraftChannelFilters([...draftChannelFilters, channel]);
+  const toggleChannelFilter = (channel: string) => {
+    setActiveFilters((prev) =>
+      prev.includes(channel) ? prev.filter((f) => f !== channel) : [...prev, channel]
+    );
   };
-  const applyChannelFilter = () => { 
-      setActiveFilters(draftChannelFilters); 
-      setIsChannelFilterOpen(false); 
-  };
+  const closeChannelFilter = () => setIsChannelFilterOpen(false);
   
   const handleExportCSV = () => {
     if (!allTableData.length) return;
@@ -276,17 +261,19 @@ export default function RetailResultsPage() {
     
     // Lista da Tabela
     let tableList = [...eligibleChannels].sort((a: any, b: any) => b.value - a.value);
-    if (channelSearch) {
-        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(channelSearch.toLowerCase()));
+    const normalizedChannelSearch = channelSearchTerm.trim().toLowerCase();
+    if (normalizedChannelSearch) {
+        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(normalizedChannelSearch));
     }
 
     return { visibleCards: renderList, othersCard: finalOthersCard, allTableData: tableList };
-  }, [data, activeFilters, channelSearch]);
+  }, [data, activeFilters, channelSearchTerm]);
 
   // Lógica Paginação Lojas
   const { paginatedStores, totalStores, totalStorePages } = useMemo(() => {
     let filteredStores = staticStores;
-    if (storeSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase()));
+    const normalizedStoreSearch = storeSearch.trim().toLowerCase();
+    if (normalizedStoreSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(normalizedStoreSearch));
     const totalStores = filteredStores.length;
     const totalStorePages = Math.ceil(totalStores / storesPerPage);
     const startIndex = (storePage - 1) * storesPerPage;
@@ -402,17 +389,18 @@ export default function RetailResultsPage() {
           <section>
              <div className="flex justify-between items-center mt-8 mb-6 relative z-20">
                 <SectionTitle title="Impacto por canal" tooltip={TEXTS.impacto_canal} />
-                <div className="relative" ref={channelFilterRef}>
-                    <button onClick={openChannelFilter} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all shadow-sm"><Filter size={16}/> Filtrar Canais <ChevronDown size={16}/></button>
-                    {isChannelFilterOpen && (<div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 p-4"><p className="text-xs font-bold text-slate-400 uppercase mb-3">Exibir Canais</p><div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">{PRIMITIVE_CHANNELS.map(ch => (
+                <div className="relative" ref={channelFilterRef} onMouseDown={(e) => e.stopPropagation()}>
+                    <button onClick={openChannelFilter} onMouseDown={(e) => e.stopPropagation()} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-all shadow-sm"><Filter size={16}/> Filtrar Canais <ChevronDown size={16}/></button>
+                    {isChannelFilterOpen && (<div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 p-4" onMouseDown={(e) => e.stopPropagation()}><p className="text-xs font-bold text-slate-400 uppercase mb-3">Exibir Canais</p><div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">{PRIMITIVE_CHANNELS.map(ch => (
                       <div
                         key={ch}
                         className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                        onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
-                            e.stopPropagation();          // 🔧 impede fechar o dropdown
-                            toggleChannelDraft(ch);
+                            e.stopPropagation();
+                            toggleChannelFilter(ch);
                         }}
-                      ><div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${draftChannelFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{draftChannelFilters.includes(ch) && <Check size={14} className="text-white" />}</div><span className="text-sm text-slate-700 font-medium">{ch}</span></div>))}</div><div className="border-t mt-3 pt-3 flex justify-end gap-2"><button className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2" onClick={() => setIsChannelFilterOpen(false)}>Cancelar</button><button className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg w-full transition-colors" onClick={applyChannelFilter}>Aplicar</button></div></div>)}
+                      ><div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${activeFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{activeFilters.includes(ch) && <Check size={14} className="text-white" />}</div><span className="text-sm text-slate-700 font-medium">{ch}</span></div>))}</div><div className="border-t mt-3 pt-3 flex justify-end gap-2"><button className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2" onClick={closeChannelFilter}>Fechar</button></div></div>)}
                 </div>
             </div>
             <div className={`grid gap-6 mb-8 ${getGridClass(visibleCards.length)}`}>
@@ -423,7 +411,7 @@ export default function RetailResultsPage() {
                 ))}
             </div>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Buscar na tabela..." value={channelSearch} onChange={(e) => setChannelSearchTerm(e.target.value)} className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" /></div><button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors"><Download size={18}/> Exportar CSV</button></div>
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Buscar na tabela..." value={channelSearchTerm} onChange={(e) => setChannelSearchTerm(e.target.value)} className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" /></div><button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors"><Download size={18}/> Exportar CSV</button></div>
                 <table className="w-full text-sm text-left text-slate-600"><thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider"><tr><th className="px-6 py-4">Canal</th><th className="px-6 py-4">Valor</th><th className="px-6 py-4 text-right">% Infl.</th></tr></thead><tbody className="divide-y divide-slate-100">{allTableData.map((ch:any, idx:number) => (<tr key={idx} className="hover:bg-indigo-50/30 transition-colors"><td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3"><div className="p-1.5 rounded bg-slate-100 text-slate-500">{CHANNEL_ICONS[ch.name] || <Target size={16}/>}</div> {ch.name}</td><td className="px-6 py-4 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td><td className="px-6 py-4 text-right"><span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">{ch.percent}%</span></td></tr>))}</tbody></table>
             </div>
           </section>
