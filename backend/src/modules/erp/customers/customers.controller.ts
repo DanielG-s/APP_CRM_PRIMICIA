@@ -8,7 +8,7 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista todos os clientes com LTV calculado' })
+  @ApiOperation({ summary: 'Lista carteira de clientes com Status, LTV e Recência calculados' })
   async getAllCustomers() {
     return this.customersService.findAll();
   }

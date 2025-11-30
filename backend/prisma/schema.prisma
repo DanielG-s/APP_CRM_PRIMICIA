@@ -99,14 +99,32 @@ model Campaign {
   id                String   @id @default(uuid())
   storeId           String
   store             Store    @relation(fields: [storeId], references: [id])
+  
   name              String
-  channel           String
-  status            String
-  attributionWindow Int      @default(7)
-  conversionTrigger String
-  schedules         CampaignSchedule[]
+  channel           String   // 'whatsapp', 'email', 'sms'
+  status            String   @default("draft") // 'draft', 'scheduled', 'sent'
+  
+  // --- NOVOS CAMPOS NECESSÁRIOS PARA O ERRO SUMIR ---
+  segmentId         String?  // 'all', 'vip', etc
+  audienceSize      Int?     @default(0)
+  
+  config            Json?    // { subject: "..." }
+  content           Json?    // { body: "..." }
+  
+  scheduledAt       DateTime?
+  
+  // Campos de Auditoria (Resolvem o erro de 'createdAt')
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relacionamentos
   metrics           CampaignMetric?
-  contents          CampaignContent[]
+  schedules         CampaignSchedule[] 
+  contents          CampaignContent[] 
+  
+  // Campos legados (opcional manter para não quebrar histórico antigo)
+  attributionWindow Int?      @default(7)
+  conversionTrigger String?
 }
 
 model CampaignSchedule {

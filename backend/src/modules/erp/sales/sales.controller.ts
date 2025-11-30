@@ -18,7 +18,7 @@ export class SalesController {
   }
 
   @Get('dashboard-total')
-  @ApiOperation({ summary: 'Retorna o total vendido (para o Dashboard)' })
+  @ApiOperation({ summary: 'Retorna o total vendido HOJE (para o Dashboard)' })
   async getDashboardTotal() {
     return this.salesService.getDailyTotal();
   }
@@ -29,24 +29,28 @@ export class SalesController {
     return this.salesService.getSalesHistory();
   }
 
+  @Get('recent-sales')
+  @ApiOperation({ summary: 'Retorna as 5 últimas vendas realizadas' })
+  async getRecentSales() {
+    return this.salesService.getRecentSales();
+  }
+
   @Get('stores')
-  @ApiOperation({ summary: 'Lista todas as lojas para o filtro do Frontend' })
+  @ApiOperation({ summary: 'Lista todas as lojas' })
   async getStores() {
     return this.salesService.getStores();
   }
 
   @Get('retail-metrics')
-  @ApiOperation({ summary: 'Métricas de Varejo filtradas por data e lojas' })
+  @ApiOperation({ summary: 'Métricas de Varejo filtradas' })
   @ApiQuery({ name: 'start', required: false })
   @ApiQuery({ name: 'end', required: false })
-  @ApiQuery({ name: 'stores', required: false, description: 'IDs das lojas separados por vírgula' })
+  @ApiQuery({ name: 'stores', required: false })
   async getRetailMetrics(
     @Query('start') start?: string,
     @Query('end') end?: string,
     @Query('stores') stores?: string, 
   ) {
-    // CORREÇÃO: Passamos 'stores' (string) diretamente, sem converter para array aqui.
-    // O Service já tem a lógica de .split(',')
     return this.salesService.getRetailMetrics(start, end, stores);
   }
 }
