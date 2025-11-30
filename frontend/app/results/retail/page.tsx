@@ -5,7 +5,7 @@ import {
   Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, 
   ShoppingBag, TrendingUp, DollarSign, ArrowUp, ArrowDown, RefreshCw, Activity, Wallet, 
   Download, Search, ChevronDown, Smartphone, Mail, CalendarDays, Zap, Layers, Check, 
-  ChevronLeft, ChevronRight, Filter, Store, X, FileText
+  ChevronLeft, ChevronRight, Filter, Store, X, FileText, PieChart as PieIcon, Info
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
@@ -14,19 +14,23 @@ import {
 
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
-  blue: "#2563eb", green: "#10b981", purple: "#8b5cf6", gray: "#d1d5db", red: "#ef4444", warning: "#f59e0b", darkTooltip: "#1e2336",
-  primary: "#6366f1", primaryLight: "#818cf8", secondary: "#a5b4fc", success: "#10b981", danger: "#f43f5e", textSub: "#64748b"
+  primary: "#6366f1",   // Violeta
+  secondary: "#0f172a", // Slate Dark
+  accent: "#f59e0b",    // Amber/Laranja
+  success: "#10b981",   // Emerald
+  danger: "#ef4444",    // Red
+  neutral: "#94a3b8",   // Gray
+  grid: "#e2e8f0"
 };
-const THEME = COLORS;
 
 const CHANNEL_ICONS: any = {
-  'Agenda': <CalendarDays size={28} />,
-  'SMS': <Smartphone size={28} />,
-  'E-mail': <Mail size={28} />,
-  'WhatsApp': <MessageCircle size={28} />,
-  'Agenda + SMS': <Zap size={28} />,
-  'Agenda + E-mail': <Layers size={28} />,
-  'Outros': <Target size={28} />
+  'Agenda': <CalendarDays size={24} />,
+  'SMS': <Smartphone size={24} />,
+  'E-mail': <Mail size={24} />,
+  'WhatsApp': <MessageCircle size={24} />,
+  'Agenda + SMS': <Zap size={24} />,
+  'Agenda + E-mail': <Layers size={24} />,
+  'Outros': <Target size={24} />
 };
 
 export default function RetailResultsPage() {
@@ -41,8 +45,6 @@ export default function RetailResultsPage() {
   const [draftDate, setDraftDate] = useState({ start: lastYear, end: today });
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [draftStores, setDraftStores] = useState<string[]>([]);
-  
-  // Estado para armazenar a lista de lojas disponíveis (vindo do Backend)
   const [availableStores, setAvailableStores] = useState<any[]>([]);
 
   const [isDateOpen, setIsDateOpen] = useState(false);
@@ -54,78 +56,52 @@ export default function RetailResultsPage() {
   const [impactViewMode, setImpactViewMode] = useState<'mensal' | 'trimestral'>('mensal');
   const [groupMode, setGroupMode] = useState<'people' | 'revenue'>('people');
   
-  // Filtros Canais
   const [isChannelFilterOpen, setIsChannelFilterOpen] = useState(false);
   const PRIMITIVE_CHANNELS = ['Agenda', 'SMS', 'E-mail', 'WhatsApp', 'Mobile Push'];
   const [activeFilters, setActiveFilters] = useState<string[]>([...PRIMITIVE_CHANNELS]);
-
-  // Stores Data (agora vem do backend)
   const [staticStores, setStaticStores] = useState<any[]>([]);
 
-  // Refs
   const dateRef = useRef<HTMLDivElement>(null);
   const globalFilterRef = useRef<HTMLDivElement>(null);
   const channelFilterRef = useRef<HTMLDivElement>(null);
 
-  // --- FETCHING METRICS ---
   async function fetchData(start: string, end: string, stores: string[]) {
     setLoading(true);
     try {
       const storesQuery = stores.length > 0 ? `&stores=${stores.join(',')}` : '';
       const url = `http://localhost:3000/webhook/erp/retail-metrics?start=${start}&end=${end}${storesQuery}`;
       const res = await fetch(url, { cache: 'no-store' });
-      
-      if (!res.ok) throw new Error("Erro ao buscar métricas");
-
+      if (!res.ok) throw new Error("Erro API");
       const json = await res.json();
       setData(json);
-
-      // Agora pegamos as lojas diretamente da resposta da API (sem Math.random)
       setStaticStores(json.stores || []);
-
-    } catch (error) { 
-        console.error("Erro:", error); 
-    } finally { 
-        setLoading(false); 
-    }
+    } catch (error) { console.error(error); } 
+    finally { setLoading(false); }
   }
 
-  // --- FETCHING STORES LIST (Para o Dropdown) ---
   useEffect(() => {
     async function loadStores() {
         try {
             const res = await fetch('http://localhost:3000/webhook/erp/stores');
-            if (!res.ok) throw new Error("Erro ao buscar lista de lojas");
-            const json = await res.json();
-            setAvailableStores(json);
-        } catch (error) {
-            console.error("Erro ao carregar lojas:", error);
-        }
+            if (res.ok) setAvailableStores(await res.json());
+        } catch (e) { console.error(e); }
     }
     loadStores();
   }, []);
 
   useEffect(() => { fetchData(dateRange.start, dateRange.end, selectedStores); }, []);
 
-  // --- CLICK OUTSIDE (CORRIGIDO PARA MOUSEDOWN) ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      // Filtros Globais
       if (dateRef.current && !dateRef.current.contains(event.target as Node)) setIsDateOpen(false);
       if (globalFilterRef.current && !globalFilterRef.current.contains(event.target as Node)) setIsFilterMenuOpen(false);
-      
-      // Filtro de Canais (Lógica Blindada)
-      if (isChannelFilterOpen && channelFilterRef.current && !channelFilterRef.current.contains(event.target as Node)) {
-        setIsChannelFilterOpen(false);
-      }
+      if (isChannelFilterOpen && channelFilterRef.current && !channelFilterRef.current.contains(event.target as Node)) setIsChannelFilterOpen(false);
     }
-    
-    // Usar mousedown ao invés de click previne conflitos de renderização
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isChannelFilterOpen, isDateOpen, isFilterMenuOpen]);
 
-  // --- ACTIONS GLOBAIS ---
+  // Actions
   const handleApplyGlobalFilters = () => {
     setDateRange(draftDate);
     setSelectedStores(draftStores);
@@ -144,38 +120,91 @@ export default function RetailResultsPage() {
     fetchData(defaultStart, defaultEnd, []);
   };
 
-  const toggleStoreSelection = (storeId: string) => {
-    if (draftStores.includes(storeId)) setDraftStores(draftStores.filter(id => id !== storeId));
-    else setDraftStores([...draftStores, storeId]);
+  const toggleStoreSelection = (id: string) => {
+    if (draftStores.includes(id)) setDraftStores(draftStores.filter(s => s !== id));
+    else setDraftStores([...draftStores, id]);
   };
 
-  const formatDateDisplay = (isoString: string) => {
-    if(!isoString) return '';
-    const [y, m, d] = isoString.split('-');
+  const toggleChannelFilter = (ch: string) => {
+    setActiveFilters(prev => prev.includes(ch) ? prev.filter(f => f !== ch) : [...prev, ch]);
+  };
+
+  const formatDateDisplay = (iso: string) => {
+    if(!iso) return '';
+    const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
   }
 
-  // --- ACTIONS CANAIS ---
-  const toggleChannelFilter = (channel: string) => {
-    setActiveFilters((prev) =>
-      prev.includes(channel) ? prev.filter((f) => f !== channel) : [...prev, channel]
-    );
-  };
-  
-  // --- MEMOS DE DADOS ---
+  // --- LÓGICA DE DADOS ---
   const processData = (mode: 'mensal' | 'trimestral') => {
     if (!data) return [];
+    
+    // MODO MENSAL
     if (mode === 'mensal') {
         return data.history.map((item: any) => ({
             ...item,
             revenueOrganic: item.revenue - item.revenueInfluenced 
         }));
     }
-    return data.history; 
+
+    // MODO TRIMESTRAL (Agregação)
+    const groupedData: any = {};
+    
+    data.history.forEach((item: any, index: number) => {
+       const quarterIndex = Math.floor(index / 3) + 1;
+       const year = item.name.split(' ')[1] || ''; 
+       const label = `Trim ${quarterIndex} ${year}`;
+
+       if(!groupedData[label]) { 
+           groupedData[label] = { 
+               name: label, count: 0, 
+               revenue:0, revenueLastYear:0, transactions:0, revenueInfluenced:0, 
+               groupNew:0, groupRecurrent:0, groupRecovered:0, 
+               consumers:0, consumersActive:0,
+               accTicket: 0, accRepurchase: 0, accAvgSpend: 0, accInterval: 0, accFrequency: 0
+           }; 
+       }
+       
+       const g = groupedData[label];
+       g.revenue += item.revenue || 0;
+       g.revenueLastYear += item.revenueLastYear || 0;
+       g.transactions += item.transactions || 0;
+       g.revenueInfluenced += item.revenueInfluenced || 0;
+       g.groupNew += item.groupNew || 0;
+       g.groupRecurrent += item.groupRecurrent || 0;
+       g.groupRecovered += item.groupRecovered || 0;
+       
+       g.consumers += item.consumers || 0;
+       g.consumersActive += item.consumersActive || 0;
+       g.accTicket += item.ticket || 0;
+       g.accRepurchase += Number(item.repurchase) || 0;
+       g.accAvgSpend += item.avgSpend || 0;
+       g.accInterval += item.interval || 0;
+       g.accFrequency += item.frequency || 0;
+       
+       g.count++;
+    });
+
+    return Object.values(groupedData).map((g: any) => ({
+        ...g,
+        revenueOrganic: g.revenue - g.revenueInfluenced,
+        ticket: g.count ? Math.round(g.revenue / g.transactions) : 0, 
+        itemsPerTicket: g.count ? (g.transactions > 0 ? (g.revenue / g.transactions / 150).toFixed(2) : 0) : 0,
+        repurchase: g.count ? (g.accRepurchase / g.count).toFixed(1) : 0,
+        avgSpend: g.count ? Math.round(g.accAvgSpend / g.count) : 0,
+        interval: g.count ? Math.round(g.accInterval / g.count) : 0,
+        frequency: g.count ? (g.accFrequency / g.count).toFixed(2) : 0,
+        consumers: Math.round(g.consumers / g.count),
+        consumersActive: Math.round(g.consumersActive / g.count),
+        revenueNew: g.transactions > 0 ? Math.round((g.groupNew / g.transactions) * g.revenue) : 0,
+        revenueRecurrent: g.transactions > 0 ? Math.round((g.groupRecurrent / g.transactions) * g.revenue) : 0,
+        revenueRecovered: g.transactions > 0 ? Math.round((g.groupRecovered / g.transactions) * g.revenue) : 0,
+    }));
   };
 
   const mainGraphData = useMemo(() => processData(viewMode), [data, viewMode]);
   const impactGraphData = useMemo(() => processData(impactViewMode), [data, impactViewMode]);
+  
   const donutTotals = useMemo(() => {
     if (!impactGraphData.length) return { total: 0, influenced: 0, percent: "0" };
     const total = impactGraphData.reduce((acc: number, item: any) => acc + item.revenue, 0);
@@ -183,236 +212,379 @@ export default function RetailResultsPage() {
     return { total, influenced, percent: total > 0 ? ((influenced / total) * 100).toFixed(2) : "0" };
   }, [impactGraphData]);
 
-  // Lógica de Canais (Smart Grid)
-  const { visibleCards, othersCard, allTableData } = useMemo(() => {
-    if (!data) return { visibleCards: [], othersCard: null, allTableData: [] };
+  const { visibleCards, allTableData } = useMemo(() => {
+    if (!data) return { visibleCards: [], allTableData: [] };
     const channels = data.channels;
     
     const eligibleChannels = channels.filter((ch: any) => {
         if (ch.name === 'Outros') return true;
         const parts = ch.name.split(' + ').map((p: string) => p.trim());
-        const isVisible = parts.some((part: string) => activeFilters.includes(part));
-        return isVisible;
+        return parts.some((part: string) => activeFilters.includes(part));
     });
 
-    const mainCandidates = eligibleChannels.filter((ch:any) => ch.name !== 'Outros').sort((a: any, b: any) => b.value - a.value);
-    const slots = mainCandidates.slice(0, 5);
-    const overflow = mainCandidates.slice(5);
-    const nativeOthers = eligibleChannels.find((ch:any) => ch.name === 'Outros');
+    const sorted = eligibleChannels.sort((a: any, b: any) => b.value - a.value);
     
-    let finalOthersCard = null;
-    const othersItemsList = [...overflow];
-    if (nativeOthers) othersItemsList.push(nativeOthers);
-
-    if (othersItemsList.length > 0) {
-        const othersValue = othersItemsList.reduce((acc: number, curr: any) => acc + curr.value, 0);
-        const othersPercent = data.kpis.revenue > 0 ? ((othersValue / data.kpis.revenue) * 100).toFixed(2) : "0";
-        finalOthersCard = { name: 'Outros', value: othersValue, percent: othersPercent, items: othersItemsList, isOther: true };
+    const topChannels = sorted.filter((c:any) => c.name !== 'Outros').slice(0, 5);
+    const others = sorted.slice(5).concat(sorted.filter((c:any) => c.name === 'Outros'));
+    
+    const finalCards = [...topChannels];
+    if (others.length > 0) {
+        const othersVal = others.reduce((acc: number, c: any) => acc + c.value, 0);
+        const othersPct = data.kpis.revenue > 0 ? ((othersVal / data.kpis.revenue) * 100).toFixed(2) : "0";
+        finalCards.push({ name: 'Outros Canais', value: othersVal, percent: othersPct, items: others, isOther: true });
     }
 
-    const renderList = [...slots];
-    if (finalOthersCard) renderList.push(finalOthersCard);
-    
-    let tableList = [...eligibleChannels].sort((a: any, b: any) => b.value - a.value);
-
-    return { visibleCards: renderList, othersCard: finalOthersCard, allTableData: tableList };
+    return { visibleCards: finalCards, allTableData: sorted };
   }, [data, activeFilters]);
 
-  if (loading) return <div className="flex h-screen items-center justify-center text-slate-400 bg-[#f8fafc]">Carregando dados...</div>;
-  if (!data) return <div className="flex h-screen items-center justify-center text-slate-500 bg-[#f8fafc]">Erro ao carregar.</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center text-slate-500 font-medium bg-[#f1f5f9]">Carregando Dashboard...</div>;
+  if (!data) return <div className="flex h-screen items-center justify-center text-slate-500 bg-[#f1f5f9]">Sem dados disponíveis.</div>;
 
-  // Textos e Configs
+  // --- TEXTOS ---
   const TEXTS = {
-    impacto_canal: "Apresenta a receita gerada a partir das transações influenciadas pelos canais e suas combinações.",
-    impacto_titulo: "Essa análise mostrará como as estratégias digitais da sua marca afetam a receita total.",
-    receita_total: "A receita total corresponde à soma da receita de todas as transações que aconteceram no período.",
-    receita_influenciada: "A receita influenciada é o resultado das ações digitais, criadas na plataforma da Dito, que impactaram a receita total no período selecionado.",
-    consumidores: "O total de consumidores são pessoas que realizaram compras no período de 12 meses referente ao filtro de data selecionado.\n\nTotal de consumidores ativos são pessoas que realizaram compras nos últimos 12 meses e possuem ao menos um contato válido.",
-    perfil_main: "Todas as análises consideram os últimos 12 meses a partir do período filtrado.\n\nA informação é gerada no 1º dia de cada mês.\n\nOs números do consolidado abaixo representam o mês mais recente do período filtrado.",
-    grupo: "Novos: primeira compra.\n\nRecorrentes: compra anterior há menos de 12 meses.\n\nRecuperados: compra anterior há mais de 12 meses.\n\nSomente transações com receita > 0 são consideradas.",
-    revenue: "A receita total corresponde à receita gerada pelo somatório de transações...",
-    transactions: "O total de transações corresponde à quantidade de compras...",
-    ticket: "O ticket médio corresponde ao valor médio gasto por compra...",
-    repurchase: "Total de recompra corresponde às transações de clientes...",
-    perfil_gasto: "Valor médio gasto por consumidor nos últimos 12 meses...",
-    perfil_intervalo: "Tempo médio para um consumidor voltar a comprar...",
-    perfil_freq: "Número médio de compras por consumidor nos últimos 12 meses..."
+    performance: "Visão geral dos principais indicadores financeiros da rede.",
+    impacto: "Analise quanto da sua receita veio de esforços de marketing direto.",
+    carteira: "Acompanhe a evolução da sua base de clientes ativos vs total.",
+    comportamento: "Entenda a frequência, recência e valor monetário dos clientes.",
+    segmentacao: "Distribuição entre clientes novos, recorrentes e recuperados.",
+    canais: "Eficiência detalhada por canal de comunicação."
   };
 
   const kpiChartConfig: any = { 
-      revenue: { yAxisFormat: (val: number) => `R$ ${val/1000}k`, lines: [{ key: "revenue", color: THEME.primary, name: "Receita Atual", type: "area" }, { key: "revenueLastYear", color: THEME.secondary, name: "Ano Anterior", type: "line" }] }, 
-      transactions: { yAxisFormat: (val: number) => val, lines: [{ key: "transactions", color: THEME.danger, name: "Total Transações", type: "line" }] }, 
-      ticket: { yAxisFormat: (val: number) => `R$ ${val}`, lines: [{ key: "ticket", color: THEME.primary, name: "Ticket Médio", type: "line" }, { key: "itemsPerTicket", color: THEME.gray, name: "PA (Peças)", type: "line", yAxisId: "right" }] }, 
-      repurchase: { yAxisFormat: (val: number) => `R$ ${val}`, lines: [{ key: "repurchase", color: THEME.warning, name: "Recompra", type: "line" }] } 
+      revenue: { prefix: "R$", lines: [{ key: "revenue", color: COLORS.primary, name: "Receita Atual", type: "area" }, { key: "revenueLastYear", color: COLORS.neutral, name: "Ano Anterior", type: "line" }] }, 
+      transactions: { prefix: "", lines: [{ key: "transactions", color: COLORS.secondary, name: "Volume de Vendas", type: "line" }] }, 
+      ticket: { prefix: "R$", lines: [{ key: "ticket", color: COLORS.primary, name: "Ticket Médio", type: "line" }, { key: "itemsPerTicket", color: COLORS.accent, name: "Peças/Atendimento", type: "line", yAxisId: "right" }] }, 
+      repurchase: { prefix: "%", lines: [{ key: "repurchase", color: COLORS.success, name: "Taxa de Recompra", type: "line" }] } 
   };
-  const profileChartConfig: any = { avgSpend: { title: "Gasto Médio", color: THEME.primary, dataKey: "avgSpend", formatter: (val: number) => `R$ ${val}` }, interval: { title: "Intervalo (dias)", color: THEME.success, dataKey: "interval", formatter: (val: number) => `${val} dias` }, frequency: { title: "Frequência", color: THEME.primaryLight, dataKey: "frequency", formatter: (val: number) => val } };
+
+  const profileConfig: any = { 
+    avgSpend: { title: "LTV (12 meses)", color: COLORS.primary, dataKey: "avgSpend", prefix: "R$" }, 
+    interval: { title: "Ciclo de Compra (dias)", color: COLORS.accent, dataKey: "interval", prefix: "" }, 
+    frequency: { title: "Frequência Anual", color: COLORS.secondary, dataKey: "frequency", prefix: "" } 
+  };
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-900">
-      <aside className="w-64 bg-[#111827] text-white flex flex-col shrink-0 shadow-xl z-20">
-        <div className="h-20 flex items-center px-6 border-b border-gray-800">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white mr-3 shadow-lg shadow-indigo-500/30">P</div>
-            <span className="font-bold text-xl tracking-tight">PRIMÍCIA</span>
+    <div className="flex h-screen bg-[#f1f5f9] font-sans text-slate-900">
+      
+      {/* SIDEBAR */}
+      <aside className="w-20 lg:w-64 bg-[#0f172a] text-slate-300 flex flex-col shrink-0 shadow-2xl z-30 transition-all">
+        <div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
+            <div className="w-10 h-10 bg-violet-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-violet-900/50">P</div>
+            <span className="font-bold text-xl tracking-tight text-white ml-3 hidden lg:block">PRIMÍCIA</span>
         </div>
-        <nav className="flex-1 py-8 px-4 space-y-2 overflow-y-auto custom-scrollbar">
-          <Link href="/"><NavItem icon={<Home size={20}/>} label="Visão Geral" /></Link>
-          <Link href="/clients"><NavItem icon={<Users size={20}/>} label="Clientes" /></Link>
-          <div className="pt-2 pb-2"><p className="px-4 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Relatórios</p><NavItem icon={<BarChart2 size={20}/>} label="Analytics" active />
-            <div className="pl-12 pr-2 space-y-1 mt-1 border-l-2 border-gray-800 ml-5">
-                <div className="px-3 py-2 text-indigo-400 text-sm font-medium cursor-default">Varejo</div>
-                <Link href="/results/channels"><div className="px-3 py-2 text-gray-400 hover:text-white text-sm cursor-pointer transition-colors">Canais</div></Link>
-            </div>
-          </div>
-          <div className="pt-6 pb-2"><p className="px-4 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Marketing</p><Link href="/campaigns"><NavItem icon={<MessageCircle size={20}/>} label="Campanhas" /></Link><NavItem icon={<Calendar size={20}/>} label="Agenda" /><NavItem icon={<Target size={20}/>} label="Metas" /></div>
+        <nav className="flex-1 py-6 space-y-1 overflow-y-auto px-3">
+          <NavItem icon={<Home size={20}/>} label="Visão Geral" />
+          <NavItem icon={<Users size={20}/>} label="Carteira de Clientes" />
+          <div className="mt-6 mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hidden lg:block">Analytics</div>
+          <NavItem icon={<BarChart2 size={20}/>} label="Performance Varejo" active />
+          <NavItem icon={<PieIcon size={20}/>} label="Canais & Origem" />
+          <div className="mt-6 mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hidden lg:block">Engajamento</div>
+          <NavItem icon={<MessageCircle size={20}/>} label="Campanhas" />
+          <NavItem icon={<Target size={20}/>} label="Metas & Objetivos" />
         </nav>
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-10 shrink-0 sticky top-0 z-10">
+        {/* HEADER */}
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Resultados Varejo</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Acompanhe a performance geral da sua marca</p>
+            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span className="bg-violet-100 text-violet-700 p-1.5 rounded-md"><BarChart2 size={18}/></span>
+                Performance Executiva
+            </h1>
           </div>
-          <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 cursor-pointer transition shadow-sm"><Bell className="text-gray-500" size={20} /></div><div className="w-10 h-10 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-sm shadow-sm">DA</div></div>
+          <div className="flex items-center gap-3">
+             <div className="text-right hidden sm:block">
+                <p className="text-xs font-bold text-slate-700">Admin User</p>
+                <p className="text-[10px] text-slate-400">Diretor Comercial</p>
+             </div>
+             <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">AD</div>
+          </div>
         </header>
 
-        <div className="flex-1 p-10 overflow-auto space-y-12 scroll-smooth">
-          {/* Filtros Gerais */}
-          <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center pl-4 pr-2 relative z-50">
-            <div className="flex items-center gap-4">
-                <div onClick={() => setIsDateOpen(!isDateOpen)} className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm text-slate-600 font-medium cursor-pointer hover:bg-slate-100 transition relative" ref={dateRef}>
-                    <Calendar size={16} className="text-indigo-500"/> <span>{formatDateDisplay(dateRange.start)}</span> <span className="text-gray-300">|</span> <span>{formatDateDisplay(dateRange.end)}</span>
-                    {isDateOpen && (<div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 w-72 z-50" onClick={(e) => e.stopPropagation()}><p className="text-xs font-bold text-gray-400 uppercase mb-3">Período</p><div className="space-y-3"><div><label className="block text-xs text-gray-500 mb-1">Início</label><input type="date" value={draftDate.start} onChange={(e) => setDraftDate({...draftDate, start: e.target.value})} className="w-full border rounded p-2 text-sm text-gray-600 outline-none focus:border-indigo-500" /></div><div><label className="block text-xs text-gray-500 mb-1">Fim</label><input type="date" value={draftDate.end} onChange={(e) => setDraftDate({...draftDate, end: e.target.value})} className="w-full border rounded p-2 text-sm text-gray-600 outline-none focus:border-indigo-500" /></div></div><div className="border-t mt-4 pt-3 flex justify-end gap-2"><button className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2" onClick={() => setIsDateOpen(false)}>Cancelar</button><button className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg" onClick={handleApplyGlobalFilters}>Aplicar</button></div></div>)}
+        <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-10 scroll-smooth">
+          
+          {/* BARRA DE FILTROS */}
+          <div className="bg-white p-1.5 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center pl-2 pr-2 relative z-50">
+            <div className="flex items-center gap-2">
+                {/* Date Picker */}
+                <div onClick={() => setIsDateOpen(!isDateOpen)} className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition relative" ref={dateRef}>
+                    <Calendar size={14} className="text-violet-500"/> 
+                    <span>{formatDateDisplay(dateRange.start)}</span> 
+                    <span className="text-slate-300">→</span> 
+                    <span>{formatDateDisplay(dateRange.end)}</span>
+                    {isDateOpen && (
+                        <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 z-50" onClick={(e) => e.stopPropagation()}>
+                            <div className="space-y-3">
+                                <div><label className="block text-xs text-slate-500 mb-1">De:</label><input type="date" value={draftDate.start} onChange={(e) => setDraftDate({...draftDate, start: e.target.value})} className="w-full border rounded p-1.5 text-xs outline-none focus:border-violet-500" /></div>
+                                <div><label className="block text-xs text-slate-500 mb-1">Até:</label><input type="date" value={draftDate.end} onChange={(e) => setDraftDate({...draftDate, end: e.target.value})} className="w-full border rounded p-1.5 text-xs outline-none focus:border-violet-500" /></div>
+                            </div>
+                            <div className="border-t mt-3 pt-3 flex justify-end gap-2">
+                                <button className="text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 px-3 py-1.5 rounded" onClick={handleApplyGlobalFilters}>Filtrar</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Loja Selector */}
                 <div className="relative" ref={globalFilterRef}>
-                    <div onClick={() => { setDraftStores([...selectedStores]); setIsFilterMenuOpen(!isFilterMenuOpen); }} className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-indigo-600 cursor-pointer transition-colors select-none">Filtros e visualizações {selectedStores.length > 0 && <span className="bg-indigo-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">{selectedStores.length}</span>} <ChevronDown size={14}/></div>
-                    {isFilterMenuOpen && (<div className="absolute top-full left-0 mt-4 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50"><p className="text-xs font-bold text-gray-400 uppercase mb-2">Filtrar Lojas</p><div className="max-h-60 overflow-y-auto space-y-1 border-b border-gray-100 pb-3 mb-3 custom-scrollbar">
-                        {/* AQUI ESTÁ A LISTA REAL DE LOJAS */}
-                        {availableStores.map(store => (
-                            <label key={store.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 bg-white'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>
-                                    {draftStores.includes(store.id) && <Check size={14} className="text-white" />}
-                                </div>
-                                <span className="text-sm text-gray-700 truncate">{store.name}</span>
-                            </label>
-                        ))}
-                    </div><div className="flex justify-end gap-2"><button className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg" onClick={handleApplyGlobalFilters}>Aplicar</button></div></div>)}
+                    <div onClick={() => { setDraftStores([...selectedStores]); setIsFilterMenuOpen(!isFilterMenuOpen); }} className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition select-none">
+                        <Store size={14} className="text-violet-500"/>
+                        {selectedStores.length > 0 ? `${selectedStores.length} Lojas Selecionadas` : 'Todas as Lojas'} 
+                        <ChevronDown size={12}/>
+                    </div>
+                    {isFilterMenuOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-xl p-3 z-50">
+                            <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
+                                {availableStores.map(store => (
+                                    <label key={store.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>
+                                            {draftStores.includes(store.id) && <Check size={10} className="text-white" />}
+                                        </div>
+                                        <span className="text-xs text-slate-700 truncate font-medium">{store.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="pt-2 mt-2 border-t flex justify-end">
+                                <button className="text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 px-3 py-1.5 rounded" onClick={handleApplyGlobalFilters}>Confirmar</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="flex gap-2"><button onClick={handleClearFilters} className="text-sm text-emerald-600 hover:bg-emerald-50 px-4 py-1.5 rounded-xl font-medium transition-colors">Limpar filtros</button><button onClick={handleApplyGlobalFilters} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5">Aplicar</button></div>
+            <div className="flex gap-2 pr-1">
+                <button onClick={handleClearFilters} className="text-xs text-slate-500 hover:text-slate-800 font-medium px-3 py-1.5">Limpar</button>
+                <button onClick={handleApplyGlobalFilters} className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 shadow-sm transition-all">Atualizar Dashboard</button>
+            </div>
           </div>
 
-          {/* 1. Consolidados */}
+          {/* 1. KPIs PRINCIPAIS */}
           <section>
-            <SectionTitle title="Consolidados da marca" tooltip={TEXTS.revenue} />
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <SelectableCard label="Receita" value={data.kpis.revenue} percent={11.69} active={selectedMetric === 'revenue'} onClick={() => setSelectedMetric('revenue')} icon={<DollarSign size={20}/>} />
-                <SelectableCard label="Transações" value={data.kpis.transactions} percent={-0.93} isRed active={selectedMetric === 'transactions'} onClick={() => setSelectedMetric('transactions')} icon={<ShoppingBag size={20}/>} />
-                <SelectableCard label="Ticket Médio" value={data.kpis.ticketAverage} percent={12.74} active={selectedMetric === 'ticket'} onClick={() => setSelectedMetric('ticket')} icon={<TrendingUp size={20}/>} />
-                <SelectableCard label="Recompras" value={data.kpis.repurchaseRate} percent={54.01} isPercent active={selectedMetric === 'repurchase'} onClick={() => setSelectedMetric('repurchase')} icon={<RefreshCw size={20}/>} />
+            <SectionTitle title="Indicadores de Performance" subtitle={TEXTS.performance} />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+                <ModernKPICard label="Faturamento Total" value={data.kpis.revenue} percent={11.69} active={selectedMetric === 'revenue'} onClick={() => setSelectedMetric('revenue')} icon={<DollarSign size={18}/>} isCurrency />
+                <ModernKPICard label="Volume de Vendas" value={data.kpis.transactions} percent={-0.93} isRed active={selectedMetric === 'transactions'} onClick={() => setSelectedMetric('transactions')} icon={<ShoppingBag size={18}/>} />
+                <ModernKPICard label="Ticket Médio" value={data.kpis.ticketAverage} percent={12.74} active={selectedMetric === 'ticket'} onClick={() => setSelectedMetric('ticket')} icon={<TrendingUp size={18}/>} isCurrency />
+                <ModernKPICard label="Taxa de Recompra" value={data.kpis.repurchaseRate} percent={5.01} active={selectedMetric === 'repurchase'} onClick={() => setSelectedMetric('repurchase')} icon={<RefreshCw size={18}/>} isPercent />
             </div>
-            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-100/50 relative overflow-hidden"><div className="absolute top-8 right-8 z-10 bg-slate-50 p-1 rounded-lg border border-slate-200 flex">{['mensal', 'trimestral'].map((m:any) => (<button key={m} onClick={() => setViewMode(m)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === m ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{m === 'mensal' ? 'Mensal' : 'Trimestral'}</button>))}</div><div className="h-96 w-full mt-4"><ResponsiveContainer width="100%" height="100%"><LineChart data={mainGraphData} margin={{ top: 20, right: 0, left: -10, bottom: 0 }}><defs><linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={THEME.primary} stopOpacity={0.1}/><stop offset="95%" stopColor={THEME.primary} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 500}} dy={10} /><YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 500}} tickFormatter={kpiChartConfig[selectedMetric].yAxisFormat}/>{selectedMetric === 'ticket' && <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />}<Tooltip content={<CustomTooltip />} cursor={{stroke: '#e2e8f0', strokeWidth: 1}} /><Legend verticalAlign="top" height={36} iconType="circle" align="left" />{kpiChartConfig[selectedMetric].lines.map((line: any, idx: number) => { if (line.type === 'area' || (selectedMetric === 'revenue' && line.key === 'revenue')) { return <Area key={idx} type="monotone" yAxisId={line.yAxisId || 0} dataKey={line.key} name={line.name} stroke={line.color} strokeWidth={3} fill="url(#colorMetric)" activeDot={{r:6, strokeWidth: 0}} /> } return <Line key={idx} type="monotone" yAxisId={line.yAxisId || 0} dataKey={line.key} name={line.name} stroke={line.color} strokeWidth={line.width} dot={false} activeDot={{r:6}} /> })}</LineChart></ResponsiveContainer></div></div>
+            
+            {/* Gráfico Principal */}
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 relative">
+                <div className="absolute top-6 right-6 z-10 flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+                    {['mensal', 'trimestral'].map((m:any) => (
+                        <button key={m} onClick={() => setViewMode(m)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase ${viewMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{m}</button>
+                    ))}
+                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={mainGraphData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 500}} dy={10} />
+                        <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} tickFormatter={(val) => kpiChartConfig[selectedMetric].prefix + (val > 1000 ? val/1000 + 'k' : val)}/>
+                        {selectedMetric === 'ticket' && <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} />}
+                        <Tooltip content={<CustomTooltip />} cursor={{stroke: '#cbd5e1', strokeWidth: 1}} />
+                        <Legend verticalAlign="top" height={36} iconType="circle" align="left" wrapperStyle={{fontSize: '12px', fontWeight: 600, color: '#475569'}}/>
+                        {kpiChartConfig[selectedMetric].lines.map((line: any, idx: number) => { 
+                            if (line.type === 'area') return <Area key={idx} type="monotone" yAxisId={line.yAxisId || 0} dataKey={line.key} name={line.name} stroke={line.color} strokeWidth={2} fill="url(#colorMetric)" activeDot={{r:5}} />;
+                            return <Line key={idx} type="monotone" yAxisId={line.yAxisId || 0} dataKey={line.key} name={line.name} stroke={line.color} strokeWidth={2} dot={false} activeDot={{r:5}} />;
+                        })}
+                    </LineChart>
+                </ResponsiveContainer>
+            </div>
           </section>
 
-          {/* 2. BASE & 3. PERFIL */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <section><SectionTitle title="Base de consumidores" tooltip={TEXTS.consumidores} /><div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-lg shadow-slate-100/50 h-[420px]"><div className="h-full pb-4 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={mainGraphData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} dy={10} interval="preserveStartEnd" /><YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} /><Tooltip content={<CustomTooltip type="number" />} /><Legend verticalAlign="top" iconType="circle" /><Line type="monotone" dataKey="consumers" name="Total" stroke={THEME.textSub} strokeWidth={2} dot={false} /><Line type="monotone" dataKey="consumersActive" name="Ativos" stroke={THEME.success} strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div></div></section>
-            <section><SectionTitle title="Perfil de consumidores" tooltip={TEXTS.perfil_main} /><div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-lg shadow-slate-100/50 h-[420px] flex flex-col"><div className="flex gap-2 mb-6 overflow-x-auto pb-2"><MiniFilterButton label="Gasto Médio" active={selectedProfile === 'avgSpend'} onClick={() => setSelectedProfile('avgSpend')} /><MiniFilterButton label="Intervalo" active={selectedProfile === 'interval'} onClick={() => setSelectedProfile('interval')} /><MiniFilterButton label="Frequência" active={selectedProfile === 'frequency'} onClick={() => setSelectedProfile('frequency')} /></div><div className="flex-1 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={mainGraphData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#94a3b8'}} dy={10} interval="preserveStartEnd" /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#94a3b8'}} tickFormatter={profileChartConfig[selectedProfile].formatter} /><Tooltip content={<CustomTooltip type={selectedProfile === 'avgSpend' ? 'currency' : 'number'} />} /><Line type="monotone" dataKey={profileChartConfig[selectedProfile].dataKey} stroke={profileChartConfig[selectedProfile].color} strokeWidth={3} dot={false} name={profileChartConfig[selectedProfile].title} /></LineChart></ResponsiveContainer></div></div></section>
+          {/* 2. BASE & PERFIL */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <section>
+                <SectionTitle title="Evolução da Carteira" subtitle={TEXTS.carteira} />
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-[380px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={mainGraphData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                            <Tooltip content={<CustomTooltip type="number" />} />
+                            <Legend verticalAlign="top" iconType="circle" wrapperStyle={{fontSize: '11px', fontWeight: 600}} />
+                            <Line type="monotone" dataKey="consumers" name="Total Clientes Únicos" stroke={COLORS.secondary} strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="consumersActive" name="Ativos (Recentes)" stroke={COLORS.success} strokeWidth={2} dot={false} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            </section>
+            <section>
+                <SectionTitle title="Comportamento de Compra" subtitle={TEXTS.comportamento} />
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-[380px] flex flex-col">
+                    <div className="flex gap-2 mb-4">
+                        <TabButton 
+                            label="LTV Anual" 
+                            tooltip="Valor médio gasto por cliente acumulado em 12 meses."
+                            active={selectedProfile === 'avgSpend'} 
+                            onClick={() => setSelectedProfile('avgSpend')} 
+                        />
+                        <TabButton 
+                            label="Ciclo (Dias)" 
+                            tooltip="Média de dias que um cliente recorrente leva para comprar novamente."
+                            active={selectedProfile === 'interval'} 
+                            onClick={() => setSelectedProfile('interval')} 
+                        />
+                        <TabButton 
+                            label="Frequência" 
+                            tooltip="Quantidade média de compras por cliente no período."
+                            active={selectedProfile === 'frequency'} 
+                            onClick={() => setSelectedProfile('frequency')} 
+                        />
+                    </div>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={mainGraphData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} />
+                                <Tooltip content={<CustomTooltip type={selectedProfile === 'avgSpend' ? 'currency' : 'number'} />} />
+                                <Line type="step" dataKey={profileConfig[selectedProfile].dataKey} stroke={profileConfig[selectedProfile].color} strokeWidth={2} dot={false} name={profileConfig[selectedProfile].title} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </section>
           </div>
 
-          {/* 4. GRUPO */}
-          <section><SectionTitle title="Grupo de consumidores" tooltip={TEXTS.grupo} /><div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-lg shadow-slate-100/50 h-96 relative"><div className="absolute top-8 right-8 z-10 flex gap-2 bg-slate-50 p-1 rounded-lg"><button onClick={() => setGroupMode('people')} className={`px-3 py-1 text-xs font-bold rounded transition ${groupMode === 'people' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}>Pessoas</button><button onClick={() => setGroupMode('revenue')} className={`px-3 py-1 text-xs font-bold rounded transition ${groupMode === 'revenue' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}>Receita</button></div><ResponsiveContainer width="100%" height="100%"><BarChart data={mainGraphData} barSize={32}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} tickFormatter={(val) => groupMode === 'revenue' ? `R$ ${val/1000}k` : val} /><Tooltip content={<CustomTooltip type={groupMode === 'revenue' ? 'currency' : 'number'} />} cursor={{fill: '#f8fafc'}} /><Legend iconType="circle" align="left" verticalAlign="top" height={36} /><Bar dataKey={groupMode === 'people' ? 'groupRecurrent' : 'revenueRecurrent'} name="Recorrentes" stackId="a" fill={THEME.primary} radius={[0,0,0,0]} /><Bar dataKey={groupMode === 'people' ? 'groupNew' : 'revenueNew'} name="Novos" stackId="a" fill={THEME.success} radius={[0,0,0,0]} /><Bar dataKey={groupMode === 'people' ? 'groupRecovered' : 'revenueRecovered'} name="Recuperados" stackId="a" fill={THEME.gray} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div></section>
-
-          {/* 5. IMPACTO DIGITAL */}
+          {/* 4. SEGMENTAÇÃO */}
           <section>
-            <div className="flex justify-between items-center mb-6 mt-8"><SectionTitle title="Impacto das ações digitais" tooltip={TEXTS.impacto_titulo} /><div className="bg-slate-50 p-1 rounded-lg border border-slate-200 flex"><button onClick={() => setImpactViewMode('mensal')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${impactViewMode === 'mensal' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>Mensal</button><button onClick={() => setImpactViewMode('trimestral')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${impactViewMode === 'trimestral' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>Trimestral</button></div></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-lg shadow-slate-100/50 flex flex-col items-center justify-center relative overflow-hidden"><div className="absolute top-0 right-0 p-6 opacity-10"><Activity size={100} className="text-indigo-200"/></div><div className="relative w-64 h-64 z-10"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{value: Number(donutTotals.percent)}, {value: 100 - Number(donutTotals.percent)}]} innerRadius={80} outerRadius={95} startAngle={90} endAngle={-270} dataKey="value" stroke="none" cornerRadius={10} paddingAngle={5}><Cell fill={THEME.success} /> <Cell fill="#f1f5f9" /></Pie></PieChart></ResponsiveContainer><div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Influência</span><span className="text-4xl font-black text-slate-800 tracking-tight">{donutTotals.percent}%</span></div></div><div className="w-full mt-6 space-y-3"><div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-slate-300"/><span className="text-sm font-bold text-slate-600">Receita Total</span></div><span className="font-mono font-bold text-slate-700">R$ {(donutTotals.total/1000000).toFixed(1)}mi</span></div><div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl border border-emerald-100"><div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-emerald-500"/><span className="text-sm font-bold text-emerald-800">Influenciada</span></div><span className="font-mono font-bold text-emerald-700">R$ {(donutTotals.influenced/1000000).toFixed(1)}mi</span></div></div></div>
-                <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-100 shadow-lg shadow-slate-100/50 h-[450px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={impactGraphData} barSize={18}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#94a3b8'}} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#94a3b8'}} tickFormatter={(val) => `R$ ${(val/1000000).toFixed(1)} mi`} /><Tooltip content={<CustomTooltip type="currency" />} cursor={{fill: '#f8fafc'}} /><Legend verticalAlign="top" align="right" iconType="circle" height={36} /><Bar dataKey="revenueInfluenced" name="Receita influenciada" stackId="a" fill={THEME.success} radius={[0,0,4,4]} /><Bar dataKey="revenueOrganic" name="Receita orgânica" stackId="a" fill={THEME.primary} radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></div>
+            <SectionTitle title="Segmentação da Base" subtitle={TEXTS.segmentacao} />
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 relative">
+                <div className="absolute top-6 right-6 z-10 flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+                    <button onClick={() => setGroupMode('people')} className={`px-3 py-1 text-[10px] font-bold rounded transition ${groupMode === 'people' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>Pessoas</button>
+                    <button onClick={() => setGroupMode('revenue')} className={`px-3 py-1 text-[10px] font-bold rounded transition ${groupMode === 'revenue' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>Receita</button>
+                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={mainGraphData} barSize={24}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
+                        <Tooltip content={<CustomTooltip type={groupMode === 'revenue' ? 'currency' : 'number'} />} cursor={{fill: '#f8fafc'}} />
+                        <Legend iconType="circle" align="left" verticalAlign="top" height={36} wrapperStyle={{fontSize:'12px'}}/>
+                        <Bar dataKey={groupMode === 'people' ? 'groupRecurrent' : 'revenueRecurrent'} name="Recorrentes" stackId="a" fill={COLORS.primary} />
+                        <Bar dataKey={groupMode === 'people' ? 'groupNew' : 'revenueNew'} name="Novos Clientes" stackId="a" fill={COLORS.success} />
+                        <Bar dataKey={groupMode === 'people' ? 'groupRecovered' : 'revenueRecovered'} name="Recuperados" stackId="a" fill={COLORS.neutral} />
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
           </section>
 
-          {/* 6. IMPACTO POR CANAL (SMART GRID)*/}
+          {/* 5. ATRIBUIÇÃO DE RECEITA (ORGANIZADO) */}
           <section>
-              <div className="flex justify-between items-center mt-8 mb-6 relative z-50">
-                  <SectionTitle title="Impacto por canal" tooltip={TEXTS.impacto_canal} />
-                  
-                  <div className="relative" ref={channelFilterRef}>
-                      <button
-                          onClick={(e) => {
-                              e.stopPropagation();
-                              setIsChannelFilterOpen(!isChannelFilterOpen); 
-                          }}
-                          className={`flex items-center gap-2 border px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${
-                              isChannelFilterOpen || activeFilters.length > 0 
-                              ? 'bg-indigo-50 border-indigo-300 text-indigo-600' 
-                              : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
-                          }`}
-                      >
-                          <Filter size={16} /> 
-                          {activeFilters.length > 0 ? `${activeFilters.length} Canais` : 'Filtrar Canais'} 
-                          <ChevronDown size={16} className={`transition-transform ${isChannelFilterOpen ? 'rotate-180' : ''}`}/>
-                      </button>
+             <SectionTitle title="Atribuição de Receita" subtitle={TEXTS.impacto} />
+             
+             {/* BLOCO DE CIMA: RECEITA (DONUT + ÁREA) */}
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                {/* 1/3: Donut (Snapshot) */}
+                <div className="lg:col-span-1">
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center h-full">
+                        <div className="relative w-48 h-48">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={[{value: Number(donutTotals.percent)}, {value: 100 - Number(donutTotals.percent)}]} innerRadius={60} outerRadius={75} startAngle={90} endAngle={-270} dataKey="value" stroke="none" paddingAngle={5}>
+                                        <Cell fill={COLORS.success} /> <Cell fill="#f1f5f9" />
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-3xl font-black text-slate-800 tracking-tighter">{donutTotals.percent}%</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">TAXA DE INFLUÊNCIA</span>
+                            </div>
+                        </div>
+                        <div className="w-full mt-6 space-y-3">
+                            <div className="flex justify-between text-sm border-b border-slate-100 pb-2">
+                                <span className="text-slate-500">Receita Total</span>
+                                <span className="font-bold text-slate-700">{donutTotals.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-emerald-600 font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>Influenciada</span>
+                                <span className="font-bold text-emerald-600">{donutTotals.influenced.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                      {isChannelFilterOpen && (
-                          <div 
-                              className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 p-4" 
-                              onClick={(e) => e.stopPropagation()} 
-                          >
-                              <div className="flex justify-between items-center mb-3">
-                                  <p className="text-xs font-bold text-slate-400 uppercase">Exibir Canais</p>
-                                  {activeFilters.length > 0 && (
-                                      <button 
-                                          onClick={(e) => {
-                                              e.stopPropagation(); 
-                                              setActiveFilters([]);
-                                          }}
-                                          className="text-[10px] text-indigo-600 font-bold hover:underline"
-                                      >
-                                          LIMPAR
-                                      </button>
-                                  )}
-                              </div>
-                              
-                              <div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">
-                                  {PRIMITIVE_CHANNELS.map(ch => (
-                                      <div
-                                          key={ch}
-                                          className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors group select-none"
-                                          onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation(); 
-                                              toggleChannelFilter(ch);
-                                          }}
-                                      >
-                                          <div className={`pointer-events-none w-5 h-5 rounded border flex items-center justify-center transition-colors ${activeFilters.includes(ch) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white group-hover:border-indigo-300'}`}>
-                                              {activeFilters.includes(ch) && <Check size={14} className="text-white" />}
-                                          </div>
-                                          <span className={`pointer-events-none text-sm font-medium ${activeFilters.includes(ch) ? 'text-indigo-900' : 'text-slate-700'}`}>
-                                              {ch}
-                                          </span>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )}
-                  </div>
-              </div>
+                {/* 2/3: Gráfico de Área (Evolução) */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-sm font-bold text-slate-800">Evolução: Orgânico vs. Influenciado</h3>
+                            <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+                                {['mensal', 'trimestral'].map((m:any) => (
+                                    <button key={m} onClick={() => setImpactViewMode(m)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase ${impactViewMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{m}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={impactGraphData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} tickFormatter={(val) => (val > 1000000 ? `R$ ${(val/1000000).toFixed(1)}mi` : `R$ ${(val/1000).toFixed(0)}k`)} />
+                                    <Tooltip content={<CustomTooltip type="currency" />} cursor={{stroke: '#cbd5e1'}} />
+                                    <Legend iconType="circle" align="left" verticalAlign="top" height={36} wrapperStyle={{fontSize:'12px'}}/>
+                                    <Area type="monotone" dataKey="revenueInfluenced" name="Receita Influenciada" stackId="1" stroke={COLORS.success} fill={COLORS.success} fillOpacity={0.8} />
+                                    <Area type="monotone" dataKey="revenueOrganic" name="Receita Orgânica" stackId="1" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.2} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+             </div>
 
-              {/* Z-INDEX 0 + Relative: Garante que o grid fique atrás do menu */}
-              <div className={`grid gap-6 mb-8 relative z-0 ${getGridClass(visibleCards.length)}`}>
-                  {visibleCards.map((card: any, idx: number) => (
-                      <div key={idx} className={getSlotClass(idx, visibleCards.length)}>
-                          <ModernChannelCard data={card} isBig={idx === 0 && visibleCards.length >= 3} />
-                      </div>
-                  ))}
-              </div>
+             {/* BLOCO DE BAIXO: CANAIS (CARDS + TABELA) */}
+             <div className="flex flex-col gap-6">
+                <div className="flex justify-between items-center">
+                    <SectionTitle title="Performance por Canal" subtitle={TEXTS.canais} />
+                    
+                    {/* FILTRO CANAIS */}
+                    <div className="relative" ref={channelFilterRef}>
+                        <button onClick={(e) => { e.stopPropagation(); setIsChannelFilterOpen(!isChannelFilterOpen); }} className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:border-violet-400 transition">
+                            <Filter size={12} /> Filtrar Canais <ChevronDown size={12}/>
+                        </button>
+                        {isChannelFilterOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-xl p-3 z-50" onClick={(e) => e.stopPropagation()}>
+                                <div className="space-y-1">
+                                    {PRIMITIVE_CHANNELS.map(ch => (
+                                        <div key={ch} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleChannelFilter(ch); }}>
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${activeFilters.includes(ch) ? 'bg-violet-600 border-violet-600' : 'bg-white border-slate-300'}`}>
+                                                {activeFilters.includes(ch) && <Check size={10} className="text-white" />}
+                                            </div>
+                                            <span className="text-xs text-slate-700">{ch}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="pt-2 mt-2 border-t text-right">
+                                    <span onClick={(e) => {e.stopPropagation(); setActiveFilters([])}} className="text-[10px] font-bold text-red-500 cursor-pointer hover:underline">Limpar</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
 
-              {/* Tabela de Dados com Busca Corrigida */}
-              <ChannelsTable data={allTableData} />
+                {/* Bento Grid */}
+                <div className={`grid gap-4 relative z-0 ${getGridClass(visibleCards.length)}`}>
+                    {visibleCards.map((card: any, idx: number) => (
+                        <div key={idx} className={getSlotClass(idx, visibleCards.length)}>
+                            <ModernChannelCard data={card} isBig={idx === 0 && visibleCards.length >= 3} />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Tabela de Canais */}
+                <ChannelsTable data={allTableData} />
+             </div>
           </section>
 
-          {/* 7. LISTA DE LOJAS (ISOLADA) */}
+          {/* 7. LISTA DE LOJAS */}
           <StoresTableSection stores={staticStores} />
 
         </div>
@@ -421,195 +593,177 @@ export default function RetailResultsPage() {
   );
 }
 
-// --- COMPONENTES AUXILIARES ---
+// --- COMPONENTES VISUAIS (DESIGN SYSTEM) ---
 
-function getGridClass(count: number) {
-    if (count <= 2) return "grid-cols-1 lg:grid-cols-2 h-[300px]";
-    if (count === 3) return "grid-cols-1 lg:grid-cols-3 h-[300px]";
-    if (count === 4) return "grid-cols-2 lg:grid-cols-2 h-[400px]"; 
-    return "grid-cols-1 lg:grid-cols-3 h-[450px]"; 
+function SectionTitle({title, subtitle}: {title: string, subtitle?: string}) { 
+    return (
+        <div className="mb-4">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-1 h-5 bg-violet-500 rounded-full"></span>
+                {title}
+            </h2>
+            {subtitle && <p className="text-xs text-slate-400 ml-3 mt-0.5">{subtitle}</p>}
+        </div>
+    )
 }
 
-function getSlotClass(index: number, total: number) {
-     if (total > 4 && index === 0) return "lg:col-span-2 lg:row-span-2 h-full";
-     return "col-span-1 h-full";
+function ModernKPICard({ label, value, percent, active, onClick, icon, isRed, isCurrency, isPercent }: any) {
+    let display = value;
+    if(typeof value === 'number') {
+        if(isPercent) display = value.toFixed(2) + "%";
+        else if(isCurrency) display = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
+        else display = value.toLocaleString('pt-BR');
+    }
+
+    return (
+        <div onClick={onClick} className={`relative bg-white p-5 rounded-xl border transition-all cursor-pointer group hover:-translate-y-1 ${active ? 'border-violet-500 shadow-md ring-1 ring-violet-500' : 'border-slate-200 hover:border-violet-300 shadow-sm'}`}>
+            <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${active ? 'bg-violet-500' : 'bg-transparent group-hover:bg-violet-200'}`} />
+            <div className="flex justify-between items-start mb-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${isRed ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    {percent > 0 ? <ArrowUp size={10}/> : <ArrowDown size={10}/>} {Math.abs(percent)}%
+                </span>
+            </div>
+            <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${active ? 'bg-violet-100 text-violet-700' : 'bg-slate-50 text-slate-400 group-hover:text-violet-500'}`}>{icon}</div>
+                <span className="text-2xl font-bold text-slate-800 tracking-tight">{display}</span>
+            </div>
+        </div>
+    )
 }
 
-function SelectableCard({ label, value, percent, isRed, isPercent, active, onClick, icon, tooltipText }: any) { let formattedValue = value; if (typeof value === 'number') { if (isPercent) formattedValue = `${value}%`; else formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); } return <div onClick={onClick} className={`p-6 rounded-2xl border cursor-pointer transition-all duration-300 bg-white group relative overflow-hidden ${active ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-lg shadow-indigo-100' : 'border-slate-100 hover:border-indigo-200 hover:shadow-md'}`}>{tooltipText && <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-800 text-white text-xs p-3 rounded-lg hidden group-hover:block z-50 shadow-xl text-center transition-opacity">{tooltipText}<div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div></div>}<div className="flex justify-between items-start mb-3 relative z-10"><div className="flex items-center gap-3 text-slate-500"><div className={`p-2 rounded-lg transition-colors ${active ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50'}`}>{icon}</div><span className="text-xs uppercase font-bold tracking-wider">{label}</span></div><span className={`text-xs font-bold px-2 py-1 rounded-full flex items-center ${isRed ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>{percent > 0 ? <ArrowUp size={12} className="mr-1"/> : ''} {Math.abs(percent)}%</span></div><span className="text-2xl font-black text-slate-800 tracking-tight relative z-10">{formattedValue}</span>{active && <div className="absolute right-0 bottom-0 w-24 h-24 bg-gradient-to-tl from-indigo-50 to-transparent rounded-tl-full opacity-50" />}</div> }
-function ModernChannelCard({ data, isBig, small }: any) { if (!data) return null; return <div className={`relative overflow-hidden rounded-2xl transition-all duration-500 ease-out group border border-slate-100 bg-white w-full h-full flex flex-col justify-center items-center p-1 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200`}><div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-50 to-white rounded-full -mr-10 -mt-10 opacity-30 transition-transform group-hover:scale-150" /><div className="z-10 flex flex-col items-center justify-center h-full w-full"><div className={`p-4 rounded-2xl mb-3 text-indigo-600 bg-slate-50 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300 shadow-inner ${isBig ? 'scale-125' : ''}`}>{CHANNEL_ICONS[data.name] || <Target size={24}/>}</div><h3 className="text-slate-500 font-bold uppercase tracking-wider text-[10px] group-hover:text-indigo-900 text-center transition-colors">{data.name}</h3></div><div className="absolute inset-x-0 bottom-0 h-full flex flex-col justify-center items-center bg-white/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-4 group-hover:translate-y-0 z-20">{data.isOther ? (<div className="w-full h-full p-4 overflow-auto custom-scrollbar"><p className="text-center text-slate-400 text-[10px] font-bold uppercase border-b border-slate-100 pb-2 mb-2">OUTROS CANAIS</p>{data.items.map((item: any, idx: number) => (<div key={idx} className="flex justify-between items-center text-[10px] border-b border-slate-50 py-1.5"><span className="truncate w-20 text-slate-600 font-medium">{item.name}</span><span className="font-bold text-indigo-600">{item.percent}%</span></div>))}</div>) : (<div className="text-center"><p className="text-slate-400 text-[10px] font-bold uppercase mb-1">Receita Gerada</p><h4 className={`${isBig ? 'text-3xl' : 'text-lg'} font-black text-slate-800 mb-3`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(data.value)}</h4><div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 mx-auto shadow-sm"><span className="text-[10px] font-bold text-indigo-400 uppercase">INF</span><span className="text-xs font-bold text-indigo-700">{data.percent}%</span></div></div>)}</div></div> }
-function EmptySlot() { return <div className="h-full w-full bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-slate-300 text-xs font-medium uppercase tracking-wider">Vazio</div> }
-function SectionTitle({title, tooltip}: {title: string, tooltip?: string}) { return <div className="flex items-center gap-2 mt-2 mb-4 group relative w-fit"><h2 className="text-lg font-bold text-slate-800 tracking-tight">{title}</h2>{tooltip && <><span className="text-slate-400 text-[10px] border border-slate-200 rounded-full w-4 h-4 flex items-center justify-center cursor-help hover:bg-slate-100 hover:text-slate-600 transition-colors">?</span><div className="absolute bottom-full left-0 mb-2 w-80 bg-slate-800 text-white text-sm p-4 rounded-xl shadow-xl hidden group-hover:block z-50 whitespace-pre-line leading-relaxed text-left shadow-slate-900/20">{tooltip}<div className="absolute top-full left-4 border-8 border-transparent border-t-slate-800"></div></div></>}</div> }
-const CustomTooltip = ({ active, payload, label, type }: any) => { if (active && payload && payload.length) { return (<div className="bg-slate-900/95 backdrop-blur text-white p-4 shadow-2xl rounded-xl text-sm z-50 border border-slate-800"><p className="font-bold text-slate-300 mb-2 text-xs uppercase tracking-wider">{label}</p>{payload.map((entry: any, index: number) => { let displayValue = entry.value; const isCurrency = type === 'currency' || (type !== 'number' && typeof entry.value === 'number' && entry.value > 100 && !entry.name.includes('Frequência') && !entry.name.includes('Peças') && !entry.name.includes('Transações') && !entry.name.includes('Consumidores')); if (typeof entry.value === 'number') displayValue = isCurrency ? `R$ ${entry.value.toLocaleString('pt-BR')}` : entry.value.toLocaleString('pt-BR'); return <div key={index} className="flex items-center gap-3 mb-1.5 last:mb-0"><div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" style={{ backgroundColor: entry.color }}></div><span className="text-slate-300">{entry.name}:</span><span className="font-bold text-white ml-auto">{displayValue}</span></div> })}</div>); } return null; };
-function MiniFilterButton({ label, active, onClick }: any) { return <button onClick={onClick} className={`px-4 py-2 text-xs font-bold rounded-full transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{label}</button> }
-function NavItem({ icon, label, active }: any) { return <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-gray-800 hover:text-white'}`}>{icon}<span className="text-sm font-medium">{label}</span></div> }
+function TabButton({ label, active, onClick, tooltip }: any) {
+    return (
+        <div className="relative group">
+            <button onClick={onClick} className={`flex items-center gap-2 px-4 py-1.5 text-xs font-bold rounded-full border transition-all ${active ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                {label}
+                {tooltip && <Info size={10} className={active ? 'text-slate-400' : 'text-slate-300'} />}
+            </button>
+            {tooltip && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-800 text-white text-[10px] p-2 rounded-lg shadow-xl hidden group-hover:block z-50 text-center leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    {tooltip}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                </div>
+            )}
+        </div>
+    )
+}
 
-// --- COMPONENTES ISOLADOS (Para Performance de Busca) ---
+function NavItem({ icon, label, active }: any) {
+    return (
+        <div className={`flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg cursor-pointer transition-all ${active ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>
+            {icon}
+            <span className="text-sm font-medium hidden lg:block">{label}</span>
+        </div>
+    )
+}
+
+function ModernChannelCard({ data, isBig }: any) { 
+    if (!data) return null; 
+    return (
+        <div className="relative overflow-hidden rounded-xl bg-white border border-slate-200 p-4 h-full flex flex-col justify-between hover:shadow-md transition-shadow group">
+            <div className="flex justify-between items-start">
+                <div className={`p-3 rounded-lg ${data.isOther ? 'bg-slate-100 text-slate-500' : 'bg-violet-50 text-violet-600'}`}>
+                    {CHANNEL_ICONS[data.name] || <Target size={20}/>}
+                </div>
+                <span className="bg-slate-50 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-full border border-slate-100">
+                    {data.percent}%
+                </span>
+            </div>
+            <div>
+                <h4 className="text-slate-500 text-xs font-bold uppercase mb-1 mt-2">{data.name}</h4>
+                <p className="text-lg font-bold text-slate-800">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(data.value)}
+                </p>
+            </div>
+            {data.isOther && (
+                <div className="absolute inset-0 bg-white/95 backdrop-blur flex flex-col p-4 opacity-0 group-hover:opacity-100 transition-opacity justify-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Detalhes</p>
+                    {data.items.slice(0,3).map((it:any, idx:number) => (
+                        <div key={idx} className="flex justify-between text-xs py-1 border-b border-slate-100">
+                            <span>{it.name}</span>
+                            <span className="font-bold">{it.percent}%</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    ) 
+}
 
 function StoresTableSection({ stores }: { stores: any[] }) {
     const [search, setSearch] = useState("");
     const deferredSearch = useDeferredValue(search);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(5);
-
-    // Estado para ordenação
-    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
-        key: 'revenue', // Ordenação padrão por Receita
-        direction: 'desc'
-    });
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
     const handleSort = (key: string) => {
-        setSortConfig((current) => ({
-            key,
-            direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc',
-        }));
+        setSortConfig((current) => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' }));
     };
 
     const { paginatedStores, totalStores, totalPages } = useMemo(() => {
-        let processedData = [...stores];
+        let processed = [...stores];
+        if (deferredSearch) processed = processed.filter(s => s.name.toLowerCase().includes(deferredSearch.toLowerCase()));
+        
+        processed.sort((a, b) => {
+            let valA = a[sortConfig.key];
+            let valB = b[sortConfig.key];
+            if (typeof valA === 'string' && !isNaN(Number(valA))) valA = Number(valA);
+            if (typeof valB === 'string' && !isNaN(Number(valB))) valB = Number(valB);
+            return sortConfig.direction === 'asc' ? (valA < valB ? -1 : 1) : (valA > valB ? -1 : 1);
+        });
 
-        // 1. Filtrar (Busca)
-        const term = deferredSearch.trim().toLowerCase();
-        if (term) {
-            processedData = processedData.filter(s => 
-                s.name.toLowerCase().includes(term) || 
-                String(s.id).includes(term)
-            );
-        }
-
-        // 2. Ordenar
-        if (sortConfig.key) {
-            processedData.sort((a, b) => {
-                let valA = a[sortConfig.key];
-                let valB = b[sortConfig.key];
-
-                // Tratamento especial para strings numéricas (ex: "45.2")
-                if (typeof valA === 'string' && !isNaN(Number(valA))) valA = Number(valA);
-                if (typeof valB === 'string' && !isNaN(Number(valB))) valB = Number(valB);
-
-                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
-
-        // 3. Paginar
-        const total = processedData.length;
-        const pages = Math.ceil(total / perPage);
         const start = (page - 1) * perPage;
-        const pagedData = processedData.slice(start, start + perPage);
-
-        return { paginatedStores: pagedData, totalStores: total, totalPages: pages };
+        return { paginatedStores: processed.slice(start, start + perPage), totalStores: processed.length, totalPages: Math.ceil(processed.length / perPage) };
     }, [stores, deferredSearch, page, perPage, sortConfig]);
 
-    useEffect(() => { setPage(1); }, [deferredSearch, sortConfig]);
-
-    // Componente auxiliar para Cabeçalho Ordenável
-    const SortableHeader = ({ label, sortKey, align = "left" }: any) => (
-        <th 
-            className={`px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none text-${align}`}
-            onClick={() => handleSort(sortKey)}
-        >
+    const SortHeader = ({ label, k, align="left" }: any) => (
+        <th className={`px-6 py-3 text-xs font-bold text-slate-500 uppercase cursor-pointer hover:text-violet-600 transition text-${align}`} onClick={() => handleSort(k)}>
             <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}>
-                {label}
-                <div className="flex flex-col">
-                    {sortConfig.key === sortKey && (
-                        sortConfig.direction === 'asc' 
-                            ? <ArrowUp size={12} className="text-indigo-600" />
-                            : <ArrowDown size={12} className="text-indigo-600" />
-                    )}
-                    {sortConfig.key !== sortKey && (
-                        <div className="h-3 w-3 opacity-20">
-                           <ArrowDown size={12} />
-                        </div>
-                    )}
-                </div>
+                {label} {sortConfig.key === k && (sortConfig.direction === 'asc' ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
             </div>
         </th>
     );
 
     return (
         <section>
-            <SectionTitle title="Lista de lojas" />
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 relative">
-                    <Search className="absolute left-10 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                        type="text" 
-                        value={search} 
-                        onChange={(e) => setSearch(e.target.value)} 
-                        placeholder="Buscar por loja..." 
-                        className="pl-12 pr-4 py-3 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" 
-                    />
+            <SectionTitle title="Ranking de Lojas" />
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+                    <Search className="text-slate-400" size={16} />
+                    <input type="text" placeholder="Filtrar lojas..." value={search} onChange={(e) => setSearch(e.target.value)} className="text-sm outline-none w-full placeholder-slate-400 text-slate-700"/>
                 </div>
-                
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
-                            <SortableHeader label="Nome da Loja" sortKey="name" />
-                            <SortableHeader label="Receita" sortKey="revenue" />
-                            <SortableHeader label="Influência" sortKey="revenueInfluenced" />
-                            <SortableHeader label="Transações" sortKey="transactions" />
-                            <SortableHeader label="Recompra" sortKey="repurchase" align="center" />
-                            <SortableHeader label="PA (Peças)" sortKey="itemsPerTicket" align="center" />
-                            <SortableHeader label="Ticket Médio" sortKey="ticket" align="right" />
+                            <SortHeader label="Loja" k="name" />
+                            <SortHeader label="Receita" k="revenue" />
+                            <SortHeader label="Influência" k="revenueInfluenced" />
+                            <SortHeader label="Transações" k="transactions" />
+                            <SortHeader label="Recompra" k="repurchase" align="center" />
+                            <SortHeader label="PA" k="itemsPerTicket" align="center" />
+                            <SortHeader label="Ticket Médio" k="ticket" align="right" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {paginatedStores.map((store: any) => (
-                            <tr key={store.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                <td className="px-6 py-4">
-                                    <div className="font-bold text-slate-800">{store.name}</div>
-                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {store.code}</div>
-                                </td>
-                                <td className="px-6 py-4 font-mono text-slate-600">
-                                    R$ {store.revenue.toLocaleString('pt-BR', {maximumFractionDigits:0})}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-mono text-slate-600">R$ {store.revenueInfluenced.toLocaleString('pt-BR', {maximumFractionDigits:0})}</span>
-                                        <span className="text-[10px] font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full">{store.percentInfluenced}%</span>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 text-slate-500">{store.transactions}</td>
-                                
-                                {/* COLUNA RECOMPRA */}
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${Number(store.repurchase) > 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                                        {store.repurchase || "0.0"}%
-                                    </span>
-                                </td>
-
-                                {/* COLUNA PA */}
-                                <td className="px-6 py-4 text-center font-mono text-slate-600">
-                                    {store.itemsPerTicket || "0.00"}
-                                </td>
-
-                                <td className="px-6 py-4 font-mono text-slate-500 text-right">
-                                    R$ {store.ticket.toFixed(2)}
-                                </td>
+                        {paginatedStores.map((s: any) => (
+                            <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-4 font-bold text-slate-700">{s.name}</td>
+                                <td className="px-6 py-4 font-mono text-slate-600">R$ {s.revenue.toLocaleString('pt-BR', {maximumFractionDigits:0})}</td>
+                                <td className="px-6 py-4 font-mono text-slate-600">R$ {s.revenueInfluenced.toLocaleString('pt-BR', {maximumFractionDigits:0})}</td>
+                                <td className="px-6 py-4 text-slate-500">{s.transactions}</td>
+                                <td className="px-6 py-4 text-center"><span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">{s.repurchase}%</span></td>
+                                <td className="px-6 py-4 text-center text-slate-600 font-mono">{s.itemsPerTicket}</td>
+                                <td className="px-6 py-4 text-right font-bold text-slate-700">R$ {s.ticket.toFixed(2)}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-
-                {/* Footer da Tabela */}
-                <div className="p-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500 bg-slate-50">
-                    <div className="flex items-center gap-2">
-                        <span>Lojas por página:</span>
-                        <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className="border rounded p-1 bg-white outline-none cursor-pointer hover:border-indigo-300">
-                            <option value="5">5</option>
-                            <option value="10">10</option>
-                            <option value="20">20</option>
-                        </select>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <span>{(page-1)*perPage+1}-{Math.min(page*perPage, totalStores)} de {totalStores}</span>
-                        <div className="flex gap-1">
-                            <button disabled={page===1} onClick={()=>setPage(page-1)} className="p-1.5 rounded bg-white border hover:bg-slate-100 disabled:opacity-50"><ChevronLeft size={14}/></button>
-                            <span className="px-2 py-1.5 font-bold bg-indigo-600 text-white rounded">{page}</span>
-                            <button disabled={page===totalPages} onClick={()=>setPage(page+1)} className="p-1.5 rounded bg-white border hover:bg-slate-100 disabled:opacity-50"><ChevronRight size={14}/></button>
-                        </div>
-                    </div>
+                <div className="p-4 border-t border-slate-100 flex justify-end gap-2 text-xs text-slate-500">
+                    <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page===1} className="disabled:opacity-30 hover:text-violet-600 font-bold"><ChevronLeft size={16}/></button>
+                    <span>Página {page} de {totalPages}</span>
+                    <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page===totalPages} className="disabled:opacity-30 hover:text-violet-600 font-bold"><ChevronRight size={16}/></button>
                 </div>
             </div>
         </section>
@@ -618,74 +772,63 @@ function StoresTableSection({ stores }: { stores: any[] }) {
 
 function ChannelsTable({ data }: { data: any[] }) {
     const [search, setSearch] = useState("");
-    const deferredSearch = useDeferredValue(search);
-
-    const filteredData = useMemo(() => {
-        const term = deferredSearch.trim().toLowerCase();
-        if (!term) return data;
-        return data.filter(ch => ch.name.toLowerCase().includes(term));
-    }, [data, deferredSearch]);
-
-    const handleExportCSV = () => {
-        if (!filteredData.length) return;
-        const headers = "Canal;Valor;Influencia\n";
-        const rows = filteredData.map((c:any) => `${c.name};${c.value};${c.percent}%`).join("\n");
-        const blob = new Blob([headers + rows], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = "canais.csv"; a.click();
-    };
-
+    const deferred = useDeferredValue(search);
+    const filtered = useMemo(() => data.filter(c => c.name.toLowerCase().includes(deferred.toLowerCase())), [data, deferred]);
+    
     return (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar na tabela..." 
-                        value={search} 
-                        onChange={(e) => setSearch(e.target.value)} 
-                        className="pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-80 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all" 
-                    />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+            <div className="p-4 border-b border-slate-100 flex justify-between">
+                <div className="flex items-center gap-2 w-full max-w-xs bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                    <Search size={14} className="text-slate-400"/>
+                    <input type="text" placeholder="Buscar canal..." className="bg-transparent outline-none text-xs w-full" value={search} onChange={e=>setSearch(e.target.value)}/>
                 </div>
-                <button onClick={handleExportCSV} className="text-indigo-600 text-sm bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-indigo-100 font-bold transition-colors">
-                    <Download size={18} /> Exportar CSV
-                </button>
+                <button className="text-xs font-bold text-violet-600 hover:bg-violet-50 px-3 py-1.5 rounded-lg transition">Exportar CSV</button>
             </div>
-            
-            <table className="w-full text-sm text-left text-slate-600">
-                <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    <tr>
-                        <th className="px-6 py-4">Canal</th>
-                        <th className="px-6 py-4">Valor</th>
-                        <th className="px-6 py-4 text-right">% Infl.</th>
-                    </tr>
+            <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase text-left">
+                    <tr><th className="px-6 py-3">Canal</th><th className="px-6 py-3">Receita</th><th className="px-6 py-3 text-right">% Share</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    {filteredData.map((ch: any, idx: number) => (
-                        <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
-                                <div className="p-1.5 rounded bg-slate-100 text-slate-500">
-                                    {CHANNEL_ICONS[ch.name] || <Target size={16} />}
-                                </div> 
-                                {ch.name}
-                            </td>
-                            <td className="px-6 py-4 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td>
-                            <td className="px-6 py-4 text-right">
-                                <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">{ch.percent}%</span>
-                            </td>
+                    {filtered.map((ch: any, i:number) => (
+                        <tr key={i} className="hover:bg-slate-50">
+                            <td className="px-6 py-3 font-bold text-slate-700 flex items-center gap-2">{CHANNEL_ICONS[ch.name] || <Target size={16}/>} {ch.name}</td>
+                            <td className="px-6 py-3 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td>
+                            <td className="px-6 py-3 text-right"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{ch.percent}%</span></td>
                         </tr>
                     ))}
-                    
-                    {filteredData.length === 0 && (
-                        <tr>
-                            <td colSpan={3} className="px-6 py-8 text-center text-slate-400">
-                                Nenhum canal encontrado para "{search}"
-                            </td>
-                        </tr>
-                    )}
                 </tbody>
             </table>
         </div>
-    );
+    )
 }
+
+function getGridClass(count: number) {
+    if (count <= 2) return "grid-cols-1 lg:grid-cols-2 h-[200px]"; // Altura menor, mais compacto
+    if (count === 3) return "grid-cols-1 lg:grid-cols-3 h-[200px]";
+    return "grid-cols-1 lg:grid-cols-3 h-[400px]"; 
+}
+
+function getSlotClass(index: number, total: number) {
+     if (total > 4 && index === 0) return "lg:col-span-2 lg:row-span-2 h-full";
+     return "col-span-1 h-full";
+}
+
+const CustomTooltip = ({ active, payload, label, type }: any) => { 
+    if (active && payload && payload.length) { 
+        return (
+            <div className="bg-slate-900 text-white p-3 shadow-xl rounded-lg text-xs border border-slate-700">
+                <p className="font-bold text-slate-400 mb-2 uppercase tracking-wider">{label}</p>
+                {payload.map((entry: any, index: number) => (
+                    <div key={index} className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                        <span className="text-slate-300">{entry.name}:</span>
+                        <span className="font-bold text-white ml-auto">
+                            {type === 'currency' ? `R$ ${entry.value.toLocaleString('pt-BR')}` : entry.value.toLocaleString('pt-BR')}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        ); 
+    } 
+    return null; 
+};
