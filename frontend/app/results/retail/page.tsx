@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
 import { 
   Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, 
-  ShoppingBag, TrendingUp, DollarSign, ArrowUp, RefreshCw, Activity, Wallet, 
+  ShoppingBag, TrendingUp, DollarSign, ArrowUp, ArrowDown, RefreshCw, Activity, Wallet, 
   Download, Search, ChevronDown, Smartphone, Mail, CalendarDays, Zap, Layers, Check, 
   ChevronLeft, ChevronRight, Filter, Store, X, FileText
 } from 'lucide-react';
@@ -29,8 +29,6 @@ const CHANNEL_ICONS: any = {
   'Outros': <Target size={28} />
 };
 
-const FAKE_STORES = Array.from({ length: 15 }).map((_, i) => ({ id: i.toString(), name: i === 0 ? "Primícia - Loja Matriz" : `Primícia - Filial ${i}` }));
-
 export default function RetailResultsPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +42,9 @@ export default function RetailResultsPage() {
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [draftStores, setDraftStores] = useState<string[]>([]);
   
+  // Estado para armazenar a lista de lojas disponíveis (vindo do Backend)
+  const [availableStores, setAvailableStores] = useState<any[]>([]);
+
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
 
@@ -58,47 +59,51 @@ export default function RetailResultsPage() {
   const PRIMITIVE_CHANNELS = ['Agenda', 'SMS', 'E-mail', 'WhatsApp', 'Mobile Push'];
   const [activeFilters, setActiveFilters] = useState<string[]>([...PRIMITIVE_CHANNELS]);
 
-  // Paginação e Busca
-  const [storeSearch, setStoreSearch] = useState("");
-  const deferredStoreSearch = useDeferredValue(storeSearch);
-  const [storePage, setStorePage] = useState(1);
-  const [storesPerPage, setStoresPerPage] = useState(5);
+  // Stores Data (agora vem do backend)
   const [staticStores, setStaticStores] = useState<any[]>([]);
-  const [channelSearchTerm, setChannelSearchTerm] = useState("");
-
 
   // Refs
   const dateRef = useRef<HTMLDivElement>(null);
   const globalFilterRef = useRef<HTMLDivElement>(null);
   const channelFilterRef = useRef<HTMLDivElement>(null);
 
-  // --- FETCHING ---
+  // --- FETCHING METRICS ---
   async function fetchData(start: string, end: string, stores: string[]) {
     setLoading(true);
     try {
       const storesQuery = stores.length > 0 ? `&stores=${stores.join(',')}` : '';
       const url = `http://localhost:3000/webhook/erp/retail-metrics?start=${start}&end=${end}${storesQuery}`;
       const res = await fetch(url, { cache: 'no-store' });
+      
+      if (!res.ok) throw new Error("Erro ao buscar métricas");
+
       const json = await res.json();
       setData(json);
 
-      const totalRevenue = json.kpis.revenue || 0;
-      const storesData = Array.from({ length: 24 }).map((_, i) => {
-            const share = i === 0 ? 0.4 : (Math.random() * 0.05); 
-            const rev = totalRevenue * share;
-            const inf = rev * (0.2 + Math.random() * 0.15); 
-            return {
-                id: i + 1, code: `0${10 + i}`,
-                name: i === 0 ? "Primícia - Loja Matriz" : `Primícia - Filial ${['Centro', 'Shopping', 'Norte', 'Sul'][i % 4]} ${i}`,
-                revenue: rev, revenueInfluenced: inf, percentInfluenced: rev > 0 ? ((inf/rev)*100).toFixed(2) : "0.00",
-                transactions: Math.floor(rev / 180), repurchase: Math.floor(100 + Math.random() * 500),
-                repurchasePercent: (40 + Math.random() * 20).toFixed(2), ticket: (150 + Math.random() * 50), pa: (1.8 + Math.random()).toFixed(2)
-            };
-      });
-      setStaticStores(storesData.sort((a, b) => b.revenue - a.revenue));
-    } catch (error) { console.error("Erro:", error); }
-    finally { setLoading(false); }
+      // Agora pegamos as lojas diretamente da resposta da API (sem Math.random)
+      setStaticStores(json.stores || []);
+
+    } catch (error) { 
+        console.error("Erro:", error); 
+    } finally { 
+        setLoading(false); 
+    }
   }
+
+  // --- FETCHING STORES LIST (Para o Dropdown) ---
+  useEffect(() => {
+    async function loadStores() {
+        try {
+            const res = await fetch('http://localhost:3000/webhook/erp/stores');
+            if (!res.ok) throw new Error("Erro ao buscar lista de lojas");
+            const json = await res.json();
+            setAvailableStores(json);
+        } catch (error) {
+            console.error("Erro ao carregar lojas:", error);
+        }
+    }
+    loadStores();
+  }, []);
 
   useEffect(() => { fetchData(dateRange.start, dateRange.end, selectedStores); }, []);
 
@@ -118,7 +123,7 @@ export default function RetailResultsPage() {
     // Usar mousedown ao invés de click previne conflitos de renderização
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isChannelFilterOpen, isDateOpen, isFilterMenuOpen]); // Dependências adicionadas para garantir atualização
+  }, [isChannelFilterOpen, isDateOpen, isFilterMenuOpen]);
 
   // --- ACTIONS GLOBAIS ---
   const handleApplyGlobalFilters = () => {
@@ -157,20 +162,6 @@ export default function RetailResultsPage() {
     );
   };
   
-  const handleExportCSV = () => {
-    if (!allTableData.length) return;
-    const headers = "Canal;Valor;Influencia\n";
-    const rows = allTableData.map((c:any) => `${c.name};${c.value};${c.percent}%`).join("\n");
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = "canais.csv"; a.click();
-  };
-  
-  // Paginação Lojas
-  const handleStorePageChange = (newPage: number) => { 
-      if (newPage >= 1 && newPage <= totalStorePages) setStorePage(newPage); 
-  };
-
   // --- MEMOS DE DADOS ---
   const processData = (mode: 'mensal' | 'trimestral') => {
     if (!data) return [];
@@ -180,42 +171,7 @@ export default function RetailResultsPage() {
             revenueOrganic: item.revenue - item.revenueInfluenced 
         }));
     }
-    const groupedData: any = {};
-    data.history.forEach((item: any, index: number) => {
-       const quarterIndex = Math.floor(index / 3) + 1;
-       const year = item.name.split(' ')[1] || '2024'; 
-       const label = `Trim ${quarterIndex} ${year}`;
-       if(!groupedData[label]) { groupedData[label] = { ...item, name: label, count: 0, revenue:0, revenueLastYear:0, transactions:0, revenueInfluenced:0, ticket:0, itemsPerTicket:0, repurchase:0, avgSpend:0, interval:0, frequency:0, groupNew:0, groupRecurrent:0, groupRecovered:0, revenueNew:0, revenueRecurrent:0, revenueRecovered:0, consumers:0, consumersActive:0 }; }
-       groupedData[label].revenue += item.revenue || 0;
-       groupedData[label].revenueLastYear += item.revenueLastYear || 0;
-       groupedData[label].transactions += item.transactions || 0;
-       groupedData[label].revenueInfluenced += item.revenueInfluenced || 0;
-       groupedData[label].groupNew += item.groupNew || 0;
-       groupedData[label].groupRecurrent += item.groupRecurrent || 0;
-       groupedData[label].groupRecovered += item.groupRecovered || 0;
-       groupedData[label].revenueNew += item.revenueNew || 0;
-       groupedData[label].revenueRecurrent += item.revenueRecurrent || 0;
-       groupedData[label].revenueRecovered += item.revenueRecovered || 0;
-       groupedData[label].ticket += item.ticket || 0;
-       groupedData[label].itemsPerTicket += item.itemsPerTicket || 0;
-       groupedData[label].repurchase += item.repurchase || 0;
-       groupedData[label].avgSpend += item.avgSpend || 0;
-       groupedData[label].interval += item.interval || 0;
-       groupedData[label].frequency += item.frequency || 0;
-       groupedData[label].count++;
-       groupedData[label].consumers = item.consumers;
-       groupedData[label].consumersActive = item.consumersActive;
-    });
-    return Object.values(groupedData).map((g: any) => ({
-        ...g,
-        ticket: g.count ? Math.floor(g.ticket / g.count) : 0,
-        itemsPerTicket: g.count ? Number((g.itemsPerTicket / g.count).toFixed(1)) : 0,
-        repurchase: g.count ? Math.floor(g.repurchase / g.count) : 0,
-        avgSpend: g.count ? Math.floor(g.avgSpend / g.count) : 0,
-        interval: g.count ? Math.floor(g.interval / g.count) : 0,
-        frequency: g.count ? Number((g.frequency / g.count).toFixed(2)) : 0,
-        revenueOrganic: g.revenue - g.revenueInfluenced
-    }));
+    return data.history; 
   };
 
   const mainGraphData = useMemo(() => processData(viewMode), [data, viewMode]);
@@ -232,7 +188,6 @@ export default function RetailResultsPage() {
     if (!data) return { visibleCards: [], othersCard: null, allTableData: [] };
     const channels = data.channels;
     
-    // 1. Filtro Permissivo (Lógica "OU")
     const eligibleChannels = channels.filter((ch: any) => {
         if (ch.name === 'Outros') return true;
         const parts = ch.name.split(' + ').map((p: string) => p.trim());
@@ -258,27 +213,10 @@ export default function RetailResultsPage() {
     const renderList = [...slots];
     if (finalOthersCard) renderList.push(finalOthersCard);
     
-    // Lista da Tabela
     let tableList = [...eligibleChannels].sort((a: any, b: any) => b.value - a.value);
-    const normalizedChannelSearch = channelSearchTerm.trim().toLowerCase();
-    if (normalizedChannelSearch) {
-        tableList = tableList.filter(ch => ch.name.toLowerCase().includes(normalizedChannelSearch));
-    }
 
     return { visibleCards: renderList, othersCard: finalOthersCard, allTableData: tableList };
-  }, [data, activeFilters, channelSearchTerm]);
-
-  // Lógica Paginação Lojas
-  const { paginatedStores, totalStores, totalStorePages } = useMemo(() => {
-    let filteredStores = staticStores;
-    const normalizedStoreSearch = storeSearch.trim().toLowerCase();
-    if (normalizedStoreSearch) filteredStores = staticStores.filter(s => s.name.toLowerCase().includes(normalizedStoreSearch));
-    const totalStores = filteredStores.length;
-    const totalStorePages = Math.ceil(totalStores / storesPerPage);
-    const startIndex = (storePage - 1) * storesPerPage;
-    const paginatedStores = filteredStores.slice(startIndex, startIndex + storesPerPage);
-    return { paginatedStores, totalStores, totalStorePages };
-  }, [staticStores, deferredStoreSearch, storePage, storesPerPage]);
+  }, [data, activeFilters]);
 
   if (loading) return <div className="flex h-screen items-center justify-center text-slate-400 bg-[#f8fafc]">Carregando dados...</div>;
   if (!data) return <div className="flex h-screen items-center justify-center text-slate-500 bg-[#f8fafc]">Erro ao carregar.</div>;
@@ -348,7 +286,17 @@ export default function RetailResultsPage() {
                 </div>
                 <div className="relative" ref={globalFilterRef}>
                     <div onClick={() => { setDraftStores([...selectedStores]); setIsFilterMenuOpen(!isFilterMenuOpen); }} className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-indigo-600 cursor-pointer transition-colors select-none">Filtros e visualizações {selectedStores.length > 0 && <span className="bg-indigo-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">{selectedStores.length}</span>} <ChevronDown size={14}/></div>
-                    {isFilterMenuOpen && (<div className="absolute top-full left-0 mt-4 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50"><p className="text-xs font-bold text-gray-400 uppercase mb-2">Filtrar Lojas</p><div className="max-h-60 overflow-y-auto space-y-1 border-b border-gray-100 pb-3 mb-3 custom-scrollbar">{FAKE_STORES.map(store => (<label key={store.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 bg-white'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>{draftStores.includes(store.id) && <Check size={14} className="text-white" />}</div><span className="text-sm text-gray-700 truncate">{store.name}</span></label>))}</div><div className="flex justify-end gap-2"><button className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg" onClick={handleApplyGlobalFilters}>Aplicar</button></div></div>)}
+                    {isFilterMenuOpen && (<div className="absolute top-full left-0 mt-4 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 z-50"><p className="text-xs font-bold text-gray-400 uppercase mb-2">Filtrar Lojas</p><div className="max-h-60 overflow-y-auto space-y-1 border-b border-gray-100 pb-3 mb-3 custom-scrollbar">
+                        {/* AQUI ESTÁ A LISTA REAL DE LOJAS */}
+                        {availableStores.map(store => (
+                            <label key={store.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 bg-white'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>
+                                    {draftStores.includes(store.id) && <Check size={14} className="text-white" />}
+                                </div>
+                                <span className="text-sm text-gray-700 truncate">{store.name}</span>
+                            </label>
+                        ))}
+                    </div><div className="flex justify-end gap-2"><button className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg" onClick={handleApplyGlobalFilters}>Aplicar</button></div></div>)}
                 </div>
             </div>
             <div className="flex gap-2"><button onClick={handleClearFilters} className="text-sm text-emerald-600 hover:bg-emerald-50 px-4 py-1.5 rounded-xl font-medium transition-colors">Limpar filtros</button><button onClick={handleApplyGlobalFilters} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5">Aplicar</button></div>
@@ -464,7 +412,7 @@ export default function RetailResultsPage() {
               <ChannelsTable data={allTableData} />
           </section>
 
-          {/* 7. LISTA DE LOJAS */}
+          {/* 7. LISTA DE LOJAS (ISOLADA) */}
           <StoresTableSection stores={staticStores} />
 
         </div>
@@ -494,33 +442,90 @@ function SectionTitle({title, tooltip}: {title: string, tooltip?: string}) { ret
 const CustomTooltip = ({ active, payload, label, type }: any) => { if (active && payload && payload.length) { return (<div className="bg-slate-900/95 backdrop-blur text-white p-4 shadow-2xl rounded-xl text-sm z-50 border border-slate-800"><p className="font-bold text-slate-300 mb-2 text-xs uppercase tracking-wider">{label}</p>{payload.map((entry: any, index: number) => { let displayValue = entry.value; const isCurrency = type === 'currency' || (type !== 'number' && typeof entry.value === 'number' && entry.value > 100 && !entry.name.includes('Frequência') && !entry.name.includes('Peças') && !entry.name.includes('Transações') && !entry.name.includes('Consumidores')); if (typeof entry.value === 'number') displayValue = isCurrency ? `R$ ${entry.value.toLocaleString('pt-BR')}` : entry.value.toLocaleString('pt-BR'); return <div key={index} className="flex items-center gap-3 mb-1.5 last:mb-0"><div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)]" style={{ backgroundColor: entry.color }}></div><span className="text-slate-300">{entry.name}:</span><span className="font-bold text-white ml-auto">{displayValue}</span></div> })}</div>); } return null; };
 function MiniFilterButton({ label, active, onClick }: any) { return <button onClick={onClick} className={`px-4 py-2 text-xs font-bold rounded-full transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{label}</button> }
 function NavItem({ icon, label, active }: any) { return <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-gray-800 hover:text-white'}`}>{icon}<span className="text-sm font-medium">{label}</span></div> }
+
+// --- COMPONENTES ISOLADOS (Para Performance de Busca) ---
+
 function StoresTableSection({ stores }: { stores: any[] }) {
-    // Estado local - Ao digitar aqui, SÓ esse pedaço re-renderiza
     const [search, setSearch] = useState("");
-    // useDeferredValue ajuda a interface responder rápido antes de filtrar
     const deferredSearch = useDeferredValue(search);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(5);
 
-    // Lógica de filtro e paginação isolada
+    // Estado para ordenação
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+        key: 'revenue', // Ordenação padrão por Receita
+        direction: 'desc'
+    });
+
+    const handleSort = (key: string) => {
+        setSortConfig((current) => ({
+            key,
+            direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc',
+        }));
+    };
+
     const { paginatedStores, totalStores, totalPages } = useMemo(() => {
-        let filtered = stores;
+        let processedData = [...stores];
+
+        // 1. Filtrar (Busca)
         const term = deferredSearch.trim().toLowerCase();
-        
         if (term) {
-            filtered = stores.filter(s => s.name.toLowerCase().includes(term));
+            processedData = processedData.filter(s => 
+                s.name.toLowerCase().includes(term) || 
+                String(s.id).includes(term)
+            );
         }
 
-        const total = filtered.length;
+        // 2. Ordenar
+        if (sortConfig.key) {
+            processedData.sort((a, b) => {
+                let valA = a[sortConfig.key];
+                let valB = b[sortConfig.key];
+
+                // Tratamento especial para strings numéricas (ex: "45.2")
+                if (typeof valA === 'string' && !isNaN(Number(valA))) valA = Number(valA);
+                if (typeof valB === 'string' && !isNaN(Number(valB))) valB = Number(valB);
+
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        // 3. Paginar
+        const total = processedData.length;
         const pages = Math.ceil(total / perPage);
         const start = (page - 1) * perPage;
-        const pagedData = filtered.slice(start, start + perPage);
+        const pagedData = processedData.slice(start, start + perPage);
 
         return { paginatedStores: pagedData, totalStores: total, totalPages: pages };
-    }, [stores, deferredSearch, page, perPage]);
+    }, [stores, deferredSearch, page, perPage, sortConfig]);
 
-    // Resetar página ao pesquisar
-    useEffect(() => { setPage(1); }, [deferredSearch]);
+    useEffect(() => { setPage(1); }, [deferredSearch, sortConfig]);
+
+    // Componente auxiliar para Cabeçalho Ordenável
+    const SortableHeader = ({ label, sortKey, align = "left" }: any) => (
+        <th 
+            className={`px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none text-${align}`}
+            onClick={() => handleSort(sortKey)}
+        >
+            <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}>
+                {label}
+                <div className="flex flex-col">
+                    {sortConfig.key === sortKey && (
+                        sortConfig.direction === 'asc' 
+                            ? <ArrowUp size={12} className="text-indigo-600" />
+                            : <ArrowDown size={12} className="text-indigo-600" />
+                    )}
+                    {sortConfig.key !== sortKey && (
+                        <div className="h-3 w-3 opacity-20">
+                           <ArrowDown size={12} />
+                        </div>
+                    )}
+                </div>
+            </div>
+        </th>
+    );
 
     return (
         <section>
@@ -540,11 +545,13 @@ function StoresTableSection({ stores }: { stores: any[] }) {
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
                         <tr>
-                            <th className="px-6 py-4">Nome da Loja</th>
-                            <th className="px-6 py-4">Receita</th>
-                            <th className="px-6 py-4">Influência</th>
-                            <th className="px-6 py-4">Transações</th>
-                            <th className="px-6 py-4">Ticket Médio</th>
+                            <SortableHeader label="Nome da Loja" sortKey="name" />
+                            <SortableHeader label="Receita" sortKey="revenue" />
+                            <SortableHeader label="Influência" sortKey="revenueInfluenced" />
+                            <SortableHeader label="Transações" sortKey="transactions" />
+                            <SortableHeader label="Recompra" sortKey="repurchase" align="center" />
+                            <SortableHeader label="PA (Peças)" sortKey="itemsPerTicket" align="center" />
+                            <SortableHeader label="Ticket Médio" sortKey="ticket" align="right" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -554,7 +561,9 @@ function StoresTableSection({ stores }: { stores: any[] }) {
                                     <div className="font-bold text-slate-800">{store.name}</div>
                                     <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {store.code}</div>
                                 </td>
-                                <td className="px-6 py-4 font-mono text-slate-600">R$ {store.revenue.toLocaleString('pt-BR', {maximumFractionDigits:0})}</td>
+                                <td className="px-6 py-4 font-mono text-slate-600">
+                                    R$ {store.revenue.toLocaleString('pt-BR', {maximumFractionDigits:0})}
+                                </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
                                         <span className="font-mono text-slate-600">R$ {store.revenueInfluenced.toLocaleString('pt-BR', {maximumFractionDigits:0})}</span>
@@ -562,7 +571,22 @@ function StoresTableSection({ stores }: { stores: any[] }) {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-slate-500">{store.transactions}</td>
-                                <td className="px-6 py-4 font-mono text-slate-500">R$ {store.ticket.toFixed(2)}</td>
+                                
+                                {/* COLUNA RECOMPRA */}
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${Number(store.repurchase) > 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                        {store.repurchase || "0.0"}%
+                                    </span>
+                                </td>
+
+                                {/* COLUNA PA */}
+                                <td className="px-6 py-4 text-center font-mono text-slate-600">
+                                    {store.itemsPerTicket || "0.00"}
+                                </td>
+
+                                <td className="px-6 py-4 font-mono text-slate-500 text-right">
+                                    R$ {store.ticket.toFixed(2)}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -591,19 +615,17 @@ function StoresTableSection({ stores }: { stores: any[] }) {
         </section>
     );
 }
+
 function ChannelsTable({ data }: { data: any[] }) {
-    // Estado local isolado
     const [search, setSearch] = useState("");
     const deferredSearch = useDeferredValue(search);
 
-    // Lógica de filtro local (super rápida)
     const filteredData = useMemo(() => {
         const term = deferredSearch.trim().toLowerCase();
         if (!term) return data;
         return data.filter(ch => ch.name.toLowerCase().includes(term));
     }, [data, deferredSearch]);
 
-    // Função de exportar movida para cá (para exportar o que está sendo visto)
     const handleExportCSV = () => {
         if (!filteredData.length) return;
         const headers = "Canal;Valor;Influencia\n";

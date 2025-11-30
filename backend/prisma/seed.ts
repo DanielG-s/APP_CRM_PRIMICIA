@@ -1,80 +1,138 @@
 import { PrismaClient } from '@prisma/client';
-import { fakerPT_BR as faker } from '@faker-js/faker';
-
 const prisma = new PrismaClient();
 
+// --- CONFIGURAÇÕES DO GERADOR ---
+const TOTAL_STORES = 5;
+const TOTAL_CUSTOMERS = 300;
+const TRANSACTIONS_PER_MONTH = 100; // Ajuste para mais ou menos volume
+const MONTHS_HISTORY = 12;
+
+// Arrays auxiliares para realismo
+const STORE_NAMES = [
+  'Primícia - Matriz Centro',
+  'Primícia - Shopping Iguatemi',
+  'Primícia - Norte Shopping',
+  'Primícia - Filial Jardins',
+  'Primícia - Outlet Sul',
+];
+
+const CHANNELS_DISTRIBUTION = [
+  { name: 'Loja Física', weight: 0.5, influencedChance: 0.1 },
+  { name: 'WhatsApp', weight: 0.25, influencedChance: 0.9 },
+  { name: 'E-mail', weight: 0.15, influencedChance: 0.8 },
+  { name: 'SMS', weight: 0.05, influencedChance: 0.7 },
+  { name: 'Agenda', weight: 0.05, influencedChance: 0.6 },
+];
+
+function getRandomChannel() {
+  const r = Math.random();
+  let accumulated = 0;
+  for (const ch of CHANNELS_DISTRIBUTION) {
+    accumulated += ch.weight;
+    if (r <= accumulated) return ch;
+  }
+  return CHANNELS_DISTRIBUTION[0];
+}
+
 async function main() {
-  console.log('🌱 Começando a semeadura do banco...');
+  console.log('🌱 Iniciando Seed do Banco de Dados...');
 
-  // --- 1. LIMPEZA (A ordem importa: Filhos primeiro, depois os Pais) ---
-  
-  // Filhos de Vendas/Clientes
-  await prisma.transaction.deleteMany();
-  await prisma.customerEvent.deleteMany();
-  await prisma.surveyResponse.deleteMany();
-  
-  // Filhos de Campanhas (Aqui estava o erro)
-  await prisma.campaignContent.deleteMany();
-  await prisma.campaignSchedule.deleteMany();
-  await prisma.campaignMetric.deleteMany();
-  
-  // Agora pode deletar os Pais
-  await prisma.campaign.deleteMany();
-  await prisma.customer.deleteMany();
-  
-  // Por fim, a Loja (que é pai de todo mundo)
-  await prisma.store.deleteMany();
-
-  console.log('🧹 Banco limpo e pronto.');
-
-  // --- 2. CRIAR LOJA ---
-  const loja = await prisma.store.create({
-    data: {
-      name: 'Primícia - Loja Matriz',
-      cnpj: '12.345.678/0001-90',
-      cityNormalized: 'São Paulo',
-    },
-  });
-
-  console.log(`🏢 Loja criada: ${loja.name} (ID: ${loja.id})`);
-
-  // --- 3. CRIAR DADOS ---
-  console.log('👥 Criando 50 clientes com histórico...');
-
-  for (let i = 0; i < 50; i++) {
-    const customer = await prisma.customer.create({
-      data: {
-        storeId: loja.id,
-        name: faker.person.fullName(),
-        email: faker.internet.email(),
-        phone: faker.phone.number(),
-        cpf: faker.string.numeric(11),
-        birthDate: faker.date.birthdate({ min: 18, max: 65, mode: 'age' }),
-        city: faker.location.city(),
-        isRegistrationComplete: Math.random() > 0.2,
-      },
-    });
-
-    const numCompras = faker.number.int({ min: 1, max: 5 });
-
-    for (let j = 0; j < numCompras; j++) {
-      const dataCompra = faker.date.recent({ days: 60 });
-      
-      await prisma.transaction.create({
-        data: {
-          storeId: loja.id,
-          customerId: customer.id,
-          date: dataCompra,
-          totalValue: Number(faker.commerce.price({ min: 50, max: 1500 })),
-          items: [
-            { productName: faker.commerce.productName(), price: 100 }
-          ],
-        },
-      });
-    }
+  // 1. Limpar dados antigos (Ordem importa por causa das chaves estrangeiras)
+  console.log('🧹 Limpando tabelas antigas...');
+  try {
+    await prisma.transaction.deleteMany();
+    await prisma.customer.deleteMany();
+    await prisma.store.deleteMany();
+  } catch (e) {
+    console.log('   (Tabelas já estavam vazias ou erro ignorado)');
   }
 
-  console.log('✅ Semeadura concluída com sucesso!');
+  // 2. Criar Lojas
+  console.log('🏪 Criando Lojas...');
+  // CORREÇÃO: Tipando explicitamente como any[] para o TS não reclamar
+  const createdStores: any[] = []; 
+  
+  for (let i = 0; i < TOTAL_STORES; i++) {
+    const store = await prisma.store.create({
+      data: {
+        name: STORE_NAMES[i],
+        cnpj: `12.345.678/000${i + 1}-00`,
+        cityNormalized: 'São Paulo',
+      },
+    });
+    createdStores.push(store);
+  }
+
+  // 3. Criar Clientes (Base CRM)
+  console.log('👥 Criando Clientes...');
+  // CORREÇÃO: Tipando explicitamente como any[]
+  const createdCustomers: any[] = [];
+
+  for (let i = 0; i < TOTAL_CUSTOMERS; i++) {
+    const customer = await prisma.customer.create({
+      data: {
+        name: `Cliente Teste ${i + 1}`,
+        email: `cliente${i + 1}@exemplo.com`,
+        phone: `1199999${i.toString().padStart(4, '0')}`,
+        storeId: createdStores[i % createdStores.length].id, // Distribui entre lojas
+        propensityScore: Math.random() * 100,
+        propensityLabel: Math.random() > 0.7 ? 'Alta' : 'Média',
+      },
+    });
+    createdCustomers.push(customer);
+  }
+
+  // 4. Gerar Transações (Histórico de 12 meses)
+  console.log('💳 Gerando Transações (pode demorar um pouco)...');
+  
+  const today = new Date();
+  const oneYearAgo = new Date();
+  oneYearAgo.setMonth(today.getMonth() - MONTHS_HISTORY);
+
+  // CORREÇÃO: Tipando explicitamente como any[]
+  const transactionsData: any[] = [];
+
+  // Loop para criar volume
+  const totalTransactions = TRANSACTIONS_PER_MONTH * MONTHS_HISTORY;
+  
+  for (let i = 0; i < totalTransactions; i++) {
+    // Escolher Loja e Cliente Aleatórios
+    const store = createdStores[Math.floor(Math.random() * createdStores.length)];
+    const customer = createdCustomers[Math.floor(Math.random() * createdCustomers.length)];
+    
+    // Escolher Canal e Influência
+    const channelInfo = getRandomChannel();
+    const isInfluenced = Math.random() < channelInfo.influencedChance;
+
+    // Gerar Data (com tendência de crescimento recente)
+    const timeOffset = Math.pow(Math.random(), 0.5) * (today.getTime() - oneYearAgo.getTime());
+    const date = new Date(today.getTime() - timeOffset);
+
+    // Gerar Valor (Ticket Médio variado)
+    const baseValue = 150 + Math.random() * 650;
+    const totalValue = Number(baseValue.toFixed(2));
+
+    transactionsData.push({
+      storeId: store.id,
+      customerId: customer.id,
+      totalValue: totalValue,
+      date: date,
+      items: {}, // JSON vazio
+      channel: channelInfo.name,
+      isInfluenced: isInfluenced,
+    });
+  }
+
+  // Inserção em Lote
+  await prisma.transaction.createMany({
+    data: transactionsData,
+  });
+
+  console.log(`✅ Seed concluído!`);
+  console.log(`📊 Resumo:`);
+  console.log(`   - ${createdStores.length} Lojas`);
+  console.log(`   - ${createdCustomers.length} Clientes`);
+  console.log(`   - ${transactionsData.length} Transações geradas`);
 }
 
 main()

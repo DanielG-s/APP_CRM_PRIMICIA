@@ -29,16 +29,24 @@ export class SalesController {
     return this.salesService.getSalesHistory();
   }
 
+  @Get('stores')
+  @ApiOperation({ summary: 'Lista todas as lojas para o filtro do Frontend' })
+  async getStores() {
+    return this.salesService.getStores();
+  }
+
   @Get('retail-metrics')
   @ApiOperation({ summary: 'Métricas de Varejo filtradas por data e lojas' })
   @ApiQuery({ name: 'start', required: false })
   @ApiQuery({ name: 'end', required: false })
-  @ApiQuery({ name: 'stores', required: false, description: 'IDs das lojas separados por vírgula' }) // NOVO
+  @ApiQuery({ name: 'stores', required: false, description: 'IDs das lojas separados por vírgula' })
   async getRetailMetrics(
     @Query('start') start?: string,
     @Query('end') end?: string,
-    @Query('stores') stores?: string, // NOVO
+    @Query('stores') stores?: string, 
   ) {
+    // CORREÇÃO: Passamos 'stores' (string) diretamente, sem converter para array aqui.
+    // O Service já tem a lógica de .split(',')
     return this.salesService.getRetailMetrics(start, end, stores);
   }
 }

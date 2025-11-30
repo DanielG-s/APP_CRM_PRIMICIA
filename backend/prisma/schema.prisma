@@ -40,7 +40,6 @@ model Customer {
   externalId      String?
   name            String
   
-  // AQUI ESTAVA O ERRO. ADICIONE O @unique NO FINAL
   email           String?  @unique 
   
   phone           String?
@@ -71,15 +70,19 @@ model CustomerEvent {
 }
 
 model Transaction {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   customerId    String
-  customer      Customer @relation(fields: [customerId], references: [id])
+  customer      Customer  @relation(fields: [customerId], references: [id])
   storeId       String
-  store         Store    @relation(fields: [storeId], references: [id])
+  store         Store     @relation(fields: [storeId], references: [id])
   salespersonId String?
   totalValue    Decimal
   items         Json
   date          DateTime
+
+  // --- NOVOS CAMPOS ---
+  channel       String    @default("Loja Física") // Ex: "WhatsApp", "E-mail", "Ads"
+  isInfluenced  Boolean   @default(false)         // Se houve toque digital antes da compra
 }
 
 // --- 3. SEGMENTAÇÃO ---
