@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service'; 
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { Prisma } from '@prisma/client';
 import { format, differenceInDays, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -8,143 +9,329 @@ import { ptBR } from 'date-fns/locale';
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
-  // ... (MÉTODOS DE INGESTÃO E HOME PERMANECEM IGUAIS) ...
-  async processSale(data: CreateSaleDto) { /* ... código anterior ... */ return {transactionId: 'ok'}; }
-  async getDailyTotal() { /* ... código anterior ... */ return {total:0, count:0}; }
-  async getSalesHistory() { /* ... código anterior ... */ return []; }
-  async getRecentSales() { /* ... código anterior ... */ return []; }
-  async getStores() { return this.prisma.store.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }); }
-  async getRetailMetrics(startStr?: string, endStr?: string, storesStr?: string) { /* ... código anterior ... */ return {}; }
+  // --- MÉTODOS BÁSICOS ---
+  async processSale(data: CreateSaleDto) {
+    const customer = await this.prisma.customer.upsert({
+      where: { email: data.customerEmail },
+      update: { name: data.customerName },
+      create: { name: data.customerName, email: data.customerEmail, cpf: data.customerCpf, storeId: data.storeId },
+    });
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        storeId: data.storeId, customerId: customer.id, totalValue: data.totalValue, date: new Date(),
+        items: data.items as any, channel: data.channel || 'Loja Física', isInfluenced: data.isInfluenced || false,
+      },
+    });
+    return { message: 'Venda processada!', transactionId: transaction.id };
+  }
 
-  // --- 4. MÉTODO NOVO: DASHBOARD COM TODOS OS FILTROS ---
-  async getChannelDashboard(
-    startDate: string, 
-    endDate: string,
-    filters?: {
-        channel?: string,
-        campaignId?: string,
-        // tags e type podem ser adicionados no futuro
+  async getDailyTotal() {
+    const today = new Date();
+    const aggregate = await this.prisma.transaction.aggregate({
+      _sum: { totalValue: true }, _count: { id: true },
+      where: { date: { gte: startOfDay(today), lte: endOfDay(today) } }
+    });
+    return { total: Number(aggregate._sum.totalValue) || 0, count: aggregate._count.id || 0 };
+  }
+
+  async getSalesHistory() {
+    const endDate = new Date();
+    const startDate = subDays(endDate, 6);
+    startDate.setHours(0,0,0,0);
+    const transactions = await this.prisma.transaction.findMany({
+        where: { date: { gte: startDate, lte: endDate } }, orderBy: { date: 'asc' }
+    });
+    const historyMap = new Map();
+    for(let i=0; i<=6; i++) {
+        const d = subDays(endDate, 6-i);
+        const key = format(d, 'dd/MM', { locale: ptBR });
+        historyMap.set(key, { name: key, vendas: 0, total: 0 });
     }
-  ) {
+    transactions.forEach(tx => {
+        const key = format(tx.date, 'dd/MM', { locale: ptBR });
+        if(historyMap.has(key)) {
+            const current = historyMap.get(key);
+            current.vendas += Number(tx.totalValue);
+            current.total += 1;
+        }
+    });
+    return Array.from(historyMap.values());
+  }
+
+  async getRecentSales() {
+    const sales = await this.prisma.transaction.findMany({
+        take: 5, orderBy: { date: 'desc' },
+        include: { customer: { select: { name: true, email: true } }, store: { select: { name: true } } }
+    });
+    return sales.map(s => ({
+        id: s.id, customer: s.customer?.name || 'Consumidor', email: s.customer?.email,
+        store: s.store?.name, value: Number(s.totalValue), date: s.date, channel: s.channel
+    }));
+  }
+
+  async getStores() {
+    return this.prisma.store.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  }
+
+  // --- FILTROS ---
+  async getFilterOptions() {
+    const campaigns = await this.prisma.campaign.findMany({
+      select: { id: true, name: true, tags: true, type: true, channel: true }, orderBy: { date: 'desc' }, take: 2000 
+    });
+    const tagsSet = new Set<string>(); campaigns.forEach(c => c.tags.forEach(t => tagsSet.add(t)));
+    const typesSet = new Set<string>(); campaigns.forEach(c => { if(c.type) typesSet.add(c.type); });
+    return {
+      campaigns: campaigns.map(c => ({ id: c.id, name: c.name })),
+      tags: Array.from(tagsSet).sort(), types: Array.from(typesSet).sort(),
+      channels: ['E-mail', 'SMS', 'Mobile push', 'WhatsApp'] 
+    };
+  }
+
+  // --- LÓGICA DO DASHBOARD DE CANAIS (COM CÁLCULO DE DISPAROS) ---
+  async getChannelDashboard(startDate: string, endDate: string, filters?: any) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     end.setUTCHours(23, 59, 59, 999);
 
-    // Filtros dinâmicos para Campanhas
-    const campaignWhere: any = { date: { gte: start, lte: end } };
+    const campaignWhere: Prisma.CampaignWhereInput = { date: { gte: start, lte: end } };
     if (filters?.channel && filters.channel !== 'Todos') {
-        // Mapear nomes do front para o banco se necessário (ex: 'E-mail' -> 'Email')
-        campaignWhere.channel = filters.channel === 'E-mail' ? 'Email' : filters.channel;
+        const map: any = { 'Mobile push': 'Push', 'E-mail': 'Email' };
+        campaignWhere.channel = map[filters.channel] || filters.channel;
     }
-    if (filters?.campaignId && filters.campaignId !== 'todas') {
-        campaignWhere.id = filters.campaignId;
-    }
+    if (filters?.campaignIds?.length) campaignWhere.id = { in: filters.campaignIds };
+    if (filters?.tags?.length) campaignWhere.tags = { hasSome: filters.tags };
+    if (filters?.campaignType?.length && !filters.campaignType.includes('Todos')) campaignWhere.type = { in: filters.campaignType };
 
-    // 1. Buscar Campanhas Filtradas
-    const campaignsRaw = await this.prisma.campaign.findMany({
-      where: campaignWhere,
-      orderBy: { date: 'desc' }
+    // Busca Campanhas com Agendamentos
+    const campaignsRaw = await this.prisma.campaign.findMany({ 
+        where: campaignWhere, 
+        orderBy: { date: 'desc' },
+        include: { schedules: true } 
     });
 
-    // 2. Buscar Transações (Receita)
-    // Nota: Em um cenário real, filtraríamos vendas APENAS das campanhas selecionadas.
-    // Como o seed gera vendas aleatórias, vamos manter o filtro de data para não zerar os gráficos.
     const salesRaw = await this.prisma.transaction.findMany({
       where: { date: { gte: start, lte: end } },
       select: { date: true, totalValue: true, id: true, isInfluenced: true, storeId: true, store: { select: { name: true } } }
     });
 
-    // 3. Buscar Lista de Opções para o Filtro (Todas as campanhas do período, sem filtro de canal)
-    const filterOptions = await this.prisma.campaign.findMany({
-        where: { date: { gte: start, lte: end } },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' }
-    });
+    // Calcular totais globais para atribuição proporcional de receita aos disparos
+    const totalInfluencedRevenue = salesRaw.filter(s => s.isInfluenced).reduce((acc, s) => acc + Number(s.totalValue), 0);
+    const totalConversions = salesRaw.filter(s => s.isInfluenced).length;
+    const totalClicks = campaignsRaw.reduce((acc, c) => acc + c.clicks, 0);
 
-    // 4. Montar Gráfico Dia a Dia
+    // --- LÓGICA DE DISPAROS (Popula tabela de disparos) ---
+    let dispatchesList: any[] = [];
+    
+    campaignsRaw.forEach(camp => {
+        // Atribuição de Receita Simples (Proporcional aos cliques da campanha na falta de tracking granular)
+        const campaignShare = totalClicks > 0 ? (camp.clicks / totalClicks) : 0;
+        const campRevenue = totalInfluencedRevenue * campaignShare;
+        const campConversions = Math.floor(totalConversions * campaignShare);
+
+        if (camp.schedules && camp.schedules.length > 0) {
+            const share = 1 / camp.schedules.length;
+            camp.schedules.forEach((sch) => {
+                const dispRev = campRevenue * share;
+                const dispConv = campConversions * share;
+                dispatchesList.push({
+                    id: sch.id,
+                    campaignName: camp.name,
+                    date: sch.sendDate,
+                    status: 'Enviado',
+                    sent: Math.floor(camp.sent * share),
+                    revenue: dispRev,
+                    conversions: dispConv,
+                    ticket: dispConv > 0 ? dispRev / dispConv : 0
+                });
+            });
+        } else {
+            dispatchesList.push({
+                id: camp.id + '-main',
+                campaignName: camp.name,
+                date: camp.date,
+                status: camp.status === 'sent' ? 'Concluído' : 'Agendado',
+                sent: camp.sent,
+                revenue: campRevenue,
+                conversions: campConversions,
+                ticket: campConversions > 0 ? campRevenue / campConversions : 0
+            });
+        }
+    });
+    dispatchesList = dispatchesList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // --- PROCESSAMENTO GRÁFICO (Mantido igual) ---
     const chartData: any[] = [];
     const currentDate = new Date(start);
-
     while (currentDate <= end) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const dayLabel = `${currentDate.getUTCDate()}/${(currentDate.getUTCMonth() + 1).toString().padStart(2, '0')}`;
-
-      // Dados do dia
       const salesOfDay = salesRaw.filter(s => s.date.toISOString().split('T')[0] === dateStr);
-      const revenueInfluencedDay = salesOfDay.filter(s => s.isInfluenced).reduce((acc, curr) => acc + Number(curr.totalValue), 0);
-      const revenueTotalDay = salesOfDay.reduce((acc, curr) => acc + Number(curr.totalValue), 0);
-      const conversionsDay = salesOfDay.filter(s => s.isInfluenced).length;
-      
       const campsOfDay = campaignsRaw.filter(c => new Date(c.date).toISOString().split('T')[0] === dateStr);
 
-      const metrics = campsOfDay.reduce((acc, curr) => {
-        return {
-          sent: acc.sent + (curr.sent || 0),
-          delivered: acc.delivered + (curr.delivered || 0),
-          opens: acc.opens + (curr.opens || 0),
-          clicks: acc.clicks + (curr.clicks || 0),
-          softBounces: acc.softBounces + (curr.softBounces || 0),
-          hardBounces: acc.hardBounces + (curr.hardBounces || 0),
-          spamReports: acc.spamReports + (curr.spamReports || 0),
-          unsubscribes: acc.unsubscribes + (curr.unsubscribes || 0),
-        };
-      }, { sent: 0, delivered: 0, opens: 0, clicks: 0, softBounces: 0, hardBounces: 0, spamReports: 0, unsubscribes: 0 });
+      const metrics = campsOfDay.reduce((acc, curr) => ({
+          sent: acc.sent + (curr.sent||0), delivered: acc.delivered + (curr.delivered||0), opens: acc.opens + (curr.opens||0), clicks: acc.clicks + (curr.clicks||0), softBounces: acc.softBounces + (curr.softBounces||0), hardBounces: acc.hardBounces + (curr.hardBounces||0), spam: acc.spam + (curr.spamReports||0), unsub: acc.unsub + (curr.unsubscribes||0),
+      }), { sent: 0, delivered: 0, opens: 0, clicks: 0, softBounces: 0, hardBounces: 0, spam: 0, unsub: 0 });
 
-      const ctr = metrics.delivered > 0 ? (metrics.clicks / metrics.delivered) * 100 : 0;
-      const ctor = metrics.opens > 0 ? (metrics.clicks / metrics.opens) * 100 : 0;
-      const ticket = conversionsDay > 0 ? revenueInfluencedDay / conversionsDay : 0;
+      const revTotal = salesOfDay.reduce((acc, s) => acc + Number(s.totalValue), 0);
+      const revInf = salesOfDay.filter(s => s.isInfluenced).reduce((acc, s) => acc + Number(s.totalValue), 0);
+      const convs = salesOfDay.filter(s => s.isInfluenced).length;
 
       chartData.push({
-        name: dayLabel,
-        fullDate: dateStr,
-        envios: metrics.sent,
-        entregues: metrics.delivered,
-        aberturas: metrics.opens,
-        cliques: metrics.clicks,
-        ctr: Number(ctr.toFixed(2)),
-        ctor: Number(ctor.toFixed(2)),
-        softBounces: metrics.softBounces,
-        hardBounces: metrics.hardBounces,
-        bounces: metrics.softBounces + metrics.hardBounces,
-        spam: metrics.spamReports,
-        descadastro: metrics.unsubscribes,
-        rejeicoes: metrics.spamReports + metrics.unsubscribes,
-        receitaTotal: Number(revenueTotalDay.toFixed(2)),
-        receitaInfluenciada: Number(revenueInfluencedDay.toFixed(2)),
-        conversoes: conversionsDay,
-        ticket: Number(ticket.toFixed(2)),
-        vendasInfluenciadas: conversionsDay, 
-        baseInfluenciada: conversionsDay, 
+        name: dayLabel, fullDate: dateStr,
+        envios: metrics.sent, entregues: metrics.delivered, aberturas: metrics.opens, cliques: metrics.clicks,
+        ctr: metrics.delivered > 0 ? (metrics.clicks/metrics.delivered)*100 : 0,
+        ctor: metrics.opens > 0 ? (metrics.clicks/metrics.opens)*100 : 0,
+        softBounces: metrics.softBounces, hardBounces: metrics.hardBounces, bounces: metrics.softBounces + metrics.hardBounces,
+        spam: metrics.spam, descadastro: metrics.unsub, rejeicoes: metrics.spam + metrics.unsub,
+        receitaTotal: Number(revTotal.toFixed(2)), receitaInfluenciada: Number(revInf.toFixed(2)),
+        conversoes: convs, ticket: convs > 0 ? revInf/convs : 0, vendasInfluenciadas: convs, baseInfluenciada: convs, 
       });
-
       currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
-    // 5. Tabela de Lojas
     const storesMap = new Map();
-    salesRaw.forEach(sale => {
-      if (!storesMap.has(sale.storeId)) {
-        storesMap.set(sale.storeId, { id: sale.storeId, name: sale.store?.name || 'Loja', revenue: 0, revenueInfluenced: 0, conversions: 0, salesInfluenced: 0 });
-      }
-      const storeData = storesMap.get(sale.storeId);
-      const val = Number(sale.totalValue);
-      storeData.revenue += val;
-      if (sale.isInfluenced) {
-        storeData.revenueInfluenced += val;
-        storeData.conversoes += 1;
-        storeData.salesInfluenced += 1;
-      }
+    salesRaw.forEach(s => {
+        if(!storesMap.has(s.storeId)) storesMap.set(s.storeId, { id: s.storeId, name: s.store?.name, revenue: 0, revenueInfluenced: 0, conversions: 0, salesInfluenced: 0 });
+        const d = storesMap.get(s.storeId);
+        d.revenue += Number(s.totalValue);
+        if(s.isInfluenced) { d.revenueInfluenced += Number(s.totalValue); d.conversoes++; d.salesInfluenced++; }
     });
-
-    const storesList = Array.from(storesMap.values()).map((s: any) => ({
-      ...s, ticketAverage: s.conversions > 0 ? s.revenueInfluenced / s.conversions : 0
-    }));
 
     return { 
         chart: chartData, 
         campaignsList: campaignsRaw, 
-        storesList: storesList,
-        filterOptions: filterOptions // Lista para o dropdown
+        storesList: Array.from(storesMap.values()).map((s:any) => ({...s, ticketAverage: s.conversoes > 0 ? s.revenueInfluenced/s.conversoes : 0})),
+        dispatchesList, // Lista de disparos com receita calculada
+        filterOptions: await this.getFilterOptions()
+    };
+  }
+
+  // --- 3. LÓGICA DE VAREJO (PRESERVADA E ROBUSTA) ---
+  async getRetailMetrics(startStr?: string, endStr?: string, storesStr?: string) {
+    const today = new Date();
+    const endDate = endStr ? new Date(endStr) : today;
+    endDate.setUTCHours(23, 59, 59, 999);
+    const startDate = startStr ? new Date(startStr) : new Date(new Date().setDate(today.getDate() - 365));
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    const whereClause: any = { date: { gte: startDate, lte: endDate } };
+    if (storesStr && storesStr.length > 0) whereClause.storeId = { in: storesStr.split(',') };
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: whereClause, include: { store: true }, orderBy: { date: 'asc' },
+    });
+
+    let totalRevenue = 0;
+    let totalTransactions = transactions.length;
+    
+    // Maps para agregação
+    const historyMap = new Map();
+    const storesMap = new Map();
+    const channelsMap = new Map();
+    const customerHistory = new Map<string, Date>(); 
+
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    const isDaily = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) <= 60;
+
+    for (const tx of transactions) {
+      const val = Number(tx.totalValue);
+      const storeId = tx.storeId;
+      const channel = tx.channel || 'Outros';
+      const isInfluenced = tx.isInfluenced || false;
+      const txDate = new Date(tx.date);
+
+      totalRevenue += val;
+
+      let groupType = 'new';
+      const lastPurchase = customerHistory.get(tx.customerId);
+      if (lastPurchase) {
+        const daysSinceLast = differenceInDays(txDate, lastPurchase);
+        if (daysSinceLast > 90) groupType = 'recovered'; 
+        else groupType = 'recurrent';
+      }
+      customerHistory.set(tx.customerId, txDate);
+
+      const dateKey = isDaily ? format(txDate, 'dd/MM', { locale: ptBR }) : format(txDate, 'MMM yyyy', { locale: ptBR });
+
+      if (!historyMap.has(dateKey)) {
+        historyMap.set(dateKey, { 
+            name: dateKey, sortDate: txDate, revenue: 0, revenueInfluenced: 0, transactions: 0,
+            customerSet: new Set(), groupNew: 0, groupRecurrent: 0, groupRecovered: 0
+        });
+      }
+      const hist = historyMap.get(dateKey);
+      hist.revenue += val;
+      hist.transactions += 1;
+      if (isInfluenced) hist.revenueInfluenced += val;
+      hist.customerSet.add(tx.customerId);
+      
+      if (groupType === 'new') hist.groupNew++;
+      else if (groupType === 'recurrent') hist.groupRecurrent++;
+      else hist.groupRecovered++;
+
+      if (!storesMap.has(storeId)) {
+        storesMap.set(storeId, {
+          id: storeId, name: tx.store.name, code: tx.store.cnpj ? tx.store.cnpj.slice(0,4) : 'LOJA',
+          revenue: 0, revenueInfluenced: 0, transactions: 0, recurrentCount: 0 
+        });
+      }
+      const st = storesMap.get(storeId);
+      st.revenue += val;
+      st.transactions += 1;
+      if (isInfluenced) st.revenueInfluenced += val;
+      if (groupType === 'recurrent') st.recurrentCount += 1;
+
+      if (!channelsMap.has(channel)) channelsMap.set(channel, { name: channel, value: 0 });
+      channelsMap.get(channel).value += val;
+    }
+
+    const channels = Array.from(channelsMap.values()).map((ch: any) => ({
+      ...ch, percent: totalRevenue > 0 ? ((ch.value / totalRevenue) * 100).toFixed(2) : "0.00"
+    })).sort((a, b) => b.value - a.value);
+
+    const stores = Array.from(storesMap.values()).map((s: any) => {
+        const ticket = s.transactions > 0 ? s.revenue / s.transactions : 0;
+        return {
+            ...s,
+            ticket: ticket,
+            percentInfluenced: s.revenue > 0 ? ((s.revenueInfluenced / s.revenue) * 100).toFixed(2) : "0.00",
+            repurchase: s.transactions > 0 ? ((s.recurrentCount / s.transactions) * 100).toFixed(1) : "0.0",
+            itemsPerTicket: ticket > 0 ? (ticket / 150).toFixed(2) : "0.00" 
+        };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    const history = Array.from(historyMap.values()).sort((a: any, b: any) => a.sortDate - b.sortDate).map((h: any) => {
+        const uniqueConsumers = h.customerSet.size;
+        const ticket = h.transactions > 0 ? h.revenue / h.transactions : 0;
+        return {
+            ...h,
+            revenueOrganic: h.revenue - h.revenueInfluenced,
+            ticket: Math.round(ticket),
+            itemsPerTicket: ticket > 0 ? Number((ticket / 150).toFixed(1)) : 0,
+            repurchase: h.transactions > 0 ? Number(((h.groupRecurrent / h.transactions) * 100).toFixed(1)) : 0,
+            revenueLastYear: h.revenue * 0.85, 
+            consumers: uniqueConsumers,
+            consumersActive: Math.floor(uniqueConsumers * 0.9),
+            avgSpend: uniqueConsumers > 0 ? Math.round(h.revenue / uniqueConsumers) : 0,
+            frequency: uniqueConsumers > 0 ? Number((h.transactions / uniqueConsumers).toFixed(2)) : 0,
+            interval: uniqueConsumers > 0 ? Math.round(30 / (h.transactions / uniqueConsumers)) : 0,
+            revenueNew: Math.round((h.groupNew / h.transactions) * h.revenue) || 0,
+            revenueRecurrent: Math.round((h.groupRecurrent / h.transactions) * h.revenue) || 0,
+            revenueRecovered: Math.round((h.groupRecovered / h.transactions) * h.revenue) || 0,
+        };
+    });
+
+    return {
+      kpis: {
+        revenue: totalRevenue,
+        revenueLastYear: totalRevenue * 0.9,
+        transactions: totalTransactions,
+        ticketAverage: totalTransactions > 0 ? totalRevenue / totalTransactions : 0,
+        repurchaseRate: totalTransactions > 0 ? ((totalTransactions - customerHistory.size) / totalTransactions * 100).toFixed(2) : 0,
+      },
+      history,
+      channels,
+      stores
     };
   }
 }
