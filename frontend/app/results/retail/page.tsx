@@ -69,7 +69,7 @@ export default function RetailResultsPage() {
     setLoading(true);
     try {
       const storesQuery = stores.length > 0 ? `&stores=${stores.join(',')}` : '';
-      const url = `http://localhost:3000/webhook/erp/retail-metrics?start=${start}&end=${end}${storesQuery}`;
+      const url = `http://localhost:3000/sales/retail-metrics?start=${start}&end=${end}${storesQuery}`;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error("Erro API");
       const json = await res.json();
@@ -279,7 +279,9 @@ export default function RetailResultsPage() {
           </Link>
           <div className="mt-6 mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hidden lg:block">Analytics</div>
           <NavItem icon={<BarChart2 size={20}/>} label="Performance Varejo" active />
-          <NavItem icon={<PieIcon size={20}/>} label="Canais & Origem" />
+          <Link href="/results/channels">
+            <NavItem icon={<PieIcon size={20}/>} label="Canais & Origem" />
+          </Link>  
           <div className="mt-6 mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hidden lg:block">Engajamento</div>
           <NavItem icon={<MessageCircle size={20}/>} label="Campanhas" />
           <NavItem icon={<Target size={20}/>} label="Metas & Objetivos" />
