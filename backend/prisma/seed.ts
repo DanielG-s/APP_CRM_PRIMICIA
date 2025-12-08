@@ -1,10 +1,12 @@
+// backend/prisma/seed.ts
+
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // --- CONFIGURAÇÕES DO GERADOR ---
 const TOTAL_STORES = 5;
 const TOTAL_CUSTOMERS = 300;
-const TRANSACTIONS_PER_MONTH = 100; // Ajuste para mais ou menos volume
+const TRANSACTIONS_PER_MONTH = 100;
 const MONTHS_HISTORY = 12;
 
 // Arrays auxiliares para realismo
@@ -35,11 +37,18 @@ function getRandomChannel() {
 }
 
 async function main() {
-  console.log('🌱 Iniciando Seed do Banco de Dados...');
+  console.log('🌱 Iniciando Seed Completo do Banco de Dados...');
 
-  // 1. Limpar dados antigos (Ordem importa por causa das chaves estrangeiras)
+  // 1. Limpar dados antigos
   console.log('🧹 Limpando tabelas antigas...');
   try {
+    // Limpeza de Campanhas e suas dependências
+    await prisma.campaignMetric.deleteMany();
+    await prisma.campaignContent.deleteMany();
+    await prisma.campaignSchedule.deleteMany();
+    await prisma.campaign.deleteMany();
+    
+    // Limpeza do CRM Core
     await prisma.transaction.deleteMany();
     await prisma.customer.deleteMany();
     await prisma.store.deleteMany();
@@ -49,7 +58,6 @@ async function main() {
 
   // 2. Criar Lojas
   console.log('🏪 Criando Lojas...');
-  // CORREÇÃO: Tipando explicitamente como any[] para o TS não reclamar
   const createdStores: any[] = []; 
   
   for (let i = 0; i < TOTAL_STORES; i++) {
@@ -65,7 +73,6 @@ async function main() {
 
   // 3. Criar Clientes (Base CRM)
   console.log('👥 Criando Clientes...');
-  // CORREÇÃO: Tipando explicitamente como any[]
   const createdCustomers: any[] = [];
 
   for (let i = 0; i < TOTAL_CUSTOMERS; i++) {
@@ -74,7 +81,7 @@ async function main() {
         name: `Cliente Teste ${i + 1}`,
         email: `cliente${i + 1}@exemplo.com`,
         phone: `1199999${i.toString().padStart(4, '0')}`,
-        storeId: createdStores[i % createdStores.length].id, // Distribui entre lojas
+        storeId: createdStores[i % createdStores.length].id,
         propensityScore: Math.random() * 100,
         propensityLabel: Math.random() > 0.7 ? 'Alta' : 'Média',
       },
@@ -83,32 +90,25 @@ async function main() {
   }
 
   // 4. Gerar Transações (Histórico de 12 meses)
-  console.log('💳 Gerando Transações (pode demorar um pouco)...');
+  console.log('💳 Gerando Transações (Receita)...');
   
   const today = new Date();
   const oneYearAgo = new Date();
   oneYearAgo.setMonth(today.getMonth() - MONTHS_HISTORY);
 
-  // CORREÇÃO: Tipando explicitamente como any[]
   const transactionsData: any[] = [];
-
-  // Loop para criar volume
   const totalTransactions = TRANSACTIONS_PER_MONTH * MONTHS_HISTORY;
   
   for (let i = 0; i < totalTransactions; i++) {
-    // Escolher Loja e Cliente Aleatórios
     const store = createdStores[Math.floor(Math.random() * createdStores.length)];
     const customer = createdCustomers[Math.floor(Math.random() * createdCustomers.length)];
     
-    // Escolher Canal e Influência
     const channelInfo = getRandomChannel();
     const isInfluenced = Math.random() < channelInfo.influencedChance;
 
-    // Gerar Data (com tendência de crescimento recente)
     const timeOffset = Math.pow(Math.random(), 0.5) * (today.getTime() - oneYearAgo.getTime());
     const date = new Date(today.getTime() - timeOffset);
 
-    // Gerar Valor (Ticket Médio variado)
     const baseValue = 150 + Math.random() * 650;
     const totalValue = Number(baseValue.toFixed(2));
 
@@ -117,22 +117,95 @@ async function main() {
       customerId: customer.id,
       totalValue: totalValue,
       date: date,
-      items: {}, // JSON vazio
+      items: {}, 
       channel: channelInfo.name,
       isInfluenced: isInfluenced,
     });
   }
 
-  // Inserção em Lote
   await prisma.transaction.createMany({
     data: transactionsData,
+  });
+
+  // --- 5. GERAR CAMPANHAS (NOVO CÓDIGO) ---
+  console.log('📢 Gerando Campanhas com Métricas Detalhadas (Soft/Hard Bounces, Spam)...');
+  
+  // Vamos gerar campanhas dos últimos 60 dias até hoje
+  const campaignStartDate = new Date();
+  campaignStartDate.setDate(today.getDate() - 60);
+  
+  const campaignsData: any[] = [];
+  let currentCampaignDate = new Date(campaignStartDate);
+
+  while (currentCampaignDate <= today) {
+    // 1 ou 2 campanhas por dia
+    const dailyCampaignsCount = Math.random() > 0.7 ? 2 : 1;
+
+    for (let k = 0; k < dailyCampaignsCount; k++) {
+        // Escolher uma loja aleatória para ser a "dona" da campanha
+        const store = createdStores[Math.floor(Math.random() * createdStores.length)];
+        
+        // Volume de envio (entre 2000 e 5000)
+        const sent = Math.floor(Math.random() * 3000) + 2000;
+        
+        // Funil de Métricas
+        const delivered = Math.floor(sent * (0.95 + Math.random() * 0.04)); // 95-99% entregue
+        const totalBounces = sent - delivered;
+        
+        // Distribuição de Bounces
+        const softBounces = Math.floor(totalBounces * 0.7); // 70% soft
+        const hardBounces = totalBounces - softBounces;     // 30% hard
+
+        // Engajamento
+        const opens = Math.floor(delivered * (0.15 + Math.random() * 0.15)); // 15-30% abertura
+        const clicks = Math.floor(opens * (0.10 + Math.random() * 0.10));    // 10-20% clique
+
+        // Rejeição
+        const unsubscribes = Math.floor(Math.random() * 15); // 0-15 descadastros
+        const spamReports = Math.floor(Math.random() * 4);   // 0-4 spams
+
+        campaignsData.push({
+            storeId: store.id,
+            name: `Campanha Diária ${k+1} - ${currentCampaignDate.getDate()}/${currentCampaignDate.getMonth() + 1}`,
+            channel: Math.random() > 0.5 ? 'E-mail' : 'WhatsApp', // Alterna canais
+            status: 'sent',
+            segmentId: 'all',
+            audienceSize: sent,
+            date: new Date(currentCampaignDate), // Importante para o gráfico diário
+            
+            // Métricas
+            sent,
+            delivered,
+            opens,
+            clicks,
+            softBounces,
+            hardBounces,
+            spamReports,
+            unsubscribes,
+
+            // Configuração fake
+            config: { subject: "Oferta Exclusiva" },
+            content: { body: "Conteúdo da campanha..." },
+            
+            // Datas de auditoria
+            createdAt: new Date(currentCampaignDate),
+            updatedAt: new Date(currentCampaignDate)
+        });
+    }
+    // Avançar dia
+    currentCampaignDate.setDate(currentCampaignDate.getDate() + 1);
+  }
+
+  await prisma.campaign.createMany({
+    data: campaignsData,
   });
 
   console.log(`✅ Seed concluído!`);
   console.log(`📊 Resumo:`);
   console.log(`   - ${createdStores.length} Lojas`);
   console.log(`   - ${createdCustomers.length} Clientes`);
-  console.log(`   - ${transactionsData.length} Transações geradas`);
+  console.log(`   - ${transactionsData.length} Transações`);
+  console.log(`   - ${campaignsData.length} Campanhas com métricas de Bounces/Rejeições`);
 }
 
 main()

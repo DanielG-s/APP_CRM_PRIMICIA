@@ -2,186 +2,237 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Home, Users, BarChart2, MessageCircle, Target, Calendar, Filter, 
-  ChevronDown, Mail, Smartphone, Download, MousePointer, Eye, 
-  AlertCircle, DollarSign, ShoppingBag, PieChart as PieIcon, FileText, Check, X, Info,
-  ArrowUpRight, ArrowDownRight, Search
+  Home, Users, BarChart2, MessageCircle, Calendar, Filter, 
+  ChevronDown, Mail, MousePointer, Eye, 
+  AlertCircle, PieChart as PieIcon, FileText, Check, Download,
+  ArrowUpRight, ArrowDownRight, Search, XCircle, Info
 } from 'lucide-react';
 import Link from 'next/link';
 import { 
-  LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
+  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 
 // --- TEMA VISUAL ---
 const COLORS = {
-  primary: "#6366f1",   // Violeta
-  secondary: "#0f172a", // Slate Dark
-  accent: "#f59e0b",    // Amber
-  success: "#10b981",   // Emerald
-  danger: "#ef4444",    // Red
-  neutral: "#94a3b8",   // Gray
-  grid: "#e2e8f0"
+  primary: "#6366f1",   
+  secondary: "#0f172a", 
+  accent: "#f59e0b",    
+  success: "#10b981",   
+  danger: "#ef4444",    
+  neutral: "#94a3b8",   
+  grid: "#e2e8f0",
+  softBounce: "#f59e0b", 
+  hardBounce: "#dc2626", 
+  spam: "#db2777",       
+  unsubscribe: "#7c3aed",
+  clicks: "#f97316",     
+  ctr: "#10b981",        
+  ctor: "#8b5cf6"        
 };
 
 const TOOLTIPS = {
-    receitaTotal: "É a soma dos valores gerados por todas as transações realizadas pela marca (incluindo vendas e devoluções). Dentre os filtros, só o de data afeta este número.",
-    receitaInfluenciada: "É a fatia da receita da marca que foi influenciada por meio de um canal.",
-    conversoes: "É quando as pessoas realizam uma compra (ou mais) após interagirem com uma campanha. É considerada uma única vez dentro da janela de conversão analisada. A taxa é calculada sobre as aberturas.", 
-    vendasInfluenciadas: "Quantidade de vendas que ocorreram a partir de uma interação com uma campanha, dentro da janela de conversão analisada.",
-    baseInfluenciada: "São as pessoas únicas que geraram vendas influenciadas durante o período.",
-    ticket: "É o valor monetário gasto, em média, em cada venda influenciada. É calculado dividindo o valor total da receita influenciada pelo número total de vendas influenciadas.",
-    envios: "Total de mensagens disparadas no período selecionado.",
-    entregues: "Mensagens confirmadas como recebidas pelo servidor de destino.",
-    aberturas: "Quantidade de aberturas únicas (Disponível para E-mail).",
-    cliques: "Total de cliques únicos em links dentro das mensagens.",
-    rejeicoes: "Mensagens que falharam permanentemente (Hard Bounce) ou temporariamente (Soft Bounce)."
+  receitaTotal: "Soma total gerada por todas as transações no período.",
+  receitaInfluenciada: "Fatia da receita atribuída diretamente às campanhas.",
+  conversoes: "Total de vendas realizadas após interação.", 
+  vendasInfluenciadas: "Quantidade de pedidos influenciados.",
+  baseInfluenciada: "Clientes únicos que compraram.",
+  ticket: "Valor médio gasto por venda influenciada.",
+  envios: "Total de mensagens enviadas.",
+  entregues: "Mensagens confirmadas pelo servidor.",
+  aberturas: "Total de aberturas únicas.",
+  cliques: "Gráfico detalhado: Volume de Cliques (Eixo esquerdo) comparado com CTR e CTOR (Eixo direito).",
+  bounces: "Gráfico detalhado: Soft Bounce (Erro Temporário) e Hard Bounce (Erro Permanente).",
+  rejeicoes: "Gráfico detalhado: Marcações de Spam vs Solicitações de Descadastro."
 };
 
-// --- DADOS MOCKADOS (CAMPANHAS) ---
-const MOCK_CAMPAIGNS = [
-    { 
-        id: "CMP-001", name: "Blog-Quinzenal-Novembro", segment: "TODOS USUARIOS SEM ERRO", platform: "APP.PRIMICIA", channel: "E-mail", date: "2024-11-17T00:00:00", 
-        revenueInfluenced: 7189.22, conversions: 18, conversionRate: 0.76, salesInfluenced: 19, ticketAverage: 378.38,
-        sent: 26944, delivered: 26855, deliveredRate: 99.67, opens: 2366, openRate: 8.81, clicks: 29, ctr: 0.11, ctor: 1.23, bounces: 93, bounceRate: 0.35, rejections: 8, rejectionRate: 0.03
-    },
-    { 
-        id: "CMP-002", name: "Pink Friday - 13", segment: "TODOS USUARIOS COM ERRO", platform: "APP.PRIMICIA", channel: "E-mail", date: "2024-11-21T13:30:00", 
-        revenueInfluenced: 5709.00, conversions: 15, conversionRate: 0.92, salesInfluenced: 19, ticketAverage: 300.10,
-        sent: 15000, delivered: 14800, deliveredRate: 98.66, opens: 3000, openRate: 20.00, clicks: 150, ctr: 1.00, ctor: 5.00, bounces: 150, bounceRate: 1.00, rejections: 50, rejectionRate: 0.33
-    },
-    { 
-        id: "CMP-003", name: "Oferta Relâmpago VIP", segment: "VIPS E LOVERS", platform: "WHATSAPP", channel: "WhatsApp", date: "2024-11-05T10:00:00", 
-        revenueInfluenced: 8900.50, conversions: 45, conversionRate: 2.5, salesInfluenced: 48, ticketAverage: 197.78,
-        sent: 2000, delivered: 1980, deliveredRate: 99.00, opens: 1800, openRate: 90.00, clicks: 400, ctr: 20.00, ctor: 22.22, bounces: 10, bounceRate: 0.50, rejections: 10, rejectionRate: 0.50
-    },
-    { 
-        id: "CMP-004", name: "Recuperação de Carrinho", segment: "ABANDONO 24H", platform: "SMS", channel: "SMS", date: "2024-11-07T15:45:00", 
-        revenueInfluenced: 1200.00, conversions: 5, conversionRate: 1.2, salesInfluenced: 5, ticketAverage: 240.00,
-        sent: 500, delivered: 450, deliveredRate: 90.00, opens: 0, openRate: 0, clicks: 45, ctr: 10.00, ctor: 0, bounces: 20, bounceRate: 4.00, rejections: 30, rejectionRate: 6.00
-    },
-    { 
-        id: "CMP-005", name: "Lançamento Verão", segment: "BASE COMPLETA", platform: "APP.PRIMICIA", channel: "E-mail", date: "2024-11-10T09:00:00", 
-        revenueInfluenced: 22100.00, conversions: 60, conversionRate: 3.1, salesInfluenced: 65, ticketAverage: 368.33,
-        sent: 18000, delivered: 17900, deliveredRate: 99.44, opens: 3780, openRate: 21.00, clicks: 800, ctr: 4.44, ctor: 21.16, bounces: 50, bounceRate: 0.27, rejections: 50, rejectionRate: 0.27
-    },
-];
+// --- FUNÇÃO AUXILIAR: AGRUPAR POR SEMANA ---
+const groupDataByWeek = (dailyData: any[]) => {
+    if (!dailyData || dailyData.length === 0) return [];
+    const weeks: any[] = [];
+    let currentWeek: any = null;
 
-// --- DADOS MOCKADOS (LOJAS) ---
-const MOCK_STORES = [
-    { id: "004", name: "PRIMICIA - VAREJO FABRICA", revenue: 342991.22, revenueInfluenced: 12535.11, conversions: 33, salesInfluenced: 36, ticketAverage: 348.20 },
-    { id: "001", name: "PRIMICIA - MATRIZ", revenue: 520100.00, revenueInfluenced: 45000.00, conversions: 120, salesInfluenced: 130, ticketAverage: 346.15 },
-    { id: "002", name: "PRIMICIA - SHOPPING IGUATEMI", revenue: 280500.50, revenueInfluenced: 18200.00, conversions: 55, salesInfluenced: 60, ticketAverage: 303.33 },
-    { id: "003", name: "PRIMICIA - OUTLET", revenue: 150000.00, revenueInfluenced: 5000.00, conversions: 20, salesInfluenced: 20, ticketAverage: 250.00 },
-];
+    dailyData.forEach((day, index) => {
+        if (index % 7 === 0) {
+            if (currentWeek) {
+                currentWeek.ctr = currentWeek.entregues > 0 ? ((currentWeek.cliques / currentWeek.entregues) * 100).toFixed(2) : 0;
+                currentWeek.ctor = currentWeek.aberturas > 0 ? ((currentWeek.cliques / currentWeek.aberturas) * 100).toFixed(2) : 0;
+                currentWeek.ticket = currentWeek.conversoes > 0 ? (currentWeek.receitaInfluenciada / currentWeek.conversoes).toFixed(2) : 0;
+                currentWeek.name = `${currentWeek.startLabel} - ${day.name}`; 
+                weeks.push(currentWeek);
+            }
+            currentWeek = {
+                startLabel: day.name, name: day.name, 
+                envios: 0, entregues: 0, aberturas: 0, cliques: 0, softBounces: 0, hardBounces: 0, bounces: 0, spam: 0, descadastro: 0, rejeicoes: 0, receitaTotal: 0, receitaInfluenciada: 0, conversoes: 0, vendasInfluenciadas: 0, baseInfluenciada: 0
+            };
+        }
+        currentWeek.envios += day.envios;
+        currentWeek.entregues += day.entregues;
+        currentWeek.aberturas += day.aberturas;
+        currentWeek.cliques += day.cliques;
+        currentWeek.softBounces += day.softBounces;
+        currentWeek.hardBounces += day.hardBounces;
+        currentWeek.bounces += day.bounces;
+        currentWeek.spam += day.spam;
+        currentWeek.descadastro += day.descadastro;
+        currentWeek.rejeicoes += day.rejeicoes;
+        currentWeek.receitaTotal += day.receitaTotal;
+        currentWeek.receitaInfluenciada += day.receitaInfluenciada;
+        currentWeek.conversoes += day.conversoes;
+        currentWeek.vendasInfluenciadas += day.vendasInfluenciadas;
+        currentWeek.baseInfluenciada += day.baseInfluenciada;
+    });
+
+    if (currentWeek) {
+        currentWeek.ctr = currentWeek.entregues > 0 ? Number(((currentWeek.cliques / currentWeek.entregues) * 100).toFixed(2)) : 0;
+        currentWeek.ctor = currentWeek.aberturas > 0 ? Number(((currentWeek.cliques / currentWeek.aberturas) * 100).toFixed(2)) : 0;
+        currentWeek.ticket = currentWeek.conversoes > 0 ? Number((currentWeek.receitaInfluenciada / currentWeek.conversoes).toFixed(2)) : 0;
+        if(!currentWeek.name.includes('-')) currentWeek.name = `${currentWeek.startLabel} - Fim`;
+        weeks.push(currentWeek);
+    }
+    return weeks;
+};
 
 export default function ChannelResultsPage() {
-  const [dateRange, setDateRange] = useState({ start: '2024-11-01', end: '2024-11-30' });
-  const [draftDate, setDraftDate] = useState({ start: '2024-11-01', end: '2024-11-30' });
+  
+  // --- DATA DINÂMICA ---
+  const getToday = () => new Date().toISOString().split('T')[0];
+  const getStartOfMonth = () => {
+    const d = new Date();
+    d.setDate(1); 
+    return d.toISOString().split('T')[0];
+  };
+
+  const [dateRange, setDateRange] = useState({ start: getStartOfMonth(), end: getToday() });
+  const [draftDate, setDraftDate] = useState({ start: getStartOfMonth(), end: getToday() });
   const [isDateOpen, setIsDateOpen] = useState(false);
   
-  // Filtros da Tabela
   const [tableSearch, setTableSearch] = useState("");
   const [groupBy, setGroupBy] = useState("Campanhas");
 
+  const [filters, setFilters] = useState({
+    channel: 'Todos',
+    conversionEvent: 'Abertura',
+    conversionWindow: '7 dias',
+    tags: [] as string[],
+    campaigns: [] as string[],
+    campaignType: 'Todos'
+  });
+
   // Estados de Visualização
   const [engagementMetric, setEngagementMetric] = useState('aberturas');
-  const [revenueMetric, setRevenueMetric] = useState('receitaInfluenciada');
   const [engagementView, setEngagementView] = useState<'diario' | 'semanal'>('diario');
+  const [revenueMetric, setRevenueMetric] = useState('receitaInfluenciada');
   const [revenueView, setRevenueView] = useState<'diario' | 'semanal'>('diario');
   const [showComparison, setShowComparison] = useState(false);
 
-  // Dados dinâmicos
-  const [engagementData, setEngagementData] = useState<any[]>([]);
-  const [revenueData, setRevenueData] = useState<any[]>([]);
+  // --- DADOS REAIS ---
+  const [fullDailyData, setFullDailyData] = useState<any[]>([]);
+  const [campaignsList, setCampaignsList] = useState<any[]>([]); 
+  const [storesList, setStoresList] = useState<any[]>([]); 
   const [loading, setLoading] = useState(false);
+
+  // --- PAGINAÇÃO (ESTADOS NOVOS) ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const dateRef = useRef<HTMLDivElement>(null);
 
-  // --- FILTRO DA TABELA (CAMPANHAS) ---
+  // UseMemo dos Gráficos
+  const currentEngagementData = useMemo(() => {
+      if (engagementView === 'semanal') return groupDataByWeek(fullDailyData);
+      return fullDailyData;
+  }, [engagementView, fullDailyData]);
+
+  const currentRevenueData = useMemo(() => {
+      if (revenueView === 'semanal') return groupDataByWeek(fullDailyData);
+      return fullDailyData;
+  }, [revenueView, fullDailyData]);
+
+  // --- FILTROS TABELAS ---
   const filteredCampaigns = useMemo(() => {
-      const term = tableSearch.toLowerCase();
-      return MOCK_CAMPAIGNS.filter(c => 
-          c.name.toLowerCase().includes(term) || 
-          c.id.toLowerCase().includes(term) || 
-          c.segment.toLowerCase().includes(term)
+    const term = tableSearch.toLowerCase();
+    let campaigns = campaignsList.filter(c => {
+      if (filters.channel !== 'Todos' && c.channel !== filters.channel) return false;
+      return true;
+    });
+    if (term) {
+      campaigns = campaigns.filter(c => 
+        c.name.toLowerCase().includes(term) || 
+        c.id.toLowerCase().includes(term) || 
+        (c.segmentId && c.segmentId.toLowerCase().includes(term))
       );
-  }, [tableSearch]);
+    }
+    return campaigns;
+  }, [tableSearch, filters, campaignsList]); 
 
-  // --- FILTRO DA TABELA (LOJAS) ---
   const filteredStores = useMemo(() => {
-      const term = tableSearch.toLowerCase();
-      return MOCK_STORES.filter(s => 
-          s.name.toLowerCase().includes(term) || 
-          s.id.toLowerCase().includes(term)
-      );
-  }, [tableSearch]);
+    const term = tableSearch.toLowerCase();
+    return storesList.filter((s: any) => 
+      s.name.toLowerCase().includes(term) || 
+      s.id.toLowerCase().includes(term)
+    );
+  }, [tableSearch, storesList]);
 
-  // --- EXPORTAR CSV ---
-  const handleExportCSV = () => {
-      let csvContent = "";
-      
-      if (groupBy === 'Lojas') {
-          const headers = ["ID", "Loja", "Receita Total", "Receita Inf.", "Conversões", "Vendas Inf.", "Ticket Médio Inf."];
-          const rows = filteredStores.map(s => [
-              s.id, s.name, s.revenue.toFixed(2), s.revenueInfluenced.toFixed(2), s.conversions, s.salesInfluenced, s.ticketAverage.toFixed(2)
-          ]);
-          csvContent = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
-      } else {
-          const headers = [
-              "ID", "Nome", "Segmento", "Data", "Canal", 
-              "Receita Inf.", "Conversões", "Taxa Conv.", "Vendas Inf.", "Ticket Médio",
-              "Envios", "Entregas", "Taxa Entrega", "Aberturas", "Taxa Abertura", "Cliques", "CTR", "CTOR", "Bounces", "Rejeições"
-          ];
-          const rows = filteredCampaigns.map(c => [
-              c.id, c.name, c.segment, new Date(c.date).toLocaleDateString('pt-BR'), c.channel,
-              c.revenueInfluenced.toFixed(2), c.conversions, c.conversionRate + "%", c.salesInfluenced, c.ticketAverage.toFixed(2),
-              c.sent, c.delivered, c.deliveredRate + "%", c.opens, c.openRate + "%", c.clicks, c.ctr + "%", c.ctor + "%", c.bounces, c.rejections
-          ]);
-          csvContent = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
-      }
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `performance_${groupBy.toLowerCase()}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
-
-  // --- FUNÇÃO DE GERAÇÃO DE DADOS GRÁFICOS ---
+  // --- LÓGICA DE PAGINAÇÃO ---
+  // Reseta para página 1 se mudar filtros, busca ou agrupamento
   useEffect(() => {
-      setLoading(true);
-      const start = new Date(dateRange.start);
-      const end = new Date(dateRange.end);
-      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      
-      // Simulação de dados gráficos
-      const generateData = (view: string) => {
-         const count = view === 'diario' ? daysDiff : Math.ceil(daysDiff / 7);
-         return Array.from({ length: count }).map((_, i) => ({
-             name: view === 'diario' ? `${i+1}/nov` : `Semana ${i+1}`,
-             envios: Math.floor(Math.random() * 5000) + 2000,
-             entregues: Math.floor(Math.random() * 4800) + 1900,
-             aberturas: Math.floor(Math.random() * 3000) + 1000,
-             cliques: Math.floor(Math.random() * 800) + 200,
-             rejeicoes: Math.floor(Math.random() * 50),
-             receitaTotal: Math.floor(Math.random() * 50000) + 10000,
-             receitaInfluenciada: Math.floor(Math.random() * 15000) + 2000,
-             vendasInfluenciadas: Math.floor(Math.random() * 50) + 5, 
-             baseInfluenciada: Math.floor(Math.random() * 40) + 2, 
-             ticket: Math.floor(Math.random() * 100) + 200,
-             conversoes: Math.floor(Math.random() * 5) 
-         }));
-      };
+    setCurrentPage(1);
+  }, [tableSearch, groupBy, filters, dateRange]);
 
-      setEngagementData(generateData(engagementView));
-      setRevenueData(generateData(revenueView));
-      setLoading(false);
-  }, [dateRange, engagementView, revenueView]);
+  // Determina qual lista está ativa
+  const currentTableData = groupBy === 'Lojas' ? filteredStores : filteredCampaigns;
+  
+  // Calcula paginação
+  const totalItems = currentTableData.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  
+  // ITENS QUE SERÃO EXIBIDOS NA TABELA
+  const currentItems = currentTableData.slice(startIndex, endIndex);
 
-  // Click Outside
+  // --- BUSCAR DADOS ---
+  useEffect(() => {
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const url = `http://localhost:3000/sales/channel-results?start=${dateRange.start}&end=${dateRange.end}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (data) {
+                if (data.chart) setFullDailyData(data.chart);
+                
+                if (data.campaignsList) {
+                    const formattedCampaigns = data.campaignsList.map((c: any) => ({
+                        ...c,
+                        deliveredRate: c.sent > 0 ? ((c.delivered / c.sent) * 100).toFixed(1) : 0,
+                        openRate: c.delivered > 0 ? ((c.opens / c.delivered) * 100).toFixed(1) : 0,
+                        ctr: c.delivered > 0 ? ((c.clicks / c.delivered) * 100).toFixed(1) : 0,
+                        ctor: c.opens > 0 ? ((c.clicks / c.opens) * 100).toFixed(1) : 0,
+                        bounceRate: c.sent > 0 ? (((c.softBounces + c.hardBounces) / c.sent) * 100).toFixed(1) : 0,
+                        rejectionRate: c.sent > 0 ? (((c.spamReports + c.unsubscribes) / c.sent) * 100).toFixed(2) : 0,
+                        bounces: c.softBounces + c.hardBounces,
+                        rejections: c.spamReports + c.unsubscribes,
+                        revenueInfluenced: 0, conversions: 0, ticketAverage: 0
+                    }));
+                    setCampaignsList(formattedCampaigns);
+                }
+
+                if (data.storesList) setStoresList(data.storesList);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar dados:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchData();
+  }, [dateRange]);
+
+  // Utils
+  const handleExportCSV = () => { /* ... Lógica de exportação ... */ };
+  
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dateRef.current && !dateRef.current.contains(event.target as Node)) setIsDateOpen(false);
@@ -190,24 +241,14 @@ export default function ChannelResultsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleApplyDate = () => {
-      setDateRange(draftDate);
-      setIsDateOpen(false);
-  };
-
-  const formatDateDisplay = (iso: string) => {
-    if(!iso) return '';
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
-  }
-  
+  const handleApplyDate = () => { setDateRange(draftDate); setIsDateOpen(false); };
+  const formatDateDisplay = (iso: string) => { if(!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
   const formatAxis = (val: number, type: 'currency' | 'number') => {
-      if (val < 1000) return type === 'currency' ? `R$ ${val}` : val.toString();
-      const inMil = val / 1000;
-      const formatted = inMil % 1 === 0 ? inMil.toFixed(0) : inMil.toFixed(1);
-      return type === 'currency' ? `R$ ${formatted}mil` : `${formatted}mil`;
+    if (val < 1000) return type === 'currency' ? `R$ ${val}` : val.toString();
+    const inMil = val / 1000;
+    const formatted = inMil % 1 === 0 ? inMil.toFixed(0) : inMil.toFixed(1);
+    return type === 'currency' ? `R$ ${formatted}mil` : `${formatted}mil`;
   };
-
   const isRevenueMetricCurrency = useMemo(() => ['receitaTotal', 'receitaInfluenciada', 'ticket'].includes(revenueMetric), [revenueMetric]);
 
   return (
@@ -215,39 +256,24 @@ export default function ChannelResultsPage() {
       <Sidebar activePage="channels" />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* HEADER */}
         <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <span className="bg-emerald-100 text-emerald-600 p-1.5 rounded-md"><PieIcon size={18}/></span>
-                Resultados de Canais
-            </h1>
-          </div>
+          <div><h1 className="text-xl font-bold text-slate-800 flex items-center gap-2"><span className="bg-emerald-100 text-emerald-600 p-1.5 rounded-md"><PieIcon size={18}/></span>Resultados de Canais</h1></div>
           <div className="flex items-center gap-3">
-             <div className="text-right hidden sm:block">
-                <p className="text-xs font-bold text-slate-700">Admin User</p>
-                <p className="text-[10px] text-slate-400">Diretor Comercial</p>
-             </div>
+             <div className="text-right hidden sm:block"><p className="text-xs font-bold text-slate-700">Admin User</p><p className="text-[10px] text-slate-400">Diretor Comercial</p></div>
              <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">AD</div>
           </div>
         </header>
 
         <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-8">
-            
-            {/* ABAS */}
             <div className="flex border-b border-slate-200">
                 {['Lista de campanhas', 'Resultados de Canais', 'Tempo real'].map((tab) => {
                     const key = tab.toLowerCase().replace(/ /g, '');
                     const isActive = key === 'resultadosdecanais'; 
-                    return (
-                        <button key={key} className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${isActive ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                            {tab}
-                        </button>
-                    )
+                    return <button key={key} className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${isActive ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{tab}</button>
                 })}
             </div>
 
-            {/* FILTROS GLOBAIS */}
+            {/* FILTROS */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
                     <div className="relative" ref={dateRef}>
@@ -274,7 +300,7 @@ export default function ChannelResultsPage() {
                         <button className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition">Aplicar</button>
                     </div>
                 </div>
-                
+                {/* SELECTS ADICIONAIS */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                      <div><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">Canal</label><select className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-violet-500"><option>Todos os canais</option></select></div>
                      <div><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">Evento</label><select className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-violet-500"><option>Abertura</option></select></div>
@@ -286,32 +312,46 @@ export default function ChannelResultsPage() {
             {/* SEÇÃO 1: ENGAJAMENTO */}
             <section className="space-y-4">
                 <div className="flex justify-between items-end">
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <span className="w-1 h-5 bg-violet-500 rounded-full"></span>
-                        Consolidado de Engajamento
-                    </h2>
+                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><span className="w-1 h-5 bg-violet-500 rounded-full"></span>Consolidado de Engajamento</h2>
                     <div className="flex bg-white border border-slate-200 rounded-lg p-0.5">
                         <button onClick={() => setEngagementView('diario')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${engagementView === 'diario' ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:text-slate-700'}`}>Diário</button>
                         <button onClick={() => setEngagementView('semanal')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${engagementView === 'semanal' ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:text-slate-700'}`}>Semanal</button>
                     </div>
                 </div>
-                
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
                     <div className="grid grid-cols-2 md:grid-cols-6 border-b border-slate-100 rounded-t-xl">
-                        <MetricTab label="Envios" value="431.881" icon={<Mail size={14}/>} active={engagementMetric === 'envios'} onClick={() => setEngagementMetric('envios')} description={TOOLTIPS.envios} />
-                        <MetricTab label="Entregues" value="422.973" sub="98%" icon={<Check size={14}/>} active={engagementMetric === 'entregues'} onClick={() => setEngagementMetric('entregues')} description={TOOLTIPS.entregues} />
-                        <MetricTab label="Aberturas" value="37.135" sub="8.7%" icon={<Eye size={14}/>} active={engagementMetric === 'aberturas'} onClick={() => setEngagementMetric('aberturas')} color="text-violet-600" description={TOOLTIPS.aberturas} />
-                        <MetricTab label="Cliques" value="7.895" sub="21%" icon={<MousePointer size={14}/>} active={engagementMetric === 'cliques'} onClick={() => setEngagementMetric('cliques')} description={TOOLTIPS.cliques} />
-                        <MetricTab label="Rejeições" value="151" sub="0.04%" icon={<AlertCircle size={14}/>} active={engagementMetric === 'rejeicoes'} onClick={() => setEngagementMetric('rejeicoes')} isDanger description={TOOLTIPS.rejeicoes} />
+                        <MetricTab label="Envios" value={fullDailyData.reduce((acc, i) => acc + i.envios, 0).toLocaleString()} icon={<Mail size={14}/>} active={engagementMetric === 'envios'} onClick={() => setEngagementMetric('envios')} description={TOOLTIPS.envios} />
+                        <MetricTab label="Entregues" value={fullDailyData.reduce((acc, i) => acc + i.entregues, 0).toLocaleString()} sub="98%" icon={<Check size={14}/>} active={engagementMetric === 'entregues'} onClick={() => setEngagementMetric('entregues')} description={TOOLTIPS.entregues} />
+                        <MetricTab label="Aberturas" value={fullDailyData.reduce((acc, i) => acc + i.aberturas, 0).toLocaleString()} sub="8.7%" icon={<Eye size={14}/>} active={engagementMetric === 'aberturas'} onClick={() => setEngagementMetric('aberturas')} color="text-violet-600" description={TOOLTIPS.aberturas} />
+                        <MetricTab label="Cliques" value={fullDailyData.reduce((acc, i) => acc + i.cliques, 0).toLocaleString()} sub="2.18%" icon={<MousePointer size={14}/>} active={engagementMetric === 'cliques'} onClick={() => setEngagementMetric('cliques')} description={TOOLTIPS.cliques} />
+                        <MetricTab label="Bounces" value={fullDailyData.reduce((acc, i) => acc + i.bounces, 0).toLocaleString()} sub="1.23%" icon={<XCircle size={14}/>} active={engagementMetric === 'bounces'} onClick={() => setEngagementMetric('bounces')} isDanger description={TOOLTIPS.bounces} />
+                        <MetricTab label="Rejeições" value={fullDailyData.reduce((acc, i) => acc + i.rejeicoes, 0).toLocaleString()} sub="0.04%" icon={<AlertCircle size={14}/>} active={engagementMetric === 'rejeicoes'} onClick={() => setEngagementMetric('rejeicoes')} isDanger description={TOOLTIPS.rejeicoes} />
                     </div>
-                    <div className="p-6 h-72">
+                    <div className="p-6 h-72 relative">
+                        {loading && <div className="absolute inset-0 bg-white/80 z-20 flex items-center justify-center text-sm font-bold text-slate-500">Carregando dados...</div>}
+                        
+                        <div className="absolute top-4 right-6 z-10 bg-white/90 p-1.5 rounded backdrop-blur-sm flex gap-4 text-xs font-bold border border-slate-100 shadow-sm">
+                             {engagementMetric === 'bounces' && (<><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.softBounce}}></div><span className="text-slate-600">Soft Bounce</span></div><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.hardBounce}}></div><span className="text-slate-600">Hard Bounce</span></div></>)}
+                             {engagementMetric === 'rejeicoes' && (<><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.spam}}></div><span className="text-slate-600">Spam</span></div><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.unsubscribe}}></div><span className="text-slate-600">Descadastro</span></div></>)}
+                             {engagementMetric === 'cliques' && (<><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.clicks}}></div><span className="text-slate-600">Cliques</span></div><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.ctr}}></div><span className="text-slate-600">CTR %</span></div><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{background: COLORS.ctor}}></div><span className="text-slate-600">CTOR %</span></div></>)}
+                        </div>
+
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={engagementData}>
+                            <LineChart data={currentEngagementData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
+                                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
+                                {engagementMetric === 'cliques' && (<YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: COLORS.ctr}} tickFormatter={(val) => `${val}%`} />)}
                                 <Tooltip content={<CustomTooltip />} cursor={{stroke: '#cbd5e1'}} />
-                                <Line type="monotone" dataKey={engagementMetric} stroke={COLORS.primary} strokeWidth={3} dot={{r: 4, strokeWidth: 2, fill: '#fff'}} />
+                                {engagementMetric === 'bounces' ? (
+                                    <><Line yAxisId="left" type="monotone" dataKey="softBounces" name="Soft Bounce" stroke={COLORS.softBounce} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.softBounce}} activeDot={{r: 6}} /><Line yAxisId="left" type="monotone" dataKey="hardBounces" name="Hard Bounce" stroke={COLORS.hardBounce} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.hardBounce}} activeDot={{r: 6}} /></>
+                                ) : engagementMetric === 'rejeicoes' ? (
+                                    <><Line yAxisId="left" type="monotone" dataKey="spam" name="Spam" stroke={COLORS.spam} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.spam}} activeDot={{r: 6}} /><Line yAxisId="left" type="monotone" dataKey="descadastro" name="Descadastro" stroke={COLORS.unsubscribe} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.unsubscribe}} activeDot={{r: 6}} /></>
+                                ) : engagementMetric === 'cliques' ? (
+                                    <><Line yAxisId="left" type="monotone" dataKey="cliques" name="Cliques" stroke={COLORS.clicks} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.clicks}} activeDot={{r: 6}} /><Line yAxisId="right" type="monotone" dataKey="ctr" name="CTR" stroke={COLORS.ctr} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.ctr}} activeDot={{r: 6}} /><Line yAxisId="right" type="monotone" dataKey="ctor" name="CTOR" stroke={COLORS.ctor} strokeWidth={3} dot={{r: 4, fill: '#fff', stroke: COLORS.ctor}} activeDot={{r: 6}} /></>
+                                ) : (
+                                    <Line yAxisId="left" type="monotone" dataKey={engagementMetric} stroke={COLORS.primary} strokeWidth={3} dot={{r: 4, strokeWidth: 2, fill: '#fff'}} />
+                                )}
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -332,16 +372,16 @@ export default function ChannelResultsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
                     <div className="grid grid-cols-2 md:grid-cols-6 border-b border-slate-100 rounded-t-xl">
-                        <MetricTab label="Receita Total" value="R$ 1.7M" active={revenueMetric === 'receitaTotal'} onClick={() => setRevenueMetric('receitaTotal')} description={TOOLTIPS.receitaTotal} showComparison={showComparison} compValue="R$ 1.4M" compPercent={22.4} />
-                        <MetricTab label="Receita Influenciada" value="R$ 45k" color="text-emerald-600" active={revenueMetric === 'receitaInfluenciada'} onClick={() => setRevenueMetric('receitaInfluenciada')} description={TOOLTIPS.receitaInfluenciada} showComparison={showComparison} compValue="R$ 38k" compPercent={18.5} />
-                        <MetricTab label="Conversões" value="158" active={revenueMetric === 'conversoes'} onClick={() => setRevenueMetric('conversoes')} description={TOOLTIPS.conversoes} showComparison={showComparison} compValue="130" compPercent={21.5} />
-                        <MetricTab label="Vendas Inf." value="156" active={revenueMetric === 'vendasInfluenciadas'} onClick={() => setRevenueMetric('vendasInfluenciadas')} description={TOOLTIPS.vendasInfluenciadas} showComparison={showComparison} compValue="125" compPercent={24.8} />
-                        <MetricTab label="Base Inf." value="150" active={revenueMetric === 'baseInfluenciada'} onClick={() => setRevenueMetric('baseInfluenciada')} description={TOOLTIPS.baseInfluenciada} showComparison={showComparison} compValue="120" compPercent={25.0} />
+                        <MetricTab label="Receita Total" value={`R$ ${fullDailyData.reduce((acc,i)=>acc + (i.receitaTotal||0), 0).toLocaleString()}`} active={revenueMetric === 'receitaTotal'} onClick={() => setRevenueMetric('receitaTotal')} description={TOOLTIPS.receitaTotal} showComparison={showComparison} compValue="R$ 1.4M" compPercent={22.4} />
+                        <MetricTab label="Receita Influenciada" value={`R$ ${fullDailyData.reduce((acc,i)=>acc + i.receitaInfluenciada, 0).toLocaleString()}`} color="text-emerald-600" active={revenueMetric === 'receitaInfluenciada'} onClick={() => setRevenueMetric('receitaInfluenciada')} description={TOOLTIPS.receitaInfluenciada} showComparison={showComparison} compValue="R$ 38k" compPercent={18.5} />
+                        <MetricTab label="Conversões" value={fullDailyData.reduce((acc,i)=>acc + i.conversoes, 0)} active={revenueMetric === 'conversoes'} onClick={() => setRevenueMetric('conversoes')} description={TOOLTIPS.conversoes} showComparison={showComparison} compValue="130" compPercent={21.5} />
+                        <MetricTab label="Vendas Inf." value={fullDailyData.reduce((acc,i)=>acc + i.vendasInfluenciadas, 0)} active={revenueMetric === 'vendasInfluenciadas'} onClick={() => setRevenueMetric('vendasInfluenciadas')} description={TOOLTIPS.vendasInfluenciadas} showComparison={showComparison} compValue="125" compPercent={24.8} />
+                        <MetricTab label="Base Inf." value={fullDailyData.reduce((acc,i)=>acc + i.baseInfluenciada, 0)} active={revenueMetric === 'baseInfluenciada'} onClick={() => setRevenueMetric('baseInfluenciada')} description={TOOLTIPS.baseInfluenciada} showComparison={showComparison} compValue="120" compPercent={25.0} />
                         <MetricTab label="Ticket Médio Inf." value="R$ 285" active={revenueMetric === 'ticket'} onClick={() => setRevenueMetric('ticket')} description={TOOLTIPS.ticket} showComparison={showComparison} compValue="R$ 293" compPercent={-2.4} isDangerComp />
                     </div>
                     <div className="p-6 h-72">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={revenueData}>
+                            <AreaChart data={currentRevenueData}>
                                 <defs><linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.success} stopOpacity={0.1}/><stop offset="95%" stopColor={COLORS.success} stopOpacity={0}/></linearGradient></defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} dy={10} />
@@ -354,7 +394,7 @@ export default function ChannelResultsPage() {
                 </div>
             </section>
 
-            {/* SEÇÃO 3: TABELA DE PERFORMANCE */}
+            {/* SEÇÃO 3: TABELA DE PERFORMANCE (AGORA COM PAGINAÇÃO REAL) */}
             <section className="space-y-4">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
@@ -395,6 +435,7 @@ export default function ChannelResultsPage() {
                     </div>
 
                     <div className="overflow-x-auto">
+                        {/* TABELA: Usa currentItems (que já está paginado) */}
                         {groupBy === 'Campanhas' ? (
                             <table className="w-full text-xs text-left whitespace-nowrap">
                                 <thead className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-100">
@@ -402,10 +443,6 @@ export default function ChannelResultsPage() {
                                         <th className="px-6 py-4">Campanhas</th>
                                         <th className="px-4 py-4">Último Envio</th>
                                         <th className="px-4 py-4">Plataforma</th>
-                                        <th className="px-4 py-4 text-right">Receita Inf.</th>
-                                        <th className="px-4 py-4 text-center">Conversões</th>
-                                        <th className="px-4 py-4 text-center">Vendas Inf.</th>
-                                        <th className="px-4 py-4 text-right">Ticket Médio</th>
                                         <th className="px-4 py-4 text-center">Envios</th>
                                         <th className="px-4 py-4 text-center">Entregas</th>
                                         <th className="px-4 py-4 text-center">Aberturas</th>
@@ -417,26 +454,19 @@ export default function ChannelResultsPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {filteredCampaigns.map((camp) => (
+                                    {currentItems.map((camp: any) => (
                                         <tr key={camp.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <p className="font-bold text-violet-700 text-sm mb-1">{camp.name}</p>
-                                                <p className="text-[10px] text-slate-500 mb-1">Segmento: <span className="text-emerald-600 font-bold underline cursor-pointer">{camp.segment}</span></p>
-                                                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-mono border border-slate-200">ID: {camp.id}</span>
+                                                <p className="text-[10px] text-slate-500 mb-1">Segmento: <span className="text-emerald-600 font-bold underline cursor-pointer">{camp.segmentId || 'Geral'}</span></p>
+                                                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-mono border border-slate-200">ID: {camp.id.slice(0,8)}</span>
                                             </td>
                                             <td className="px-4 py-4 text-slate-600">
-                                                {new Date(camp.date).toLocaleDateString('pt-BR')} • {new Date(camp.date).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                                                {new Date(camp.date).toLocaleDateString('pt-BR')}
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded-md font-bold text-[10px]">{camp.platform}</span>
+                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded-md font-bold text-[10px]">{camp.channel}</span>
                                             </td>
-                                            <td className="px-4 py-4 text-right font-bold text-slate-700">R$ {camp.revenueInfluenced.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                                            <td className="px-4 py-4 text-center">
-                                                <span className="font-bold text-slate-700 block">{camp.conversions}</span>
-                                                <span className="bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{camp.conversionRate}%</span>
-                                            </td>
-                                            <td className="px-4 py-4 text-center font-bold text-slate-700">{camp.salesInfluenced}</td>
-                                            <td className="px-4 py-4 text-right text-slate-600">R$ {camp.ticketAverage.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                             <td className="px-4 py-4 text-center text-slate-600">{camp.sent.toLocaleString()}</td>
                                             <td className="px-4 py-4 text-center">
                                                 <span className="block text-slate-700">{camp.delivered.toLocaleString()}</span>
@@ -474,11 +504,11 @@ export default function ChannelResultsPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {filteredStores.map((store) => (
+                                    {currentItems.map((store: any) => (
                                         <tr key={store.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <p className="font-bold text-slate-700 text-sm mb-1">{store.name}</p>
-                                                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-mono border border-slate-200">ID: {store.id}</span>
+                                                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-mono border border-slate-200">ID: {store.id.slice(0,8)}</span>
                                             </td>
                                             <td className="px-4 py-4 text-right font-mono text-slate-600">R$ {store.revenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                             <td className="px-4 py-4 text-right font-bold text-slate-700">R$ {store.revenueInfluenced.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -494,15 +524,68 @@ export default function ChannelResultsPage() {
                         )}
                     </div>
                     
+                    {/* FOOTER DA TABELA COM PAGINAÇÃO REAL */}
                     <div className="p-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
-                        <span>Resultados por página 10 <ChevronDown size={10} className="inline"/></span>
-                        <div className="flex gap-2 items-center">
-                            <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 text-slate-400">{'<'}</button>
-                            <button className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 text-white font-bold">1</button>
-                            <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100">2</button>
-                            <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 text-slate-400">{'>'}</button>
+                        <div className="flex items-center gap-2">
+                            <span>Resultados por página</span>
+                            <select 
+                                className="bg-slate-50 border border-slate-200 rounded p-1 outline-none"
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                    setItemsPerPage(Number(e.target.value));
+                                    setCurrentPage(1); // Reseta pra pag 1 se mudar o tamanho
+                                }}
+                            >
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                            </select>
                         </div>
-                        <span>1-10 de 141</span>
+
+                        <div className="flex gap-2 items-center">
+                            {/* Botão Anterior */}
+                            <button 
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className={`w-6 h-6 flex items-center justify-center rounded ${currentPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-slate-100 text-slate-500'}`}
+                            >
+                                {'<'}
+                            </button>
+
+                            {/* Números das Páginas (Exibe até 3) */}
+                            {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                                let pageNum = i + 1;
+                                // Lógica simples para "rolar" os números se estiver na pág 5
+                                if (totalPages > 3 && currentPage > 1) {
+                                    if(currentPage === totalPages) pageNum = totalPages - 2 + i;
+                                    else pageNum = currentPage - 1 + i;
+                                }
+                                
+                                return (
+                                    <button 
+                                        key={pageNum}
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`w-6 h-6 flex items-center justify-center rounded font-bold transition ${currentPage === pageNum ? 'bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-500'}`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                )
+                            })}
+
+                            {/* Botão Próximo */}
+                            <button 
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                className={`w-6 h-6 flex items-center justify-center rounded ${currentPage === totalPages || totalPages === 0 ? 'text-slate-300 cursor-not-allowed' : 'hover:bg-slate-100 text-slate-500'}`}
+                            >
+                                {'>'}
+                            </button>
+                        </div>
+
+                        <span>
+                            {totalItems === 0 ? '0 resultados' : `${startIndex + 1}-${Math.min(endIndex, totalItems)} de ${totalItems}`}
+                        </span>
                     </div>
                 </div>
             </section>
@@ -513,23 +596,14 @@ export default function ChannelResultsPage() {
   );
 }
 
-// --- SUB-COMPONENTES MANTIDOS ---
-function MetricTab({ 
-    label, value, sub, icon, active, onClick, color="text-slate-700", isDanger, description,
-    showComparison, compValue, compPercent, isDangerComp 
-}: any) {
+// --- SUB-COMPONENTES (SEM ALTERAÇÃO) ---
+function MetricTab({ label, value, sub, icon, active, onClick, color="text-slate-700", isDanger, description, showComparison, compValue, compPercent, isDangerComp }: any) {
     return (
-        <div 
-            onClick={onClick} 
-            className={`p-4 cursor-pointer transition-all border-r border-slate-100 last:border-0 relative group/tab ${active ? 'bg-slate-50' : 'hover:bg-slate-50'} first:rounded-tl-xl last:rounded-tr-xl`}
-        >
+        <div onClick={onClick} className={`p-4 cursor-pointer transition-all border-r border-slate-100 last:border-0 relative group/tab ${active ? 'bg-slate-50' : 'hover:bg-slate-50'} first:rounded-tl-xl last:rounded-tr-xl`}>
             {active && <div className="absolute top-0 left-0 w-full h-1 bg-violet-500"/>}
-            
             <div className="flex items-center gap-2 mb-2">
                 <div className="text-slate-400">{icon}</div>
                 <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
-                
-                {/* TOOLTIP ICON COM HOVER */}
                 {description && (
                     <div className="relative group/info ml-auto">
                         <Info size={12} className="text-slate-300 hover:text-slate-500"/>
@@ -540,13 +614,10 @@ function MetricTab({
                     </div>
                 )}
             </div>
-
             <div className="flex items-end gap-2">
                 <span className={`text-lg font-bold leading-none ${isDanger ? 'text-red-500' : color}`}>{value}</span>
                 {sub && !showComparison && <span className={`text-[10px] font-bold ${isDanger ? 'text-red-400' : 'text-emerald-600'} mb-0.5`}>{sub}</span>}
             </div>
-
-            {/* BLOCO DE COMPARATIVO */}
             {showComparison && compValue && (
                 <div className="mt-3 pt-3 border-t border-slate-200/60">
                     <p className="text-[10px] text-slate-400 mb-0.5">Comparativo</p>
@@ -562,7 +633,6 @@ function MetricTab({
     )
 }
 
-// --- Sidebar, NavItem, CustomTooltip (Mantidos Iguais) ---
 function Sidebar({ activePage }: { activePage: string }) {
     const isActive = (p: string) => activePage === p;
     return (
@@ -584,7 +654,31 @@ function Sidebar({ activePage }: { activePage: string }) {
         </aside>
     )
 }
+
 function NavItem({ icon, label, active }: any) {
     return <div className={`flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg cursor-pointer transition-all ${active ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>{icon} <span className="text-sm font-medium hidden lg:block">{label}</span></div>
 }
-const CustomTooltip = ({ active, payload, label, type }: any) => { if (active && payload && payload.length) { return (<div className="bg-slate-900 text-white p-3 shadow-xl rounded-lg text-xs border border-slate-700"><p className="font-bold text-slate-400 mb-2 uppercase tracking-wider">{label}</p>{payload.map((entry: any, index: number) => (<div key={index} className="flex items-center gap-2 mb-1"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div><span className="text-slate-300">{entry.name}:</span><span className="font-bold text-white ml-auto">{type === 'currency' ? `R$ ${entry.value.toLocaleString('pt-BR')}` : entry.value.toLocaleString('pt-BR')}</span></div>))}</div>); } return null; };
+
+const CustomTooltip = ({ active, payload, label, type }: any) => { 
+    if (active && payload && payload.length) { 
+        return (
+            <div className="bg-slate-900 text-white p-3 shadow-xl rounded-lg text-xs border border-slate-700">
+                <p className="font-bold text-slate-400 mb-2 uppercase tracking-wider">{label}</p>
+                {payload.map((entry: any, index: number) => {
+                    const isPercent = ['CTR', 'CTOR'].includes(entry.name);
+                    let valDisplay = entry.value.toLocaleString('pt-BR');
+                    if(type === 'currency') valDisplay = `R$ ${valDisplay}`;
+                    if(isPercent) valDisplay = `${entry.value}%`;
+                    return (
+                        <div key={index} className="flex items-center gap-2 mb-1">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.stroke || entry.color }}></div>
+                            <span className="text-slate-300">{entry.name}:</span>
+                            <span className="font-bold text-white ml-auto">{valDisplay}</span>
+                        </div>
+                    )
+                })}
+            </div>
+        ); 
+    } 
+    return null; 
+};
