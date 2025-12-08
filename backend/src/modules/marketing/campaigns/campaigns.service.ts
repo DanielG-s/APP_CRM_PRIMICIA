@@ -1,70 +1,70 @@
+// src/modules/marketing/campaigns/campaigns.service.ts
+
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { PrismaService } from 'src/prisma/prisma.service'; // Ajuste o caminho se necessário
+import { CreateCampaignDto } from './dto/create-campaign.dto'; // Ajuste se necessário
 
 @Injectable()
 export class CampaignsService {
   constructor(private prisma: PrismaService) {}
 
-  // 1. Simular contagem de audiência (Para a UI mostrar "X pessoas")
-  async countAudience(storeId: string, segmentId?: string) {
-    // Aqui entraria a lógica real de filtro. 
-    // Por enquanto, se for VIP retorna 20%, se for Todos retorna 100%.
-    const total = await this.prisma.customer.count({ where: { storeId } });
-    
-    if (segmentId === 'vip') return Math.floor(total * 0.2);
-    if (segmentId === 'inactive') return Math.floor(total * 0.3);
-    return total;
-  }
+  async create(data: any) {
+    // AQUI ESTAVA O ERRO: Precisamos passar o 'date' agora que ele é obrigatório no Schema
+    // Lógica: Se tiver agendamento, usa a data agendada. Se não, usa a data de agora.
+    const campaignDate = data.scheduledAt ? new Date(data.scheduledAt) : new Date();
 
-  // 2. Criar Campanha Robusta
-  async create(data: CreateCampaignDto) {
-    // Calcula audiência estimada antes de salvar
-    const estimatedReach = await this.countAudience(data.storeId, data.segmentId);
-    
-    const campaign = await this.prisma.campaign.create({
+    return this.prisma.campaign.create({
       data: {
         name: data.name,
         channel: data.channel,
-        storeId: data.storeId,
-        status: data.scheduledAt ? 'scheduled' : 'draft', // Se tiver data, já agenda
+        storeId: data.storeId, // Assumindo que você recebe o ID da loja
+        status: data.status || 'draft',
         segmentId: data.segmentId,
-        audienceSize: estimatedReach,
-        
-        // Salva os JSONs de configuração
+        audienceSize: data.audienceSize || 0,
         config: data.config || {},
         content: data.content || {},
-        
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
+        
+        // --- CAMPO NOVO OBRIGATÓRIO ---
+        date: campaignDate, 
+        // ------------------------------
 
-        // Cria métrica inicial zerada
+        // Inicializa métricas zeradas
         metrics: {
-          create: { sentCount: 0, revenueInfluenced: 0 }
-        }
+          create: {
+            sentCount: 0,
+            revenueInfluenced: 0,
+            repurchaseRate: 0
+          }
+        },
+        
+        // Inicializa contadores zerados no próprio model (Opcional, pois já tem default(0) no schema, mas garante)
+        sent: 0,
+        delivered: 0,
+        opens: 0,
+        clicks: 0,
+        softBounces: 0,
+        hardBounces: 0,
+        spamReports: 0,
+        unsubscribes: 0
       },
     });
-
-    return { message: 'Campanha salva com sucesso!', id: campaign.id };
   }
 
-  // 3. Listar (Mantido com ajuste para ler JSON se precisar)
-  async findAll(storeId: string) {
-    const campaigns = await this.prisma.campaign.findMany({
-      where: { storeId },
-      include: { metrics: true },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findAll(storeId?: string) {
+    const where = storeId ? { storeId } : {};
 
-    return campaigns.map(c => ({
-      id: c.id,
-      name: c.name,
-      channel: c.channel,
-      status: c.status,
-      date: c.scheduledAt || c.createdAt,
-      sent: c.metrics?.sentCount || 0,
-      conversion: c.metrics?.repurchaseRate || 0,
-      // Retorna o tamanho do público alvo
-      audience: c.audienceSize || 0 
-    }));
+    return this.prisma.campaign.findMany({
+      where, // Aplica o filtro de loja se o ID for passado
+      orderBy: { createdAt: 'desc' },
+      include: { metrics: true }
+    });
+  }
+
+  async findOne(id: string) {
+    return this.prisma.campaign.findUnique({
+      where: { id },
+      include: { metrics: true }
+    });
   }
 }

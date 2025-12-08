@@ -20,7 +20,7 @@ model User {
 }
 
 model Store {
-  id              String   @id @default(uuid())
+  id              String                @id @default(uuid())
   name            String
   cnpj            String?
   cityNormalized  String?
@@ -34,113 +34,120 @@ model Store {
 
 // --- 2. CLIENTES ---
 model Customer {
-  id              String   @id @default(uuid())
-  storeId         String
-  store           Store    @relation(fields: [storeId], references: [id])
-  externalId      String?
-  name            String
-  
-  email           String?  @unique 
-  
-  phone           String?
-  cpf             String?
-  birthDate       DateTime?
-  age             Int?
-  city            String?
-  rfmScoreId      String?
-  rfmScore        RfmScore? @relation(fields: [rfmScoreId], references: [id])
-  propensityScore Float?
-  propensityLabel String?
-  isRegistrationComplete Boolean @default(false)
+  id                     String           @id @default(uuid())
+  storeId                String
+  store                  Store            @relation(fields: [storeId], references: [id])
+  externalId             String?
+  name                   String
+  email                  String?          @unique
+  phone                  String?
+  cpf                    String?
+  birthDate              DateTime?
+  age                    Int?
+  city                   String?
+  rfmScoreId             String?
+  rfmScore               RfmScore?        @relation(fields: [rfmScoreId], references: [id])
+  propensityScore        Float?
+  propensityLabel        String?
+  isRegistrationComplete Boolean          @default(false)
   dataQualityIssues      Json?
-  events          CustomerEvent[]
-  transactions    Transaction[]
-  rfmHistory      RfmHistory[]
-  responses       SurveyResponse[]
-  conversations   Conversation[]
+  events                 CustomerEvent[]
+  transactions           Transaction[]
+  rfmHistory             RfmHistory[]
+  responses              SurveyResponse[]
+  conversations          Conversation[]
 }
 
 model CustomerEvent {
-  id          String   @id @default(uuid())
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id])
-  eventType   String
-  payload     Json?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  eventType  String
+  payload    Json?
+  createdAt  DateTime @default(now())
 }
 
 model Transaction {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   customerId    String
-  customer      Customer  @relation(fields: [customerId], references: [id])
+  customer      Customer @relation(fields: [customerId], references: [id])
   storeId       String
-  store         Store     @relation(fields: [storeId], references: [id])
+  store         Store    @relation(fields: [storeId], references: [id])
   salespersonId String?
   totalValue    Decimal
   items         Json
   date          DateTime
 
   // --- NOVOS CAMPOS ---
-  channel       String    @default("Loja Física") // Ex: "WhatsApp", "E-mail", "Ads"
-  isInfluenced  Boolean   @default(false)         // Se houve toque digital antes da compra
+  channel      String  @default("Loja Física") // Ex: "WhatsApp", "E-mail", "Ads"
+  isInfluenced Boolean @default(false) // Se houve toque digital antes da compra
 }
 
 // --- 3. SEGMENTAÇÃO ---
 model Segment {
-  id          String   @id @default(uuid())
-  name        String
-  logic       String
-  rules       Json
-  isDynamic   Boolean  @default(true)
+  id        String  @id @default(uuid())
+  name      String
+  logic     String
+  rules     Json
+  isDynamic Boolean @default(true)
 }
 
-// --- 4. CAMPANHAS ---
-model Campaign {
-  id                String   @id @default(uuid())
-  storeId           String
-  store             Store    @relation(fields: [storeId], references: [id])
-  
-  name              String
-  channel           String   // 'whatsapp', 'email', 'sms'
-  status            String   @default("draft") // 'draft', 'scheduled', 'sent'
-  
-  // --- NOVOS CAMPOS NECESSÁRIOS PARA O ERRO SUMIR ---
-  segmentId         String?  // 'all', 'vip', etc
-  audienceSize      Int?     @default(0)
-  
-  config            Json?    // { subject: "..." }
-  content           Json?    // { body: "..." }
-  
-  scheduledAt       DateTime?
-  
-  // Campos de Auditoria (Resolvem o erro de 'createdAt')
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+// backend/prisma/schema.prisma
 
-  // Relacionamentos
-  metrics           CampaignMetric?
-  schedules         CampaignSchedule[] 
-  contents          CampaignContent[] 
+model Campaign {
+  id      String @id @default(uuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  name    String
+  channel String 
+  status  String @default("draft") 
+  date    DateTime // Data do disparo (usada nos gráficos)
+  type    String?  // Ex: "Mensal", "Sazonal"
+  tags    String[] // Ex: ["VIP", "BlackFriday"]
   
-  // Campos legados (opcional manter para não quebrar histórico antigo)
-  attributionWindow Int?      @default(7)
+  segmentId    String? 
+  audienceSize Int?    @default(0)
+
+  config  Json? 
+  content Json? 
+
+  scheduledAt DateTime?
+
+  sent         Int @default(0)
+  delivered    Int @default(0)
+  opens        Int @default(0)
+  clicks       Int @default(0)
+  softBounces  Int @default(0)
+  hardBounces  Int @default(0)
+  spamReports  Int @default(0)
+  unsubscribes Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metrics   CampaignMetric?
+  schedules CampaignSchedule[]
+  contents  CampaignContent[]
+
+  attributionWindow Int?    @default(7)
   conversionTrigger String?
 }
 
 model CampaignSchedule {
-  id          String   @id @default(uuid())
-  campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
-  sendDate    DateTime
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  sendDate   DateTime
 }
 
 model CampaignContent {
-  id          String   @id @default(uuid())
-  campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
-  subject     String?
-  body        String
-  mediaUrl    String?
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  subject    String?
+  body       String
+  mediaUrl   String?
 }
 
 model CampaignMetric {
@@ -154,60 +161,60 @@ model CampaignMetric {
 
 // --- 5. RFM ---
 model RfmScore {
-  id           String   @id @default(uuid())
-  name         String
-  minRecency   Int
-  maxRecency   Int
-  customers    Customer[]
+  id         String     @id @default(uuid())
+  name       String
+  minRecency Int
+  maxRecency Int
+  customers  Customer[]
 }
 
 model RfmHistory {
-  id           String   @id @default(uuid())
-  customerId   String
-  customer     Customer @relation(fields: [customerId], references: [id])
-  oldScoreId   String?
-  newScoreId   String
-  changedAt    DateTime @default(now())
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  oldScoreId String?
+  newScoreId String
+  changedAt  DateTime @default(now())
 }
 
 // --- 6. WHATSAPP ---
 model StoreWhatsappNumber {
-  id             String   @id @default(uuid())
-  storeId        String
-  store          Store    @relation(fields: [storeId], references: [id])
-  number         String
-  provider       String
-  routingRules   Json?
+  id           String  @id @default(uuid())
+  storeId      String
+  store        Store   @relation(fields: [storeId], references: [id])
+  number       String
+  provider     String
+  routingRules Json?
 }
 
 model Conversation {
-  id             String   @id @default(uuid())
-  customerId     String
-  customer       Customer @relation(fields: [customerId], references: [id])
-  storeId        String
-  status         String
-  messages       Json
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  storeId    String
+  status     String
+  messages   Json
 }
 
 // --- 7. PESQUISAS ---
 model SurveyResponse {
-  id             String   @id @default(uuid())
-  customerId     String
-  customer       Customer @relation(fields: [customerId], references: [id])
-  salespersonId  String?
-  score          Int
-  comment        String?
-  channel        String
-  createdAt      DateTime @default(now())
+  id            String   @id @default(uuid())
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  salespersonId String?
+  score         Int
+  comment       String?
+  channel       String
+  createdAt     DateTime @default(now())
 }
 
 // --- 8. METAS ---
 model StoreGoal {
-  id             String   @id @default(uuid())
-  storeId        String
-  store          Store    @relation(fields: [storeId], references: [id])
-  month          Int
-  year           Int
-  whatsappLimit  Int
-  emailLimit     Int
+  id            String @id @default(uuid())
+  storeId       String
+  store         Store  @relation(fields: [storeId], references: [id])
+  month         Int
+  year          Int
+  whatsappLimit Int
+  emailLimit    Int
 }
