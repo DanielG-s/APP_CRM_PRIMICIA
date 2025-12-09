@@ -78,11 +78,18 @@ export class SalesService {
     const campaigns = await this.prisma.campaign.findMany({
       select: { id: true, name: true, tags: true, type: true, channel: true }, orderBy: { date: 'desc' }, take: 2000 
     });
+    
     const tagsSet = new Set<string>(); campaigns.forEach(c => c.tags.forEach(t => tagsSet.add(t)));
     const typesSet = new Set<string>(); campaigns.forEach(c => { if(c.type) typesSet.add(c.type); });
+    
+    // TEM QUE TER ESSA LINHA AQUI:
+    const stores = await this.prisma.store.findMany({ select: { id: true, name: true } });
+
     return {
       campaigns: campaigns.map(c => ({ id: c.id, name: c.name })),
-      tags: Array.from(tagsSet).sort(), types: Array.from(typesSet).sort(),
+      tags: Array.from(tagsSet).sort(), 
+      types: Array.from(typesSet).sort(),
+      stores: stores.map(s => ({ id: s.id, name: s.name })), // E ESSA LINHA NO RETORNO
       channels: ['E-mail', 'SMS', 'Mobile push', 'WhatsApp'] 
     };
   }
@@ -332,6 +339,178 @@ export class SalesService {
       history,
       channels,
       stores
+    };
+  }
+
+  // --- 5. MÉTRICAS DE AGENDA ---
+  async getScheduleMetrics(startDate: string, endDate: string, filters?: any) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999);
+
+    // 1. Where Clauses
+    const campaignWhere: Prisma.CampaignWhereInput = { date: { gte: start, lte: end } };
+    const transactionWhere: Prisma.TransactionWhereInput = { date: { gte: start, lte: end }, isInfluenced: true };
+
+    if (filters?.channel && filters.channel !== 'Todos') {
+        const map: any = { 'Mobile push': 'Push', 'E-mail': 'Email' };
+        const val = map[filters.channel] || filters.channel;
+        campaignWhere.channel = val;
+        transactionWhere.channel = val;
+    }
+    if (filters?.campaignIds?.length) campaignWhere.id = { in: filters.campaignIds };
+    if (filters?.tags?.length) campaignWhere.tags = { hasSome: filters.tags };
+    if (filters?.campaignType?.length) campaignWhere.type = { in: filters.campaignType };
+    if (filters?.storeIds?.length) {
+        campaignWhere.storeId = { in: filters.storeIds };
+        transactionWhere.storeId = { in: filters.storeIds };
+    }
+
+    // 2. Buscas
+    const campaigns = await this.prisma.campaign.findMany({
+        where: campaignWhere, orderBy: { date: 'desc' },
+        include: { store: { select: { id: true, name: true } } }
+    });
+    const sales = await this.prisma.transaction.findMany({
+        where: transactionWhere,
+        select: { totalValue: true, date: true, storeId: true, salespersonId: true }
+    });
+
+    // 3. Totais Gerais
+    let totalDisponibilizados = 0, totalRealizados = 0, totalConfirmados = 0, totalDescadastros = 0;
+    campaigns.forEach(c => {
+        totalDisponibilizados += c.sent || 0;
+        totalRealizados += c.delivered || 0;
+        totalConfirmados += c.clicks || 0;
+        totalDescadastros += c.unsubscribes || 0;
+    });
+    const receitaInfluenciada = sales.reduce((acc, s) => acc + Number(s.totalValue), 0);
+    const conversoes = sales.length;
+    const naoConfirmados = totalRealizados - totalConfirmados;
+
+    // 4. Histórico Diário (Map base)
+    const daysMap = new Map();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = format(d, 'dd/MM', { locale: ptBR });
+        // Inicializa com estrutura completa
+        daysMap.set(key, { 
+            name: key, 
+            date: d.toISOString(), // Importante para ordenação
+            receitaInf: 0, 
+            vendasInf: 0,
+            realizados: 0, 
+            confirmados: 0, 
+            disponibilizados: 0, 
+            descadastros: 0 
+        });
+    }
+
+    // Popula Campanhas no dia
+    campaigns.forEach(c => {
+        const key = format(c.date, 'dd/MM', { locale: ptBR });
+        if (daysMap.has(key)) {
+            const d = daysMap.get(key);
+            d.realizados += c.delivered;
+            d.confirmados += c.clicks;
+            d.descadastros += c.unsubscribes;
+            d.disponibilizados += c.sent;
+        }
+    });
+
+    // Popula Vendas no dia
+    sales.forEach(s => {
+        const key = format(s.date, 'dd/MM', { locale: ptBR });
+        if (daysMap.has(key)) {
+            const d = daysMap.get(key);
+            d.receitaInf += Number(s.totalValue);
+            d.vendasInf += 1;
+        }
+    });
+
+    // Função Auxiliar
+    const safeDiv = (a: number, b: number) => b > 0 ? a / b : 0;
+
+    // Converte Map para Array e calcula campos derivados (CORREÇÃO DO ERRO AQUI)
+    const dailyData = Array.from(daysMap.values()).map((d: any) => ({
+        ...d,
+        receita: d.receitaInf, // Alias para o gráfico
+        conversoes: safeDiv(d.vendasInf, d.realizados), // Taxa de conversão
+        receitaCont: safeDiv(d.receitaInf, d.realizados),
+        vendasCont: safeDiv(d.vendasInf, d.realizados),
+        naoConf: d.realizados - d.confirmados
+    }));
+
+    // 5. Outras Tabelas
+    const campaignsTable = campaigns.map(c => {
+        const share = safeDiv(c.clicks, totalConfirmados);
+        const recInf = share * receitaInfluenciada;
+        const vendInf = Math.floor(share * conversoes);
+        return {
+            id: c.id, name: c.name, date: c.date, channel: c.channel,
+            receitaInf: recInf, receitaCont: safeDiv(recInf, c.delivered),
+            vendasInf: vendInf, vendasCont: safeDiv(vendInf, c.delivered),
+            conversoes: safeDiv(vendInf, c.delivered),
+            disponibilizados: c.sent, realizados: c.delivered, confirmados: c.clicks,
+            naoConf: c.delivered - c.clicks
+        };
+    });
+
+    const storesMap = new Map();
+    campaigns.forEach(c => {
+        if (!storesMap.has(c.storeId)) storesMap.set(c.storeId, { id: c.storeId, name: c.store?.name || 'Loja', receitaInf: 0, vendasInf: 0, realizados: 0, confirmados: 0, disponibilizados: 0 });
+        const st = storesMap.get(c.storeId);
+        st.disponibilizados += c.sent; st.realizados += c.delivered; st.confirmados += c.clicks;
+    });
+    sales.forEach(s => {
+        if (storesMap.has(s.storeId)) {
+            const st = storesMap.get(s.storeId);
+            st.receitaInf += Number(s.totalValue); st.vendasInf += 1;
+        }
+    });
+    const storesTable = Array.from(storesMap.values()).map((s: any) => ({
+        ...s,
+        receitaCont: safeDiv(s.receitaInf, s.realizados),
+        vendasCont: safeDiv(s.vendasInf, s.realizados),
+        conversoes: safeDiv(s.vendasInf, s.realizados),
+        naoConf: s.realizados - s.confirmados
+    }));
+
+    const sellersMap = new Map();
+    sales.forEach(s => {
+        const sellerId = s.salespersonId || 'N/A';
+        if (!sellersMap.has(sellerId)) {
+            const storeName = storesMap.get(s.storeId)?.name || 'Loja';
+            sellersMap.set(sellerId, { id: sellerId, name: sellerId === 'N/A' ? 'Vendedor' : `Vend. ${sellerId.substring(0,4)}`, storeName, storeId: s.storeId, receitaInf: 0, vendasInf: 0, disponibilizados: 0, realizados: 0, confirmados: 0 });
+        }
+        const seller = sellersMap.get(sellerId);
+        seller.receitaInf += Number(s.totalValue); seller.vendasInf += 1;
+    });
+    const sellersTable = Array.from(sellersMap.values()).map((s: any) => {
+        const storeStats = storesMap.get(s.storeId);
+        if (storeStats) {
+            const share = 0.2; 
+            s.disponibilizados = Math.floor(storeStats.disponibilizados * share);
+            s.realizados = Math.floor(storeStats.realizados * share);
+            s.confirmados = Math.floor(storeStats.confirmados * share);
+        }
+        return {
+            ...s,
+            receitaCont: safeDiv(s.receitaInf, s.realizados),
+            vendasCont: safeDiv(s.vendasInf, s.realizados),
+            conversoes: safeDiv(s.vendasInf, s.realizados),
+            naoConf: s.realizados - s.confirmados
+        };
+    });
+
+    return {
+        kpis: {
+            receitaInfluenciada, contatosRealizados: totalRealizados, contatosConfirmados: totalConfirmados,
+            conversoes: conversoes, descadastros: totalDescadastros, disponibilizados: totalDisponibilizados,
+            naoConfirmados: naoConfirmados, clientesUnicos: Math.floor(totalRealizados * 0.95),
+            frequencia: safeDiv(totalRealizados, totalDisponibilizados).toFixed(1)
+        },
+        history: dailyData,
+        tables: { campaigns: campaignsTable, stores: storesTable, sellers: sellersTable, daily: dailyData }
     };
   }
 }

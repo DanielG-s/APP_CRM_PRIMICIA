@@ -4,104 +4,137 @@ import { addDays, subDays } from 'date-fns';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Iniciando Seed...');
+  console.log('🌱 Iniciando Seed da Agenda...');
 
-  // 1. Limpar banco (opcional, cuidado em produção)
-  await prisma.transaction.deleteMany();
-  await prisma.campaign.deleteMany();
-  await prisma.customer.deleteMany();
-  await prisma.store.deleteMany();
-  await prisma.user.deleteMany();
+  // 1. Limpeza (Cuidado em produção!)
+  // Tente limpar na ordem correta para evitar erros de chave estrangeira
+  try {
+      await prisma.transaction.deleteMany();
+      await prisma.campaignSchedule.deleteMany();
+      await prisma.campaignContent.deleteMany(); // Caso exista
+      await prisma.campaignMetric.deleteMany();  // Caso exista
+      await prisma.campaign.deleteMany();
+      await prisma.customer.deleteMany();
+      await prisma.user.deleteMany();
+      await prisma.store.deleteMany();
+  } catch (e) {
+      console.log('Nota: Algumas tabelas podiam estar vazias ou ordem de deleção ignorada.');
+  }
 
-  // 2. Criar Loja e Usuário
+  // 2. Criar Loja e Usuário Base
   const store = await prisma.store.create({
     data: {
-      name: 'Loja Matriz - SP',
-      cnpj: '12.345.678/0001-90',
+      name: 'Loja Matriz - Fashion',
+      cnpj: '12.345.678/0001-99',
       cityNormalized: 'São Paulo'
     }
   });
 
-  const user = await prisma.user.create({
+  await prisma.user.create({
     data: {
-      email: 'admin@primicia.com',
-      password: 'hash-password', // Em produção use hash real
+      email: 'admin@quantix.com',
+      password: 'admin', 
       role: 'ADMIN',
       storeId: store.id
     }
   });
 
-  // 3. Dados para gerar variedade
-  const CAMPAIGN_TYPES = ['Diário', 'Semanal', 'Mensal', 'Apenas uma vez', 'Assim que ativar', 'Comportamento'];
-  const CHANNELS = ['E-mail', 'WhatsApp', 'SMS', 'Mobile push'];
-  const TAGS_POOL = ['fim de ano', 'feliz natal', '10%', 'black friday', 'vip', 'recuperação'];
+  // 3. Criar Clientes (Necessário para as Vendas)
+  console.log('👥 Criando Clientes...');
+  
+  // CORREÇÃO AQUI: Adicionamos a tipagem : any[]
+  const customers: any[] = []; 
+  
+  for (let i = 0; i < 100; i++) {
+    const customer = await prisma.customer.create({
+      data: {
+        storeId: store.id,
+        name: `Cliente ${i + 1}`,
+        email: `cliente${i + 1}@email.com`,
+        phone: `1199999${i.toString().padStart(4, '0')}`
+      }
+    });
+    customers.push(customer);
+  }
 
-  console.log('🚀 Criando Campanhas...');
+  // 4. Criar Campanhas (Agenda) - Passado e Futuro
+  console.log('📅 Criando Agenda de Campanhas...');
+  
+  const CAMPAIGN_NAMES = [
+    'Aniversariantes do Mês', 'Black Friday Antecipada', 'Recuperação de Inativos', 
+    'Lançamento Verão', 'Oferta Relâmpago VIP', 'Desconto Progressivo', 
+    'Dia do Cliente', 'Saldão de Estoque'
+  ];
+  const CHANNELS = ['WhatsApp', 'E-mail', 'SMS', 'Mobile push'];
 
-  // Criar 20 Campanhas variadas nos últimos 60 dias
-  for (let i = 0; i < 20; i++) {
-    const type = CAMPAIGN_TYPES[i % CAMPAIGN_TYPES.length];
-    const channel = CHANNELS[i % CHANNELS.length];
-    const date = subDays(new Date(), Math.floor(Math.random() * 60));
+  // Gerar 40 campanhas distribuídas entre 30 dias atrás e 7 dias a frente
+  for (let i = 0; i < 40; i++) {
+    const isPast = i < 30; // 30 campanhas passadas, 10 futuras
+    const baseDate = isPast 
+      ? subDays(new Date(), Math.floor(Math.random() * 30)) 
+      : addDays(new Date(), Math.floor(Math.random() * 10));
     
-    // Seleciona 2 tags aleatórias
-    const tags = [
-        TAGS_POOL[Math.floor(Math.random() * TAGS_POOL.length)],
-        TAGS_POOL[Math.floor(Math.random() * TAGS_POOL.length)]
-    ];
+    const channel = CHANNELS[Math.floor(Math.random() * CHANNELS.length)];
+    const sent = 500 + Math.floor(Math.random() * 2000);
+    
+    // Métricas de funil realistas
+    const delivered = Math.floor(sent * (0.9 + Math.random() * 0.08)); // ~95% entrega
+    const opens = Math.floor(delivered * (0.4 + Math.random() * 0.3)); // ~50% abertura
+    const clicks = Math.floor(opens * (0.1 + Math.random() * 0.2));    // ~20% clique
+    const unsubscribes = Math.floor(sent * 0.01);
 
     await prisma.campaign.create({
       data: {
         storeId: store.id,
-        name: `Campanha ${type} - ${channel} ${i+1}`,
+        name: `${CAMPAIGN_NAMES[i % CAMPAIGN_NAMES.length]} - ${channel}`,
         channel: channel,
-        type: type, // AQUI ESTÁ O SEGREDO: Salvando o tipo correto
-        tags: tags, // E as tags corretas
-        status: 'sent',
-        date: date,
-        sent: 1000 + Math.floor(Math.random() * 5000),
-        delivered: 900 + Math.floor(Math.random() * 4000),
-        opens: 400 + Math.floor(Math.random() * 2000),
-        clicks: 100 + Math.floor(Math.random() * 500),
-        softBounces: 10,
-        hardBounces: 5,
-        spamReports: 2,
-        unsubscribes: 5,
-        audienceSize: 1000
-      }
-    });
-  }
+        status: isPast ? 'sent' : 'scheduled',
+        date: baseDate,
+        type: 'Agenda', // Marcando como tipo Agenda
+        audienceSize: sent,
+        
+        // Métricas (Zeradas se for futuro)
+        sent: isPast ? sent : 0,
+        delivered: isPast ? delivered : 0,
+        opens: isPast ? opens : 0,
+        clicks: isPast ? clicks : 0,
+        softBounces: Math.floor(Math.random() * 20),
+        hardBounces: Math.floor(Math.random() * 10),
+        unsubscribes: isPast ? unsubscribes : 0,
+        spamReports: Math.floor(Math.random() * 5),
 
-  console.log('💰 Criando Vendas...');
-
-  // Criar Clientes e Transações
-  for (let i = 0; i < 50; i++) {
-    const customer = await prisma.customer.create({
-      data: {
-        storeId: store.id,
-        name: `Cliente ${i}`,
-        email: `cliente${i}@email.com`,
-      }
-    });
-
-    // Cria transações para esse cliente
-    for (let j = 0; j < 3; j++) {
-        const isInfluenced = Math.random() > 0.5;
-        await prisma.transaction.create({
-            data: {
-                storeId: store.id,
-                customerId: customer.id,
-                totalValue: 150 + Math.random() * 500,
-                date: subDays(new Date(), Math.floor(Math.random() * 60)),
-                items: {},
-                channel: isInfluenced ? CHANNELS[Math.floor(Math.random() * CHANNELS.length)] : 'Loja Física',
-                isInfluenced: isInfluenced
+        // Criar agendamento atrelado
+        schedules: {
+            create: {
+                sendDate: baseDate
             }
-        });
-    }
+        }
+      }
+    });
   }
 
-  console.log('✅ Seed concluído!');
+  // 5. Criar Transações (Vendas)
+  // Misturar vendas orgânicas com vendas influenciadas pelas campanhas
+  console.log('💰 Criando Vendas...');
+  
+  for (let i = 0; i < 200; i++) {
+    const isInfluenced = Math.random() > 0.4; // 60% de chance de ser influenciada
+    const date = subDays(new Date(), Math.floor(Math.random() * 30));
+    
+    await prisma.transaction.create({
+        data: {
+            storeId: store.id,
+            customerId: customers[Math.floor(Math.random() * customers.length)].id,
+            totalValue: 100 + Math.random() * 800, // Ticket entre 100 e 900
+            date: date,
+            items: {}, // JSON vazio por enquanto
+            channel: isInfluenced ? CHANNELS[Math.floor(Math.random() * CHANNELS.length)] : 'Loja Física',
+            isInfluenced: isInfluenced
+        }
+    });
+  }
+
+  console.log('✅ Seed Agenda Concluído com Sucesso!');
 }
 
 main()
