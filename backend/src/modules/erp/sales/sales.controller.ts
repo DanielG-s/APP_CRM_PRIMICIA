@@ -97,4 +97,38 @@ export class SalesController {
   ) {
     return this.salesService.getRetailMetrics(start, end, stores);
   }
+
+  // ...
+  // ...
+  @Get('schedule-metrics')
+  @ApiOperation({ summary: 'Métricas da página de Agenda' })
+  async getScheduleMetrics(
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Query('channel') channel?: string,
+    @Query('campaigns') campaigns?: string | string[],
+    @Query('tags') tags?: string | string[],
+    @Query('campaignType') campaignType?: string | string[],
+    @Query('stores') stores?: string | string[],
+    // conversionWindow afeta lógica de negócio futura, por enquanto repassamos
+    @Query('conversionWindow') conversionWindow?: string,
+  ) {
+    const startDate = start || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const endDate = end || new Date().toISOString();
+
+    // Normalização
+    const campaignIds = campaigns ? (Array.isArray(campaigns) ? campaigns : [campaigns]) : undefined;
+    const tagsList = tags ? (Array.isArray(tags) ? tags : [tags]) : undefined;
+    const typesList = campaignType ? (Array.isArray(campaignType) ? campaignType : [campaignType]) : undefined;
+    const storeIds = stores ? (Array.isArray(stores) ? stores : [stores]) : undefined;
+
+    return this.salesService.getScheduleMetrics(startDate, endDate, {
+        channel,
+        campaignIds,
+        tags: tagsList,
+        campaignType: typesList,
+        storeIds,
+        conversionWindow
+    });
+  }
 }

@@ -2,14 +2,14 @@ version: '3.8'
 services:
   postgres:
     image: postgres:13
-    container_name: primicia_db
+    container_name: QUANTIX_db
     restart: always
     ports:
       - '5432:5432'
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: adminpassword
-      POSTGRES_DB: primicia_erp
+      POSTGRES_DB: QUANTIX_erp
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

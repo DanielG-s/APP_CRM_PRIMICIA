@@ -255,8 +255,8 @@ function Sidebar({ activePage }: { activePage: string }) {
     return (
         <aside className="w-20 lg:w-64 bg-[#0f172a] text-slate-300 flex flex-col shrink-0 shadow-2xl z-30 transition-all">
             <div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
-                <div className="w-10 h-10 bg-violet-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-violet-900/50">P</div>
-                <span className="font-bold text-xl tracking-tight text-white ml-3 hidden lg:block">PRIMÍCIA</span>
+                <div className="w-10 h-10 bg-violet-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-violet-900/50">Q</div>
+                <span className="font-bold text-xl tracking-tight text-white ml-3 hidden lg:block">QUANTIX</span>
             </div>
             <nav className="flex-1 py-6 space-y-1 overflow-y-auto px-3">
                 <Link href="/"><NavItem icon={<Home size={20}/>} label="Visão Geral" active={isActive('home')} /></Link>

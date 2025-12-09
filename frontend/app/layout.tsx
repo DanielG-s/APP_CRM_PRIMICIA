@@ -5,7 +5,7 @@ import "./globals.css"; // <--- ESTA LINHA É OBRIGATÓRIA! SEM ELA FICA TUDO BR
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Primícia CRM",
+  title: "QUANTIX CRM",
   description: "Sistema de Gestão",
 };
 
