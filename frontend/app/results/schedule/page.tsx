@@ -2,18 +2,22 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  LayoutDashboard, Megaphone, CalendarRange, Users, Plus, ChevronDown, Download,
-  ArrowLeft, ArrowRight, List, Filter, Search, Check, Smartphone, MessageSquare, Mail, PieChart as PieIcon,
-  Info, MessageCircle
+  CalendarRange, Plus, ChevronDown, Download,
+  Filter, Search, Check, Smartphone, MessageSquare, Mail, PieChart as PieIcon,
+  Info, MessageCircle, List // <--- Adicionado 'List' aqui
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
-import Link from "next/link";
 
 // --- UTILS ---
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-const formatDateDisplay = (iso: string) => { if(!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const formatDateDisplay = (iso: string) => { 
+    if(!iso) return '-'; 
+    const datePart = iso.split('T')[0]; 
+    const [y, m, d] = datePart.split('-'); 
+    return `${d}/${m}/${y}`; 
+};
 const formatPercent = (val: number) => `${(val * 100).toFixed(2)}%`;
 const safeVal = (val: any) => val || 0;
 
@@ -35,7 +39,6 @@ const KPI_META: any = {
 
 // --- COMPONENTES AUXILIARES ---
 
-// CORREÇÃO: w-full removido para evitar empilhamento
 const CustomTooltipWrapper = ({ children, text }: { children: React.ReactNode; text: string }) => (
   <div className="group relative flex flex-col items-center">
     {children}
@@ -68,6 +71,14 @@ const CampaignMultiSelect = ({ label, options, selected, onChange }: any) => {
   return (<div className="relative w-full min-w-[200px]" ref={ref}><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 cursor-pointer flex justify-between items-center hover:border-violet-300 transition select-none shadow-sm"><span className="truncate block max-w-[140px] text-slate-600">{selected.length === 0 ? <span className="text-slate-400">Todas as campanhas</span> : <div className="flex gap-1 items-center"><span className="bg-violet-100 text-violet-700 px-2 py-0.5 rounded text-xs font-bold max-w-[100px] truncate block">{selectedOpts[0]?.label}</span>{selected.length > 1 && <span className="text-xs text-slate-500 font-medium">+{selected.length - 1}</span>}</div>}</span><ChevronDown size={14} className="text-slate-400 opacity-70 shrink-0"/></div>{isOpen && (<div className="absolute top-full left-0 w-full min-w-[320px] mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto p-0 flex flex-col"><div className="p-2 sticky top-0 bg-white border-b border-slate-100 z-10"><input autoFocus type="text" placeholder="Buscar..." className="w-full text-xs bg-slate-50 border border-slate-200 rounded p-2 outline-none focus:border-violet-400" value={search} onChange={e => setSearch(e.target.value)} /></div><div className="p-2 space-y-1">{selectedOpts.length > 0 && (<div className="mb-2"><div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase font-bold text-slate-400"><span>Selecionados</span></div>{selectedOpts.map((opt:any)=><div key={opt.value} onClick={()=>toggle(opt.value)} className="flex items-center justify-between p-2 bg-violet-50 hover:bg-violet-100 rounded cursor-pointer"><span className="text-xs font-bold text-violet-700 truncate">{opt.label}</span><Check size={10} className="text-violet-600"/></div>)}<div className="my-2 border-t border-slate-100"></div></div>)}<div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase font-bold text-slate-400"><span>Existentes</span></div>{unselectedOpts.map((opt:any)=><div key={opt.value} onClick={()=>toggle(opt.value)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer"><span className="text-xs font-medium text-slate-600 truncate">{opt.label}</span><div className="w-4 h-4 border border-slate-300 rounded shrink-0"></div></div>)}</div></div>)}</div>)
 };
 
+const MiniProgressCircle = ({ percent, color }: { percent: number; color: string }) => {
+  const data = [{ name: "C", value: percent }, { name: "R", value: 100 - percent }]; const COLORS = [color, "#E2E8F0"];
+  return (<div className="relative w-12 h-12 flex items-center justify-center"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} cx="50%" cy="50%" innerRadius={16} outerRadius={21} startAngle={90} endAngle={-270} dataKey="value" stroke="none">{data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Pie></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">{Math.round(percent)}%</div></div>);
+};
+const ChartCursorTooltip = ({ active, payload, label, prefix, suffix }: any) => {
+  if (active && payload && payload.length) { return (<div className="bg-white border border-gray-100 p-3 rounded shadow-md text-xs"><p className="text-slate-400 mb-1 font-medium uppercase">{label}</p><p className="text-base font-bold text-slate-800">{prefix}{payload[0].value.toLocaleString('pt-BR')}{suffix}</p></div>); } return null;
+};
+
 // --- PÁGINA PRINCIPAL ---
 export default function AgendaPage() {
   const getToday = () => new Date().toISOString().split('T')[0];
@@ -82,6 +93,7 @@ export default function AgendaPage() {
   const [loading, setLoading] = useState(true);
   const [selectedKpi, setSelectedKpi] = useState("Receita influenciada");
   const [grouping, setGrouping] = useState("Campanhas");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [viewType, setViewType] = useState('numero'); 
   const [filters, setFilters] = useState({
@@ -132,15 +144,26 @@ export default function AgendaPage() {
   const handleApply = () => fetchData();
   const handleClear = () => setFilters({ channel: 'Todos', conversionEvent: 'Abertura', conversionWindow: '7 dias', tags: [], campaigns: [], campaignType: [], stores: [], vendedores: [] });
 
+  const rawTableRows = useMemo(() => {
+      if (!data) return [];
+      if (grouping === "Campanhas") return data.tables.campaigns;
+      else if (grouping === "Lojas") return data.tables.stores;
+      else if (grouping === "Vendedores") return data.tables.sellers;
+      else return data.tables.daily;
+  }, [data, grouping]);
+
+  const filteredTableRows = useMemo(() => {
+      if (!searchTerm) return rawTableRows;
+      const lower = searchTerm.toLowerCase();
+      return rawTableRows.filter((r: any) => 
+          (r.name && r.name.toLowerCase().includes(lower)) || 
+          (r.id && r.id.toString().toLowerCase().includes(lower)) ||
+          (r.date && r.date.includes(lower))
+      );
+  }, [rawTableRows, searchTerm]);
+
   const handleExportCSV = () => {
       if (!data) return;
-      let rows: any[] = [];
-      if(grouping === 'Campanhas') rows = data.tables.campaigns;
-      else if(grouping === 'Lojas') rows = data.tables.stores;
-      else if(grouping === 'Vendedores') rows = data.tables.sellers;
-      else rows = data.tables.daily;
-
-      // Colunas dinâmicas para o CSV
       let header = [];
       if (grouping === 'Campanhas') header = ["Campanha", "Data", "Canal", "Envios", "Entregas", "Aberturas", "Cliques", "CTR", "CTOR"];
       else header = ["Nome", "Receita Influenciada", "Receita/Contato", "Vendas Influenciadas", "Vendas/Contato", "Conversões", "Disponibilizados", "Realizados", "Confirmados", "Não Confirmados"];
@@ -148,7 +171,7 @@ export default function AgendaPage() {
 
       const csv = [
           header.join(";"),
-          ...rows.map((r: any) => {
+          ...filteredTableRows.map((r: any) => {
               if (grouping === 'Campanhas') {
                   return [r.name, formatDateDisplay(r.date), r.channel, r.disponibilizados, r.realizados, r.receitaInf, r.confirmados, r.ctr, r.ctor].join(";");
               }
@@ -203,42 +226,14 @@ export default function AgendaPage() {
     "Descadastros": { value: data.kpis.descadastros, suffix: '' }
   };
 
-  let tableRows: any[] = [];
-  if (grouping === "Campanhas") tableRows = data.tables.campaigns;
-  else if (grouping === "Lojas") tableRows = data.tables.stores;
-  else if (grouping === "Vendedores") tableRows = data.tables.sellers;
-  else if (grouping === "Visão diária") tableRows = data.tables.daily;
-
-  const MiniProgressCircle = ({ percent, color }: { percent: number; color: string }) => {
-    const data = [{ name: "C", value: percent }, { name: "R", value: 100 - percent }]; const COLORS = [color, "#E2E8F0"];
-    return (<div className="relative w-12 h-12 flex items-center justify-center"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} cx="50%" cy="50%" innerRadius={16} outerRadius={21} startAngle={90} endAngle={-270} dataKey="value" stroke="none">{data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Pie></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">{Math.round(percent)}%</div></div>);
-  };
-  const ChartCursorTooltip = ({ active, payload, label, prefix, suffix }: any) => {
-    if (active && payload && payload.length) { return (<div className="bg-white border border-gray-100 p-3 rounded shadow-md text-xs"><p className="text-slate-400 mb-1 font-medium uppercase">{label}</p><p className="text-base font-bold text-slate-800">{prefix}{payload[0].value.toLocaleString('pt-BR')}{suffix}</p></div>); } return null;
-  };
-
   return (
-    <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-600 overflow-hidden">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-[#0F172A] text-slate-300 flex flex-col fixed h-full z-20">
-        <div className="h-16 flex items-center px-6 border-b border-slate-800"><div className="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center font-bold text-white mr-3">Q</div><span className="font-semibold text-white tracking-wide">QUANTIX</span></div>
-        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-            <Link href="/" className="flex items-center px-3 py-2 text-slate-400 hover:text-white cursor-pointer hover:bg-slate-800/50 rounded-md transition-colors mb-6"><LayoutDashboard size={18} className="mr-3" /> <span className="text-sm font-medium">Dashboard</span></Link>
-            <div className="px-3 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Analytics</div>
-            <Link href="/results/channels" className="flex items-center px-3 py-2 text-slate-400 hover:text-white cursor-pointer hover:bg-slate-800/50 rounded-md transition-colors"><Megaphone size={18} className="mr-3" /> <span className="text-sm font-medium">Campanhas</span></Link>
-            <div className="flex items-center px-3 py-2 bg-slate-800 text-white rounded-md cursor-pointer border-l-4 border-emerald-500 transition-colors mb-6"><CalendarRange size={18} className="mr-3 text-emerald-400" /> <span className="text-sm font-medium">Agenda</span></div>
-        </nav>
-      </aside>
-
-      {/* CONTEÚDO */}
-      <main className="flex-1 ml-64 p-8 h-full overflow-y-auto">
+    <main className="p-8 h-full w-full overflow-y-auto custom-scrollbar">
         <div className="max-w-[1600px] mx-auto">
             <div className="flex flex-wrap justify-between items-end mb-6 gap-4">
                 <div><div className="text-xs text-slate-400 mb-1">Campanhas</div><h1 className="text-3xl font-bold text-[#1e293b]">Agenda</h1></div>
                 <button className="bg-[#10B981] hover:bg-[#059669] text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 shadow-sm"><Plus size={16} /> Criar campanha</button>
             </div>
 
-            {/* FILTROS GLOBAIS */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5 mb-8">
                 <div className="flex justify-between items-center flex-wrap gap-4">
                     <div className="relative" ref={dateRef}>
@@ -278,7 +273,6 @@ export default function AgendaPage() {
                 </div>
             </div>
 
-            {/* GRÁFICO */}
             <section className="mb-8">
                 <h2 className="text-xl font-bold text-[#1e293b] mb-4">Consolidado da marca</h2>
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
@@ -312,7 +306,6 @@ export default function AgendaPage() {
                 </div>
             </section>
 
-            {/* KPIS INFERIORES */}
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <CustomTooltipWrapper text="Total de contatos gerados (sent).">
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4 h-24 w-full">
@@ -340,7 +333,6 @@ export default function AgendaPage() {
                 </CustomTooltipWrapper>
             </section>
 
-            {/* TABELA DINÂMICA (COLUNAS EXATAS DO PRINT) */}
             <section>
                 <div className="flex flex-wrap justify-between items-end mb-4 gap-4">
                     <h2 className="text-xl font-bold text-[#1e293b]">Performance</h2>
@@ -352,13 +344,16 @@ export default function AgendaPage() {
                             <option>Vendedores</option>
                             <option>Visão diária</option>
                         </select>
+                        <div className="relative">
+                            <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 border border-slate-200 rounded text-sm text-slate-700 outline-none w-48 focus:border-violet-500 transition-colors" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                        </div>
                         <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-emerald-500 text-emerald-600 rounded text-sm font-bold hover:bg-emerald-50 transition-colors"><Download size={14} /> Exportar CSV</button>
                     </div>
                 </div>
                 
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto custom-scrollbar pb-2">
-                        {/* 1. TABELA CAMPANHAS (ESTRUTURA DE FUNIL) */}
                         {grouping === 'Campanhas' && (
                             <table className="w-full text-left text-xs text-slate-600 whitespace-nowrap min-w-[1200px]">
                                 <thead>
@@ -375,7 +370,7 @@ export default function AgendaPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {tableRows.map((row: any, idx) => (
+                                    {filteredTableRows.map((row: any, idx: number) => (
                                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="p-4 pl-6">
                                                 <div className="font-bold text-violet-700">{row.name}</div>
@@ -395,7 +390,6 @@ export default function AgendaPage() {
                             </table>
                         )}
 
-                        {/* 2. TABELA LOJAS/VENDEDORES/DIARIO (ESTRUTURA FINANCEIRA) */}
                         {grouping !== 'Campanhas' && (
                             <table className="w-full text-left text-xs text-slate-600 whitespace-nowrap min-w-[1200px]">
                                 <thead>
@@ -414,7 +408,7 @@ export default function AgendaPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {tableRows.map((row: any, idx) => (
+                                    {filteredTableRows.map((row: any, idx: number) => (
                                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="p-4 pl-6">
                                                 <div className="font-bold text-[#4f46e5]">{row.name || row.date}</div>
@@ -444,7 +438,6 @@ export default function AgendaPage() {
                 </div>
             </section>
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

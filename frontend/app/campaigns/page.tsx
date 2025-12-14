@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { 
+import {
   Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell, 
-  TrendingUp, DollarSign, ShoppingBag, ArrowRight, Activity, 
+  TrendingUp, DollarSign, ShoppingBag, ArrowRight, Activity,
   Clock, FileText, PieChart as PieIcon, Zap
 } from 'lucide-react';
 import Link from 'next/link';
-import { 
+import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart 
 } from 'recharts';
 
@@ -96,7 +96,6 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen bg-[#f1f5f9] font-sans text-slate-900">
-      <Sidebar activePage="home" />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <Header title="Visão Geral" subtitle="Resumo operacional e atalhos rápidos" icon={<Home size={18}/>} />
@@ -249,28 +248,6 @@ export default function HomePage() {
   );
 }
 
-// --- SHARED COMPONENTS ---
-function Sidebar({ activePage }: { activePage: string }) {
-    const isActive = (p: string) => activePage === p;
-    return (
-        <aside className="w-20 lg:w-64 bg-[#0f172a] text-slate-300 flex flex-col shrink-0 shadow-2xl z-30 transition-all">
-            <div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
-                <div className="w-10 h-10 bg-violet-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-violet-900/50">Q</div>
-                <span className="font-bold text-xl tracking-tight text-white ml-3 hidden lg:block">QUANTIX</span>
-            </div>
-            <nav className="flex-1 py-6 space-y-1 overflow-y-auto px-3">
-                <Link href="/"><NavItem icon={<Home size={20}/>} label="Visão Geral" active={isActive('home')} /></Link>
-                <Link href="/clients"><NavItem icon={<Users size={20}/>} label="Carteira de Clientes" active={isActive('clients')} /></Link>
-                <div className="mt-6 mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hidden lg:block">Analytics</div>
-                <Link href="/results/retail"><NavItem icon={<BarChart2 size={20}/>} label="Performance Varejo" active={isActive('retail')} /></Link>
-                <Link href="/results/retail"><NavItem icon={<PieIcon size={20}/>} label="Canais & Origem" /></Link>
-                <div className="mt-6 mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hidden lg:block">Engajamento</div>
-                <Link href="/campaigns"><NavItem icon={<MessageCircle size={20}/>} label="Campanhas" active={isActive('campaigns')} /></Link>
-                <Link href="/reports"><NavItem icon={<FileText size={20}/>} label="Relatórios" active={isActive('reports')} /></Link>
-            </nav>
-        </aside>
-    )
-}
 
 function NavItem({ icon, label, active }: any) {
     return (

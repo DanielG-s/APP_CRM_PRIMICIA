@@ -344,9 +344,10 @@ export class SalesService {
 
   // --- 5. MÉTRICAS DE AGENDA ---
   async getScheduleMetrics(startDate: string, endDate: string, filters?: any) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setUTCHours(23, 59, 59, 999);
+    // CORREÇÃO: Forçar interpretação como data local (ou adicionar T12:00:00 para segurança de fuso)
+    // Ao receber "2025-12-01", concatenamos o horário para garantir que seja o início do dia LOCAL
+    const start = new Date(`${startDate}T00:00:00`);
+    const end = new Date(`${endDate}T23:59:59.999`);
 
     // 1. Where Clauses
     const campaignWhere: Prisma.CampaignWhereInput = { date: { gte: start, lte: end } };
@@ -388,14 +389,18 @@ export class SalesService {
     const conversoes = sales.length;
     const naoConfirmados = totalRealizados - totalConfirmados;
 
-    // 4. Histórico Diário (Map base)
+    // 4. Histórico Diário (CORRIGIDO)
     const daysMap = new Map();
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    // Loop dia a dia usando uma data auxiliar segura
+    // Usamos T12:00:00 para garantir que o dia não "vire" por causa de fuso horário
+    for (let d = new Date(`${startDate}T12:00:00`); d <= new Date(`${endDate}T12:00:00`); d.setDate(d.getDate() + 1)) {
         const key = format(d, 'dd/MM', { locale: ptBR });
-        // Inicializa com estrutura completa
+        // Salvamos a chave formatada e a data ISO para ordenação
         daysMap.set(key, { 
             name: key, 
-            date: d.toISOString(), // Importante para ordenação
+            // Precisamos da data ISO correta para comparação abaixo
+            // O slice(0,10) garante YYYY-MM-DD
+            isoDate: d.toISOString().split('T')[0], 
             receitaInf: 0, 
             vendasInf: 0,
             realizados: 0, 
@@ -407,6 +412,7 @@ export class SalesService {
 
     // Popula Campanhas no dia
     campaigns.forEach(c => {
+        // Formata a data da campanha para comparar com a chave do mapa
         const key = format(c.date, 'dd/MM', { locale: ptBR });
         if (daysMap.has(key)) {
             const d = daysMap.get(key);
@@ -430,11 +436,11 @@ export class SalesService {
     // Função Auxiliar
     const safeDiv = (a: number, b: number) => b > 0 ? a / b : 0;
 
-    // Converte Map para Array e calcula campos derivados (CORREÇÃO DO ERRO AQUI)
+    // Converte Map para Array e calcula campos derivados
     const dailyData = Array.from(daysMap.values()).map((d: any) => ({
         ...d,
         receita: d.receitaInf, // Alias para o gráfico
-        conversoes: safeDiv(d.vendasInf, d.realizados), // Taxa de conversão
+        conversoes: safeDiv(d.vendasInf, d.realizados), 
         receitaCont: safeDiv(d.receitaInf, d.realizados),
         vendasCont: safeDiv(d.vendasInf, d.realizados),
         naoConf: d.realizados - d.confirmados
