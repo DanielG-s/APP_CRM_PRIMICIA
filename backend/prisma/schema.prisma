@@ -10,6 +10,7 @@ datasource db {
 // --- 1. ACESSO & SEGURANÇA ---
 model User {
   id              String   @id @default(uuid())
+  name            String?
   email           String   @unique
   password        String
   role            String
@@ -17,6 +18,7 @@ model User {
   storeId         String?
   store           Store?   @relation(fields: [storeId], references: [id])
   createdAt       DateTime @default(now())
+  segmentsUpdated Segment[] @relation("SegmentUpdater")
 }
 
 model Store {
@@ -30,6 +32,7 @@ model Store {
   customers       Customer[]
   transactions    Transaction[]
   campaigns       Campaign[]
+  segments        Segment[]
 }
 
 // --- 2. CLIENTES ---
@@ -56,6 +59,8 @@ model Customer {
   rfmHistory             RfmHistory[]
   responses              SurveyResponse[]
   conversations          Conversation[]
+  totalSpent             Decimal         @default(0) @db.Decimal(10, 2)
+  state           String?
 }
 
 model CustomerEvent {
@@ -87,9 +92,18 @@ model Transaction {
 model Segment {
   id        String  @id @default(uuid())
   name      String
-  logic     String
+  logic     String?
   rules     Json
   isDynamic Boolean @default(true)
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  active      Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  
+  // Quem alterou pela última vez? (Relacionamento com User)
+  updatedById String?
+  updatedBy   User?   @relation("SegmentUpdater", fields: [updatedById], references: [id])
 }
 
 // backend/prisma/schema.prisma
@@ -132,6 +146,7 @@ model Campaign {
 
   attributionWindow Int?    @default(7)
   conversionTrigger String?
+  
 }
 
 model CampaignSchedule {
