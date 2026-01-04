@@ -1,91 +1,323 @@
 import { Injectable, ConflictException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service'; // Ajuste o caminho se necessário
+import { Prisma } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule'; // IMPORTANTE PARA O AGENDADOR
 
 @Injectable()
 export class IntelligenceService {
   constructor(private prisma: PrismaService) {}
 
   // ===========================================================================
-  // 1. MÉTODO EXISTENTE (DASHBOARD) - PRESERVADO
+  // 1. DASHBOARD RFM (Otimizado via Banco de Dados)
   // ===========================================================================
   async getRfmAnalysis() {
-    // 1. Busca todos os clientes com suas transações
-    const customers = await this.prisma.customer.findMany({
-      include: { transactions: true }
+    const groups = await this.prisma.customer.groupBy({
+      by: ['rfmStatus'],
+      _count: { id: true }
     });
 
-    let vips = 0;
-    let ativos = 0;
-    let emRisco = 0;
-    let perdidos = 0;
+    const resultMap = {
+      'Champions': { value: 0, color: '#10b981' },
+      'Leais': { value: 0, color: '#3b82f6' }, 
+      'Recentes': { value: 0, color: '#6366f1' },
+      'Em Risco': { value: 0, color: '#f59e0b' },
+      'Hibernando': { value: 0, color: '#ef4444' },
+      'Novos / Sem Dados': { value: 0, color: '#9ca3af' }
+    };
 
-    const hoje = new Date();
+    groups.forEach(g => {
+        const key = g.rfmStatus || 'Novos / Sem Dados';
+        let mapKey = key;
+        
+        if (key.includes('Champions')) mapKey = 'Champions';
+        if (key.includes('Leais')) mapKey = 'Leais';
+        if (key.includes('Recentes')) mapKey = 'Recentes';
+        if (key.includes('Risco')) mapKey = 'Em Risco';
+        if (key.includes('Hibernando')) mapKey = 'Hibernando';
 
-    customers.forEach(customer => {
-      // Se não tem transação, é "Novo/Sem Dados"
-      if (customer.transactions.length === 0) return;
-
-      // Calcula total gasto
-      const totalGasto = customer.transactions.reduce((acc, t) => acc + Number(t.totalValue), 0);
-      
-      // Encontra a data da última compra
-      const ultimaCompra = customer.transactions
-        .map(t => new Date(t.date).getTime())
-        .sort((a, b) => b - a)[0];
-      
-      const diasSemComprar = Math.floor((hoje.getTime() - ultimaCompra) / (1000 * 60 * 60 * 24));
-
-      // --- REGRA DE NEGÓCIO RFM (SIMPLIFICADA) ---
-      if (totalGasto > 1000 && diasSemComprar < 30) {
-        vips++; // Gastou muito e comprou recente
-      } else if (diasSemComprar <= 60) {
-        ativos++; // Comprou nos últimos 2 meses
-      } else if (diasSemComprar <= 120) {
-        emRisco++; // Não compra há 4 meses
-      } else {
-        perdidos++; // Sumiu há mais de 4 meses
-      }
+        if (resultMap[mapKey] && g._count) {
+            resultMap[mapKey].value += (g._count as any).id || 0;
+        }
     });
 
-    // Retorna formatado para o Gráfico de Pizza
-    return [
-      { name: 'VIPs', value: vips, color: '#10b981' },      // Verde
-      { name: 'Ativos', value: ativos, color: '#3b82f6' },    // Azul
-      { name: 'Em Risco', value: emRisco, color: '#f59e0b' }, // Laranja
-      { name: 'Perdidos', value: perdidos, color: '#ef4444' } // Vermelho
-    ];
+    return Object.keys(resultMap).map(k => ({
+        name: k,
+        value: resultMap[k].value,
+        color: resultMap[k].color
+    }));
   }
 
   // ===========================================================================
-  // 2. DADOS INICIAIS (CARREGAMENTO DA PÁGINA)
+  // 2. ENGINE DE CÁLCULO REAL (DIRETO NO BANCO - ESCALÁVEL)
   // ===========================================================================
-  async getSegmentationData() {
-    const customers = await this.prisma.customer.findMany({ include: { store: { select: { name: true } } } });
-    const events = await this.prisma.customerEvent.findMany({ orderBy: { createdAt: 'desc' }, take: 5000 });
-    const orders = await this.prisma.transaction.findMany({ orderBy: { date: 'desc' }, take: 5000 });
+  async calculatePreview(rules: any[]) {
+    const whereClause = this.buildWhereClause(rules);
 
-    return { 
-        clients: this.formatClients(customers), 
-        events: this.formatEvents(events), 
-        orders: this.formatOrders(orders) 
+    const totalClients = await this.prisma.customer.count({ where: whereClause });
+    const totalDatabase = await this.prisma.customer.count();
+
+    const matchedClients = await this.prisma.customer.findMany({
+      where: whereClause,
+      take: 10,
+      select: {
+        id: true, name: true, email: true, city: true, state: true, rfmStatus: true,
+      }
+    });
+
+    const aggregates = await this.prisma.customer.aggregate({
+      where: whereClause,
+      _sum: { totalSpent: true },
+      _count: { id: true }
+    });
+
+    const channelCounts = await this.prisma.customer.aggregate({
+        where: whereClause,
+        _count: {
+            email: true,
+            phone: true
+        }
+    });
+
+    return {
+      metrics: {
+        total: totalClients,
+        percent: totalDatabase > 0 ? ((totalClients / totalDatabase) * 100).toFixed(1) : 0,
+        revenue: {
+          total: Number(aggregates._sum.totalSpent || 0),
+          buyers: aggregates._count.id,
+          orders_count: 0
+        },
+        channels: {
+          email: channelCounts._count.email || 0,
+          whatsapp: channelCounts._count.phone || 0 
+        }
+      },
+      matchedClients: matchedClients.map(c => ({
+        ...c,
+        rfm: c.rfmStatus || 'Novos / Sem Dados'
+      }))
     };
   }
 
   // ===========================================================================
-  // 3. SALVAR SEGMENTO (COM IS_DYNAMIC)
+  // 3. O TRADUTOR (JSON -> PRISMA WHERE)
   // ===========================================================================
-  async createSegment(data: { name: string; rules: any; isDynamic: boolean }) {
-    const store = await this.prisma.store.findFirst();
-    if (!store) throw new Error("Nenhuma loja encontrada.");
+  private buildWhereClause(rules: any[]): Prisma.CustomerWhereInput {
+    if (!rules || rules.length === 0) return {};
 
-    const existingSegment = await this.prisma.segment.findFirst({
-      where: { 
-        name: { equals: data.name, mode: 'insensitive' },
-        storeId: store.id 
+    const andConditions: Prisma.CustomerWhereInput[] = [];
+    const orConditions: Prisma.CustomerWhereInput[] = [];
+
+    rules.forEach((block, index) => {
+      let condition: Prisma.CustomerWhereInput | undefined;
+
+      if (block.category === 'characteristic') {
+        condition = this.mapCharacteristicToPrisma(block);
+      } else if (block.category === 'rfm') {
+        condition = { rfmStatus: { contains: block.status, mode: 'insensitive' } };
+      } else if (block.category === 'behavioral') {
+        condition = this.mapBehaviorToPrisma(block);
+      }
+
+      if (condition) {
+        if (index === 0) {
+          andConditions.push(condition);
+        } else {
+          if (block.logicOperator === 'OR') orConditions.push(condition);
+          else andConditions.push(condition);
+        }
       }
     });
 
+    if (orConditions.length > 0) {
+      return { AND: [...andConditions, { OR: orConditions }] };
+    }
+    return { AND: andConditions };
+  }
+
+  private mapCharacteristicToPrisma(block: any): Prisma.CustomerWhereInput {
+    const { field, operator, value } = block;
+    const mode = 'insensitive';
+
+    if (field === 'totalSpent' || field === 'ordersCount') {
+        const numVal = Number(value);
+        if (operator === 'greater_than') return { [field]: { gt: numVal } };
+        if (operator === 'less_than') return { [field]: { lt: numVal } };
+        if (operator === 'equals') return { [field]: { equals: numVal } };
+    }
+
+    switch (operator) {
+      case 'equals': return { [field]: { equals: value, mode } };
+      case 'not_equals': return { [field]: { not: { equals: value, mode } } };
+      case 'contains': return { [field]: { contains: value, mode } };
+      case 'is_set': return { [field]: { not: null } };
+      case 'is': return { [field]: value === 'true' };
+      default: return {};
+    }
+  }
+
+  private mapBehaviorToPrisma(block: any): Prisma.CustomerWhereInput {
+    if (block.event.includes('pedido') || block.event.includes('comprou')) {
+        
+        if (!block.filters || block.filters.length === 0) {
+            const basicCondition = { transactions: { some: {} } };
+            return block.type === 'did_not' ? { NOT: basicCondition } : basicCondition;
+        }
+
+        const andFilters: Prisma.TransactionWhereInput[] = [];
+
+        for (const f of block.filters) {
+            const rawVal = f.value;
+            const numVal = Number(String(rawVal).replace(/[^0-9.-]+/g,"")) || 0;
+
+            if (['total', 'subtotal', 'valor', 'price'].includes(f.field)) {
+                if (f.operator === 'greater_than') andFilters.push({ totalValue: { gt: numVal } });
+                else if (f.operator === 'less_than') andFilters.push({ totalValue: { lt: numVal } });
+                else if (f.operator === 'equals') andFilters.push({ totalValue: { equals: numVal } });
+            } else if (['date', 'data', 'created_at'].includes(f.field)) {
+                const dateVal = this.parseRelativeDate(String(rawVal));
+                if (dateVal) {
+                    if (f.operator === 'greater_than') andFilters.push({ date: { gte: dateVal } });
+                    else if (f.operator === 'less_than') andFilters.push({ date: { lte: dateVal } });
+                    else if (f.operator === 'equals') {
+                        const nextDay = new Date(dateVal);
+                        nextDay.setDate(nextDay.getDate() + 1);
+                        andFilters.push({ date: { gte: dateVal, lt: nextDay } });
+                    }
+                }
+            } else if (['produto_id', 'nome_produto', 'name'].includes(f.field)) {
+                andFilters.push({
+                    items: {
+                        array_contains: [{ name: rawVal }]
+                    }
+                } as any);
+            } else if (['categoria', 'category', 'nome_categoria'].includes(f.field)) {
+                andFilters.push({
+                    items: {
+                        array_contains: [{ category: rawVal }]
+                    }
+                } as any);
+            }
+        }
+
+        if (andFilters.length > 0) {
+            const relationCondition = { transactions: { some: { AND: andFilters } } };
+            return block.type === 'did_not' ? { NOT: relationCondition } : relationCondition;
+        }
+        
+        return { transactions: { some: {} } };
+    }
+
+    return {};
+  }
+
+  private parseRelativeDate(value: string): Date | null {
+      const now = new Date();
+      if (value === 'Hoje') return new Date(now.setHours(0,0,0,0));
+      if (value === 'Ontem') { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(0,0,0,0); return d; }
+      
+      if (value.includes('Últimos')) {
+          const days = parseInt(value.replace(/\D/g, '')) || 30;
+          const d = new Date(); d.setDate(d.getDate() - days);
+          return d;
+      }
+      const parsed = new Date(value);
+      return isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  // ===========================================================================
+  // 4. MANUTENÇÃO AUTOMÁTICA (CRON JOB) E LISTAGEM COM TENDÊNCIA
+  // ===========================================================================
+  
+  // Roda toda madrugada às 03:00 para salvar o tamanho do segmento
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async handleDailySegmentSnapshot() {
+    console.log('📸 Iniciando snapshot diário dos segmentos...');
+    
+    const segments = await this.prisma.segment.findMany({ where: { active: true } });
+
+    for (const seg of segments) {
+        try {
+            // Calcula tamanho atual
+            const whereClause = this.buildWhereClause(seg.rules as any);
+            const currentCount = await this.prisma.customer.count({ where: whereClause });
+
+            // Salva no Histórico
+            await this.prisma.segmentHistory.create({
+                data: {
+                    segmentId: seg.id,
+                    count: currentCount,
+                    date: new Date()
+                }
+            });
+
+            // Atualiza cache rápido
+            await this.prisma.segment.update({
+                where: { id: seg.id },
+                data: { lastCount: currentCount }
+            });
+
+        } catch (error) {
+            console.error(`Erro ao processar snapshot do segmento ${seg.name}:`, error);
+        }
+    }
+    console.log('✅ Snapshot diário concluído.');
+  }
+
+  // LISTAGEM NOVA: Traz segmentos + tendência (crescimento vs ontem)
+  // Substitua a chamada no Controller para usar ESTE método
+  async findAllSegmentsWithTrend() {
+    const totalCustomers = await this.prisma.customer.count();
+    
+    const segments = await this.prisma.segment.findMany({
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        updatedBy: { select: { name: true, email: true } },
+        history: {
+            orderBy: { date: 'desc' },
+            take: 1,
+            skip: 1 // Pega o PENÚLTIMO registro (ontem), pois o último seria o de hoje (se já rodou)
+        }
+      }
+    });
+
+    const formattedSegments = segments.map(seg => {
+        const currentCount = seg.lastCount;
+        const previousCount = seg.history[0]?.count || currentCount; // Se não tiver histórico, assume variação 0
+        
+        let trendPercent = 0;
+        if (previousCount > 0) {
+            trendPercent = ((currentCount - previousCount) / previousCount) * 100;
+        }
+
+        return {
+            ...seg,
+            metrics: {
+                totalBase: totalCustomers,
+                reachPercent: totalCustomers > 0 ? ((currentCount / totalCustomers) * 100).toFixed(1) : 0,
+                trend: trendPercent.toFixed(1)
+            }
+        };
+    });
+
+    return { segments: formattedSegments, totalCustomers };
+  }
+
+  // ===========================================================================
+  // 5. CRUD (CREATE / UPDATE ATUALIZADOS PARA SALVAR LASTCOUNT)
+  // ===========================================================================
+
+  async createSegment(data: { name: string; rules: any; isDynamic: boolean }) {
+    const store = await this.prisma.store.findFirst();
+    const existingSegment = await this.prisma.segment.findFirst({
+      where: { name: { equals: data.name, mode: 'insensitive' }, storeId: store?.id }
+    });
+
     if (existingSegment) throw new ConflictException('Já existe um segmento com este nome.');
+
+    // Calcula tamanho inicial para já mostrar na listagem
+    const whereClause = this.buildWhereClause(data.rules);
+    const count = await this.prisma.customer.count({ where: whereClause });
 
     return this.prisma.segment.create({
       data: {
@@ -93,237 +325,40 @@ export class IntelligenceService {
         rules: data.rules,
         logic: 'custom',
         active: true,
-        storeId: store.id,
+        storeId: store?.id || 'default',
         isDynamic: data.isDynamic,
+        lastCount: count // <--- Salva tamanho inicial
       },
     });
   }
 
-  // ===========================================================================
-  // 4. ENGINE DE CÁLCULO (PREVIEW)
-  // ===========================================================================
-  async calculatePreview(rules: any[]) {
-    // Busca dados otimizados (sem includes desnecessários)
-    const customers = await this.prisma.customer.findMany(); 
-    const orders = await this.prisma.transaction.findMany(); 
-    const events = await this.prisma.customerEvent.findMany({ 
-        where: { createdAt: { gte: new Date(new Date().setDate(new Date().getDate() - 90)) } } // Últimos 90 dias de eventos
+  async updateSegment(id: string, data: { name: string; rules: any; isDynamic: boolean }, userId?: string) {
+    const existing = await this.prisma.segment.findFirst({
+        where: { name: { equals: data.name, mode: 'insensitive' }, id: { not: id } }
     });
+    if (existing) throw new ConflictException('Já existe outro segmento com este nome.');
 
-    // Formata e Calcula o RFM individualmente para o filtro
-    const formattedOrders = this.formatOrders(orders);
-    const clientsWithRFM = this.formatClientsWithRFM(customers, formattedOrders);
+    // Recalcula tamanho ao editar
+    const whereClause = this.buildWhereClause(data.rules);
+    const count = await this.prisma.customer.count({ where: whereClause });
 
-    const db = {
-        clients: clientsWithRFM,
-        events: this.formatEvents(events),
-        orders: formattedOrders
-    };
-
-    return this.evaluateRuleEngine(db, rules);
+    return this.prisma.segment.update({
+        where: { id },
+        data: {
+            name: data.name,
+            rules: data.rules,
+            isDynamic: data.isDynamic,
+            updatedById: userId,
+            lastCount: count // <--- Atualiza tamanho
+        }
+    });
   }
 
   // ===========================================================================
-  // HELPERS PRIVADOS
+  // 6. MÉTODOS AUXILIARES (Opções de Filtro, Delete, Toggle)
   // ===========================================================================
-
-  private formatClients(customers: any[]) {
-    return customers.map(c => {
-        const extraData = (c.dataQualityIssues ? c.dataQualityIssues : {}) as any;
-        return {
-            id: c.id,
-            name: c.name,
-            email: c.email,
-            city: c.city,
-            state: c.state,
-            has_android: extraData.has_android || false,
-            gender: extraData.gender || 'Não informado',
-            channels: extraData.channels || { email: true, whatsapp: false },
-        };
-    });
-  }
-
-  // Helper especial que injeta o status RFM no objeto do cliente
-  private formatClientsWithRFM(customers: any[], orders: any[]) {
-    const ordersByClient = new Map();
-    orders.forEach(o => {
-        if (!ordersByClient.has(o.client_id)) ordersByClient.set(o.client_id, []);
-        ordersByClient.get(o.client_id).push(o);
-    });
-
-    const now = new Date();
-
-    return customers.map(c => {
-        const extraData = (c.dataQualityIssues ? c.dataQualityIssues : {}) as any;
-        const clientOrders = ordersByClient.get(c.id) || [];
-        
-        // --- CÁLCULO RFM PARA SEGMENTAÇÃO ---
-        // (Nota: Usamos lógica similar ao getRfmAnalysis, mas retornando Strings para o filtro)
-        let rfmStatus = 'Novos / Sem Dados';
-        
-        if (clientOrders.length > 0) {
-            clientOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            const lastOrderDate = new Date(clientOrders[0].date);
-            const daysSinceLastOrder = Math.floor((now.getTime() - lastOrderDate.getTime()) / (1000 * 3600 * 24));
-            const totalSpent = clientOrders.reduce((acc, curr) => acc + curr.total, 0);
-            const count = clientOrders.length;
-
-            if (daysSinceLastOrder > 180) {
-                rfmStatus = 'Hibernando';
-            } else if (daysSinceLastOrder > 90) {
-                rfmStatus = 'Em Risco';
-            } else {
-                if (totalSpent > 1000 || count > 3) rfmStatus = 'Champions';
-                else if (count > 1) rfmStatus = 'Leais';
-                else rfmStatus = 'Recentes';
-            }
-        }
-
-        return {
-            id: c.id,
-            name: c.name,
-            email: c.email,
-            city: c.city,
-            state: c.state,
-            rfm: rfmStatus, // Campo usado pelo filtro 'rfm'
-            has_android: extraData.has_android || false,
-            gender: extraData.gender || 'Não informado',
-            channels: extraData.channels || { email: true, whatsapp: false },
-        };
-    });
-  }
-
-  private formatEvents(events: any[]) {
-    return events.map(e => ({
-        event: e.eventType,
-        client_id: e.customerId,
-        context_id: (e.payload as any)?.context_id || null,
-        date: e.createdAt.toISOString().split('T')[0],
-        properties: e.payload as any || {}
-    }));
-  }
-
-  private formatOrders(orders: any[]) {
-    return orders.map(o => ({
-        id: o.id,
-        client_id: o.customerId,
-        total: Number(o.totalValue),
-        date: o.date.toISOString().split('T')[0],
-        items: (o.items as any[])?.length || 0
-    }));
-  }
-
-  private evaluateRuleEngine(db: any, blocks: any[]) {
-    if (!blocks || blocks.length === 0) return { metrics: { total: 0 }, matchedClients: [] };
-
-    const checkOp = (val: any, op: string, target: any) => {
-        if (op === 'is_set') return val !== undefined && val !== null && val !== '';
-        if (op === 'is_not_set') return val === undefined || val === null || val === '';
-        
-        const v = String(val ?? '').toLowerCase();
-        const t = String(target ?? '').toLowerCase();
-    
-        if (op === 'greater_than' && target.includes('Últimos')) {
-           const days = parseInt(target.replace(/\D/g, ''));
-           const dateLimit = new Date();
-           dateLimit.setDate(dateLimit.getDate() - days);
-           const dateVal = new Date(val);
-           return dateVal >= dateLimit;
-        }
-    
-        switch (op) {
-          case 'equals': return v === t;
-          case 'not_equals': return v !== t;
-          case 'contains': return v.includes(t);
-          case 'not_contains': return !v.includes(t);
-          case 'greater_than': return Number(val) > Number(target);
-          case 'less_than': return Number(val) < Number(target);
-          case 'is': return v === t;
-          default: return false;
-        }
-    };
-
-    const matchedClients = db.clients.filter((client: any) => {
-        let globalResult: any = null;
-    
-        for (let i = 0; i < blocks.length; i++) {
-          const block = blocks[i];
-          let blockResult = false;
-          
-          // --- LOGICA DE FILTRO RFM ---
-          if (block.category === 'rfm') {
-             // Compara o status calculado (ex: "Champions") com o selecionado no dropdown
-             blockResult = client.rfm === block.status;
-          }
-          else if (block.category === 'characteristic') {
-            const clientVal = client[block.field];
-            blockResult = checkOp(clientVal, block.operator, block.value);
-          } 
-          else if (block.category === 'segment_ref') {
-            blockResult = false; // Futuro: Implementar recursão de segmentos
-          }
-          else if (block.category === 'behavioral') {
-            let clientEvents = db.events.filter((e: any) => e.client_id === client.id && e.event === block.event);
-    
-            if (block.filters && block.filters.length > 0) {
-              clientEvents = clientEvents.filter((ev: any) => {
-                return block.filters.every((f: any) => {
-                  const evVal = ev.properties[f.field] || (f.field === 'date' ? ev.date : undefined);
-                  return checkOp(evVal, f.operator, f.value);
-                });
-              });
-            }
-    
-            if (block.context === 'order') {
-               blockResult = clientEvents.some((e: any) => e.context_id !== null);
-            } else {
-               blockResult = clientEvents.length > 0;
-            }
-    
-            if (block.type === 'did_not') {
-              blockResult = !blockResult;
-            }
-          }
-    
-          if (i === 0) {
-            globalResult = blockResult;
-          } else {
-            if (block.logicOperator === 'OR') globalResult = globalResult || blockResult;
-            else globalResult = globalResult && blockResult;
-          }
-        }
-        return globalResult;
-    });
-
-    // Métricas
-    const totalClients = matchedClients.length;
-    const metrics = {
-        total: totalClients,
-        percent: db.clients.length > 0 ? ((totalClients / db.clients.length) * 100).toFixed(1) : 0,
-        channels: {
-          email: matchedClients.filter((c: any) => c.channels?.email).length,
-          whatsapp: matchedClients.filter((c: any) => c.channels?.whatsapp).length,
-        },
-        revenue: {
-          total: 0,
-          buyers: 0,
-          orders_count: 0
-        }
-      };
-    
-    const matchedIds = new Set(matchedClients.map((c: any) => c.id));
-    const filteredOrders = db.orders.filter((o: any) => matchedIds.has(o.client_id));
-      
-    metrics.revenue.total = filteredOrders.reduce((acc: any, curr: any) => acc + curr.total, 0);
-    metrics.revenue.orders_count = filteredOrders.length;
-    metrics.revenue.buyers = new Set(filteredOrders.map((o: any) => o.client_id)).size;
-    
-    return { matchedClients: matchedClients.slice(0, 10), metrics };
-  }
-
-  // --- BUSCAR OPÇÕES DINÂMICAS DO BANCO ---
+  
   async getFilterOptions() {
-    // 1. Cidades e Estados (Isso é fácil, vem da tabela Customers)
     const citiesRaw = await this.prisma.customer.findMany({
       where: { city: { not: null } }, select: { city: true }, distinct: ['city'], orderBy: { city: 'asc' }
     });
@@ -332,49 +367,21 @@ export class IntelligenceService {
     });
 
     const segmentsRaw = await this.prisma.segment.findMany({
-        where: { active: true },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' }
-    });
-
-    // 2. Campanhas, Produtos e Categorias (Isso é difícil, está dentro de JSONs)
-    // Solução: Pegamos uma amostra recente para varrer
-    const recentEvents = await this.prisma.customerEvent.findMany({
-      take: 2000, // Amostra segura
-      orderBy: { createdAt: 'desc' },
-      select: { payload: true }
+        where: { active: true }, select: { id: true, name: true }, orderBy: { name: 'asc' }
     });
 
     const recentTransactions = await this.prisma.transaction.findMany({
-      take: 1000,
-      orderBy: { date: 'desc' },
-      select: { items: true }
+      take: 1000, orderBy: { date: 'desc' }, select: { items: true }
     });
 
-    // Usamos SET para garantir valores únicos automaticamente
-    const campaignsSet = new Set<string>();
     const categoriesSet = new Set<string>();
-    const departmentsSet = new Set<string>();
     const productsSet = new Set<string>();
-    const searchTermsSet = new Set<string>();
 
-    // Varrer Eventos
-    recentEvents.forEach(e => {
-      const p = e.payload as any || {};
-      if (p.campaign_id) campaignsSet.add(p.campaign_id);
-      if (p.nome_categoria) categoriesSet.add(p.nome_categoria);
-      if (p.nome_departamento) departmentsSet.add(p.nome_departamento);
-      if (p.termo_busca) searchTermsSet.add(p.termo_busca);
-      if (p.produto_id) productsSet.add(p.produto_id);
-    });
-
-    // Varrer Transações
     recentTransactions.forEach(t => {
       const items = (t.items as any[]) || [];
       items.forEach(item => {
         if (item.name) productsSet.add(item.name);
         if (item.category) categoriesSet.add(item.category);
-        if (item.dept) departmentsSet.add(item.dept);
       });
     });
 
@@ -382,79 +389,197 @@ export class IntelligenceService {
       cities: citiesRaw.map(c => c.city).filter(Boolean),
       states: statesRaw.map(s => s.state).filter(Boolean),
       segments: segmentsRaw,
-      campaigns: Array.from(campaignsSet).sort(),
-      categories: Array.from(categoriesSet).sort(),
-      departments: Array.from(departmentsSet).sort(),
       products: Array.from(productsSet).sort(),
-      search_terms: Array.from(searchTermsSet).sort(),
+      categories: Array.from(categoriesSet).sort(),
+      campaigns: [], departments: [], search_terms: []
     };
   }
 
-  // --- 1. LISTAR TODOS (COM DADOS DE AUDITORIA) ---
+  // Método legado mantido para compatibilidade, caso algo ainda chame
   async findAllSegments() {
-    return this.prisma.segment.findMany({
-      orderBy: { updatedAt: 'desc' }, // Ordena pela última edição
-      include: {
-        updatedBy: { // Traz o nome de quem mexeu
-          select: { 
-            name: true, 
-            email: true 
-          }
-        }
-      }
-    });
+     return this.findAllSegmentsWithTrend();
   }
-
-  // --- 2. BUSCAR UM ÚNICO (PARA A TELA DE EDIÇÃO) ---
+  
+  async getSegmentationData() { return { clients: [], events: [], orders: [] }; }
+  
   async getSegmentById(id: string) {
-    const segment = await this.prisma.segment.findUnique({
-      where: { id }
-    });
-    
+    const segment = await this.prisma.segment.findUnique({ where: { id } });
     if (!segment) throw new Error('Segmento não encontrado');
     return segment;
   }
 
-  // --- 3. ATUALIZAR SEGMENTO (SALVANDO QUEM MEXEU) ---
-  async updateSegment(id: string, data: { name: string; rules: any; isDynamic: boolean }, userId?: string) {
-    // Verifica se já existe outro segmento com esse nome (exceto ele mesmo)
-    const existing = await this.prisma.segment.findFirst({
-        where: { 
-            name: { equals: data.name, mode: 'insensitive' },
-            id: { not: id },
-            // Se tiver loja: storeId: ...
-        }
+  async toggleSegmentStatus(id: string) {
+    const s = await this.prisma.segment.findUnique({ where: { id } });
+    if (!s) throw new Error('Segmento não encontrado');
+    return this.prisma.segment.update({ where: { id }, data: { active: !s.active } });
+  }
+
+  async deleteSegment(id: string) {
+    return this.prisma.segment.delete({ where: { id } });
+  }
+  
+  // Método auxiliar para atualizar métricas do cliente (chamado por webhooks de venda)
+  async updateCustomerMetrics(customerId: string) {
+    const aggregates = await this.prisma.transaction.aggregate({
+        where: { customerId },
+        _sum: { totalValue: true },
+        _count: { id: true },
+        _max: { date: true }
     });
 
-    if (existing) throw new ConflictException('Já existe outro segmento com este nome.');
+    const totalSpent = aggregates._sum.totalValue || 0;
+    const ordersCount = aggregates._count.id || 0;
+    const lastOrderDate = aggregates._max.date;
 
-    return this.prisma.segment.update({
-        where: { id },
+    let rfmStatus = 'Novos / Sem Dados';
+    if (ordersCount > 0 && lastOrderDate) {
+        const daysSince = Math.floor((new Date().getTime() - lastOrderDate.getTime()) / (1000 * 3600 * 24));
+        if (daysSince > 180) rfmStatus = 'Hibernando';
+        else if (daysSince > 90) rfmStatus = 'Em Risco';
+        else if (Number(totalSpent) > 1000 || ordersCount > 5) rfmStatus = 'Champions';
+        else if (ordersCount > 1) rfmStatus = 'Leais';
+        else rfmStatus = 'Recentes';
+    }
+
+    await this.prisma.customer.update({
+        where: { id: customerId },
         data: {
-            name: data.name,
-            rules: data.rules,
-            isDynamic: data.isDynamic,
-            // Grava o ID do usuário que fez a alteração (se fornecido)
-            updatedById: userId 
+            totalSpent: new Prisma.Decimal(Number(totalSpent)),
+            ordersCount,
+            lastOrderDate,
+            rfmStatus
         }
     });
   }
 
-  // --- 4. TOGGLE STATUS ---
-  async toggleSegmentStatus(id: string) {
-    const segment = await this.prisma.segment.findUnique({ where: { id } });
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async handleDailyUpdate() {
+    console.log('🤖 [CRON] Iniciando atualização diária dos segmentos...');
+    
+    // 1. Busca todos os segmentos ativos
+    const segments = await this.prisma.segment.findMany({
+      where: { active: true }
+    });
+
+    for (const segment of segments) {
+      let currentCount = segment.lastCount;
+
+      // 2. Se for Dinâmico, recalcula a contagem atual
+      if (segment.isDynamic) {
+        try {
+          // Reaproveita sua lógica de filtro para contar (Assumindo que countPreview existe ou similar)
+          // Se não tiver um método separado, usamos a lógica de construção de query aqui:
+          const whereClause = this.buildWhereFromRules(segment.rules as any[]);
+          currentCount = await this.prisma.customer.count({ where: whereClause });
+          
+          // Atualiza o valor no Segmento principal
+          await this.prisma.segment.update({
+             where: { id: segment.id },
+             data: { lastCount: currentCount }
+          });
+        } catch (error) {
+          console.error(`Erro ao atualizar segmento ${segment.name}:`, error);
+        }
+      } 
+      // Se for Estático, mantemos o 'currentCount' antigo, mas registramos no histórico
+      // para que o gráfico não tenha "buracos" no dia de hoje.
+
+      // 3. Salva o "Retrato" no Histórico (Para o gráfico Sparkline)
+      await this.prisma.segmentHistory.create({
+        data: {
+          segmentId: segment.id,
+          count: currentCount,
+          date: new Date() // Data de hoje
+        }
+      });
+    }
+
+    console.log(`✅ [CRON] ${segments.length} segmentos atualizados e históricos salvos.`);
+  }
+
+  // --- HELPER: CONSTRUTOR DE QUERY ---
+  private buildWhereFromRules(rules: any[]): Prisma.CustomerWhereInput {
+     if (!rules || rules.length === 0) return {};
+     
+     // Array explícito do tipo CustomerWhereInput
+     const conditions: Prisma.CustomerWhereInput[] = [];
+
+     for (const rule of rules) {
+        // Lógica para Total Gasto
+        if (rule.field === 'total_spent') {
+            const val = parseFloat(rule.value);
+            if (!isNaN(val)) {
+                if (rule.operator === 'gt') conditions.push({ totalSpent: { gt: val } });
+                else if (rule.operator === 'lt') conditions.push({ totalSpent: { lt: val } });
+                else if (rule.operator === 'gte') conditions.push({ totalSpent: { gte: val } });
+                else if (rule.operator === 'lte') conditions.push({ totalSpent: { lte: val } });
+            }
+        }
+        
+        // Lógica para Cidade (Com correção de tipagem 'as const')
+        if (rule.field === 'city' && rule.value) {
+            conditions.push({ 
+                city: { contains: rule.value, mode: 'insensitive' as const } 
+            });
+        }
+
+        // Lógica para Estado
+        if (rule.field === 'state' && rule.value) {
+             conditions.push({ 
+                state: { equals: rule.value, mode: 'insensitive' as const } 
+             });
+        }
+
+        // Adicione outros campos aqui conforme necessário (ex: lastOrderDate)
+     }
+
+     // Se não gerou nenhuma condição válida, retorna objeto vazio (busca tudo)
+     if (conditions.length === 0) return {};
+
+     return { AND: conditions };
+  }
+
+  // --- EXPORTAR CSV ---
+  async exportSegmentToCsv(segmentId: string): Promise<string> {
+    // 1. Busca as regras do segmento
+    const segment = await this.prisma.segment.findUnique({
+      where: { id: segmentId }
+    });
+
     if (!segment) throw new Error('Segmento não encontrado');
 
-    return this.prisma.segment.update({
-      where: { id },
-      data: { active: !segment.active }
-    });
-  }
+    // 2. Constrói o filtro (WHERE) baseado nas regras
+    const whereClause = this.buildWhereFromRules(segment.rules as any[]);
 
-  // --- 5. DELETAR ---
-  async deleteSegment(id: string) {
-    return this.prisma.segment.delete({
-      where: { id }
+    // 3. Busca os clientes (Aqui limitamos a 5000 para não travar o servidor, 
+    // em produção usaria Streams para milhões de linhas)
+    const customers = await this.prisma.customer.findMany({
+      where: whereClause,
+      take: 10000, 
+      orderBy: { name: 'asc' },
+      select: {
+        name: true,
+        email: true,
+        phone: true,
+        city: true,
+        state: true,
+        totalSpent: true,
+        lastOrderDate: true
+      }
     });
+
+    // 4. Monta o CSV manualmente (Cabeçalho + Linhas)
+    const header = 'Nome,Email,Telefone,Cidade,UF,Total Gasto,Ultima Compra\n';
+    
+    const rows = customers.map(c => {
+      // Tratamento para evitar quebra se tiver vírgula no nome
+      const safeName = c.name ? `"${c.name.replace(/"/g, '""')}"` : '';
+      const safeCity = c.city ? `"${c.city}"` : '';
+      const date = c.lastOrderDate ? c.lastOrderDate.toISOString().split('T')[0] : '';
+      
+      return `${safeName},${c.email || ''},${c.phone || ''},${safeCity},${c.state || ''},${c.totalSpent || 0},${date}`;
+    }).join('\n');
+
+    return header + rows;
   }
 }
