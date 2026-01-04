@@ -80,8 +80,8 @@ export function Sidebar() {
             
             <NavItem href="/campaigns" icon={<MessageCircle size={20}/>} label="Campanhas" isCollapsed={isCollapsed} />
             
-            {/* --- 2. NOVO ITEM ADICIONADO AQUI --- */}
-            <NavItem href="/segments" icon={<Layers size={20}/>} label="Segmentos" isCollapsed={isCollapsed} />
+            {/* Segmentos */}
+            <NavItem href="/segments/list" icon={<Layers size={20}/>} label="Segmentos" isCollapsed={isCollapsed} />
             
             <NavItem href="/goals" icon={<Target size={20}/>} label="Metas & Objetivos" isCollapsed={isCollapsed} />
         </nav>

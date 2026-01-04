@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Delete, Param, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Delete, Param, Put, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IntelligenceService } from './intelligence.service';
+import type { Response } from 'express';
 
 @ApiTags('Inteligência (RFM)')
-@Controller('webhook/crm/intelligence')
+@Controller('webhook/crm/intelligence') // Mantendo sua rota original
 export class IntelligenceController {
   constructor(private readonly intelligenceService: IntelligenceService) {}
 
@@ -23,9 +24,20 @@ export class IntelligenceController {
     return this.intelligenceService.getFilterOptions();
   }
 
+  // --- MUDANÇA PRINCIPAL AQUI ---
   @Get('segments')
+  @ApiOperation({ summary: 'Lista segmentos com dados de tendência e alcance' })
   async listSegments() {
-    return this.intelligenceService.findAllSegments();
+    // Agora chama o método que calcula evolução vs ontem
+    return this.intelligenceService.findAllSegmentsWithTrend();
+  }
+
+  // --- NOVO ENDPOINT DE TESTE ---
+  @Post('segments/snapshot')
+  @ApiOperation({ summary: 'Força o snapshot diário manualmente (Para testar histórico agora)' })
+  async forceSnapshot() {
+    await this.intelligenceService.handleDailySegmentSnapshot();
+    return { message: 'Snapshot diário executado com sucesso. Verifique a tabela SegmentHistory.' };
   }
 
   @Get('segments/:id')
@@ -36,12 +48,8 @@ export class IntelligenceController {
   @Put('segments/:id')
   async updateSegment(@Param('id') id: string, @Body() body: any) {
     // --- ATENÇÃO: MOCK DE USUÁRIO ---
-    // Em produção, pegue isso do token de autenticação (ex: user.id)
-    // Para testar agora, pegue um ID válido da sua tabela User no banco
-    const mockUserId = "ID_DE_UM_USUARIO_EXISTENTE_NO_SEU_BANCO"; 
-    
-    // Se não tiver nenhum usuário no banco, passe undefined por enquanto:
-    // const mockUserId = undefined;
+    // Em produção, pegue isso do req.user.id (via AuthGuard)
+    const mockUserId = undefined; 
 
     return this.intelligenceService.updateSegment(id, body, mockUserId);
   }
@@ -66,4 +74,19 @@ export class IntelligenceController {
     return this.intelligenceService.calculatePreview(body.rules);
   }
 
+  // --- ROTA DE DOWNLOAD ---
+  @Get('segments/:id/export')
+  async exportCsv(@Param('id') id: string, @Res() res: Response) {
+    const csvContent = await this.intelligenceService.exportSegmentToCsv(id);
+    
+    // Define o nome do arquivo
+    const fileName = `export_segment_${id.substring(0, 8)}.csv`;
+
+    // Headers para forçar download
+    res.header('Content-Type', 'text/csv');
+    res.attachment(fileName);
+    
+    // Envia o conteúdo
+    return res.send(csvContent);
+  }
 }
