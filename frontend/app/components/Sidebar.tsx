@@ -78,7 +78,7 @@ export function Sidebar() {
             <div className={`mt-6 mb-2 px-5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-opacity ${isCollapsed ? 'opacity-0 hidden' : 'opacity-100 block'}`}>Engajamento</div>
             {isCollapsed && <div className="my-4 border-t border-slate-800 mx-4"></div>}
             
-            <NavItem href="/campaigns" icon={<MessageCircle size={20}/>} label="Campanhas" isCollapsed={isCollapsed} />
+            <NavItem href="/campaigns/new" icon={<MessageCircle size={20}/>} label="Campanhas" isCollapsed={isCollapsed} />
             
             {/* Segmentos */}
             <NavItem href="/segments/list" icon={<Layers size={20}/>} label="Segmentos" isCollapsed={isCollapsed} />
