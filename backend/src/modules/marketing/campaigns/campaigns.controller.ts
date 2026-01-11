@@ -1,25 +1,55 @@
-import { Controller, Post, Body, Get, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Req, 
+  UseGuards, 
+  BadRequestException 
+} from '@nestjs/common';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 
-@ApiTags('Marketing (Campanhas)')
-@Controller('webhook/marketing/campaigns')
+// Se você já tem o AuthGuard configurado (JWT), importe ele aqui:
+// import { JwtAuthGuard } from '../../auth/jwt-auth.guard'; 
+
+@Controller('campaigns')
+// @UseGuards(JwtAuthGuard) // <--- Descomente isso para proteger as rotas
 export class CampaignsController {
-  constructor(private readonly service: CampaignsService) {}
+  constructor(private readonly campaignsService: CampaignsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Cria uma nova campanha de disparo' })
-  create(@Body() data: CreateCampaignDto) {
-    return this.service.create(data);
+  async create(@Body() createCampaignDto: CreateCampaignDto, @Req() req: any) {
+    // 1. Tenta pegar o storeId do usuário logado (Token JWT)
+    const userStoreId = req.user?.storeId;
+
+    // 2. Se o usuário estiver logado, forçamos o storeId dele no DTO por segurança
+    if (userStoreId) {
+      createCampaignDto.storeId = userStoreId;
+    }
+
+    // 3. Validação extra caso o storeId não venha nem do Token nem do Corpo
+    if (!createCampaignDto.storeId) {
+      // Se você estiver testando sem login, lembre-se de enviar "storeId" no JSON
+      throw new BadRequestException('Store ID não encontrado. Faça login ou envie o storeId.');
+    }
+
+    return this.campaignsService.create(createCampaignDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista histórico de campanhas da loja' })
-  @ApiQuery({ name: 'storeId', required: true, example: 'uuid-da-loja' })
-  findAll(@Query('storeId') storeId: string) {
-    // Se não vier storeId, retornamos array vazio ou erro (aqui optei por array vazio para segurança)
-    if (!storeId) return [];
-    return this.service.findAll(storeId);
+  async findAll(@Req() req: any) {
+    // Pega o ID da loja do usuário logado
+    const storeId = req.user?.storeId;
+
+    // Se estiver testando sem login, você pode pegar de uma query param temporariamente:
+    // const storeId = req.query.storeId; 
+
+    if (!storeId) {
+       // Retorna array vazio ou erro se não souber qual loja buscar
+       throw new BadRequestException('Store ID necessário para buscar campanhas.');
+    }
+
+    return this.campaignsService.findAll(storeId);
   }
 }
