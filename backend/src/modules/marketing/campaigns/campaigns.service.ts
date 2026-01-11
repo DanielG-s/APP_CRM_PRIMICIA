@@ -1,70 +1,53 @@
-// src/modules/marketing/campaigns/campaigns.service.ts
-
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service'; // Ajuste o caminho se necessário
-import { CreateCampaignDto } from './dto/create-campaign.dto'; // Ajuste se necessário
+import { Injectable, BadRequestException } from '@nestjs/common'; // Adicione BadRequestException
+import { PrismaService } from '../../../prisma/prisma.service'; // Ajuste o caminho conforme seu projeto
+import { CreateCampaignDto } from './dto/create-campaign.dto';
 
 @Injectable()
 export class CampaignsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: any) {
-    // AQUI ESTAVA O ERRO: Precisamos passar o 'date' agora que ele é obrigatório no Schema
-    // Lógica: Se tiver agendamento, usa a data agendada. Se não, usa a data de agora.
-    const campaignDate = data.scheduledAt ? new Date(data.scheduledAt) : new Date();
+  // --- CORREÇÃO DO ERRO 1: Adicionar o método findAll ---
+  async findAll(storeId: string) {
+    return this.prisma.campaign.findMany({
+      where: { storeId },
+      include: { contents: true, metrics: true },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async create(data: CreateCampaignDto) {
+    // --- CORREÇÃO DO ERRO 5: Garantir que storeId existe ---
+    if (!data.storeId) {
+      throw new BadRequestException('Store ID é obrigatório para criar uma campanha.');
+    }
+
+    // --- CORREÇÃO DOS ERROS 2, 3 e 4: Mapear os campos corretos do DTO ---
+    // O DTO usa 'body' em vez de 'html' e 'designJson' em vez de 'json'
+    const bodyContent = data.content?.body || ''; 
+    const designData = data.content?.designJson || null;
+    const subject = data.content?.subject || null; // O subject está dentro de content
+
 
     return this.prisma.campaign.create({
       data: {
         name: data.name,
         channel: data.channel,
-        storeId: data.storeId, // Assumindo que você recebe o ID da loja
-        status: data.status || 'draft',
-        segmentId: data.segmentId,
-        audienceSize: data.audienceSize || 0,
-        config: data.config || {},
-        content: data.content || {},
-        scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
-        
-        // --- CAMPO NOVO OBRIGATÓRIO ---
-        date: campaignDate, 
-        // ------------------------------
+        storeId: data.storeId, // Agora o TS sabe que isso é string, não undefined
+        status: 'draft',       // Valor padrão
+        conversionTrigger: 'manual', // Valor padrão ou vindo do DTO se existir
 
-        // Inicializa métricas zeradas
-        metrics: {
+        // Criação do relacionamento com CampaignContent
+        contents: {
           create: {
-            sentCount: 0,
-            revenueInfluenced: 0,
-            repurchaseRate: 0
-          }
+            subject: subject,
+            body: bodyContent,
+            designJson: designData ?? undefined, // Prisma prefere undefined a null para campos opcionais Json
+          },
         },
-        
-        // Inicializa contadores zerados no próprio model (Opcional, pois já tem default(0) no schema, mas garante)
-        sent: 0,
-        delivered: 0,
-        opens: 0,
-        clicks: 0,
-        softBounces: 0,
-        hardBounces: 0,
-        spamReports: 0,
-        unsubscribes: 0
       },
-    });
-  }
-
-  async findAll(storeId?: string) {
-    const where = storeId ? { storeId } : {};
-
-    return this.prisma.campaign.findMany({
-      where, // Aplica o filtro de loja se o ID for passado
-      orderBy: { createdAt: 'desc' },
-      include: { metrics: true }
-    });
-  }
-
-  async findOne(id: string) {
-    return this.prisma.campaign.findUnique({
-      where: { id },
-      include: { metrics: true }
+      include: {
+        contents: true,
+      }
     });
   }
 }

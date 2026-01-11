@@ -1,39 +1,46 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsObject, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsObject, ValidateNested, IsDateString } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class CreateCampaignContentDto {
+  @IsString()
+  @IsOptional()
+  subject?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  body: string;
+
+  @IsString()
+  @IsOptional()
+  mediaUrl?: string;
+
+  // --- NOVO CAMPO ---
+  @IsObject()
+  @IsOptional()
+  designJson?: Record<string, any>; // Permite passar o objeto JSON do editor
+}
 
 export class CreateCampaignDto {
-  @ApiProperty({ example: 'Black Friday Email 01' })
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'email', enum: ['email', 'whatsapp', 'sms'] })
   @IsString()
   @IsNotEmpty()
   channel: string;
 
-  @ApiProperty({ example: 'uuid-da-loja' })
-  @IsString()
-  @IsNotEmpty()
-  storeId: string;
-
-  @ApiProperty({ example: 'uuid-do-segmento-vip', required: false })
   @IsString()
   @IsOptional()
-  segmentId?: string;
+  storeId?: string;
 
-  @ApiProperty({ example: { subject: "Oferta", sender: "Loja" } })
-  @IsObject()
-  @IsOptional()
-  config?: any;
-
-  @ApiProperty({ example: { body: "Olá cliente...", html: "<div>...</div>" } })
-  @IsObject()
-  @IsNotEmpty()
-  content: any;
-
-  @ApiProperty({ example: '2025-12-31T10:00:00Z', required: false })
+  // O erro "Expression Expected" geralmente acontece aqui se tiver uma vírgula extra
+  // Exemplo errado: @IsDateString(), 
   @IsDateString()
   @IsOptional()
   scheduledAt?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateCampaignContentDto)
+  content?: CreateCampaignContentDto;
 }

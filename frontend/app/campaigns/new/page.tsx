@@ -1,233 +1,400 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { 
-  ArrowLeft, ChevronRight, Monitor, Settings
+  X, Smile, Code, Monitor, LayoutGrid, ChevronRight, 
+  CheckCircle, FileEdit, Trash2, Mail, MessageSquare, 
+  Smartphone, Send
 } from 'lucide-react';
-import { toast } from 'sonner';
 
-// Importamos o NOVO editor que criamos com GrapesJS
-// Certifique-se que o caminho está correto para onde você salvou o EmailEditor.tsx
-import EmailEditor from '../../components/editor/EmailEditor'; 
+// Importação dinâmica do Editor de Email
+const EmailEditor = dynamic(
+  () => import('../../components/editor/EmailEditor'), 
+  { 
+    ssr: false,
+    loading: () => <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">Carregando editor...</div>
+  }
+);
 
-export default function CreateCampaignPage() {
-  const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [isSaving, setIsSaving] = useState(false);
+type ChannelType = 'EMAIL' | 'SMS' | 'WHATSAPP';
 
-  // Estado da Campanha
-  const [setupData, setSetupData] = useState({ 
-    name: '', 
-    subject: '', 
-    channel: 'email' 
-  });
+export default function CampaignPage() {
+  // --- ESTADOS GERAIS ---
+  const [activeChannel, setActiveChannel] = useState<ChannelType>('EMAIL');
+  const [campaignName, setCampaignName] = useState('UsePrimicia');
+  
+  // --- ESTADOS DE EMAIL ---
+  const [emailSubject, setEmailSubject] = useState('');
+  const [isEmailEditorOpen, setIsEmailEditorOpen] = useState(false);
+  const [savedEmailContent, setSavedEmailContent] = useState<{ html: string; json: any } | null>(null);
 
-  // Estado do conteúdo (para salvar temporariamente entre navegações se necessário)
-  // O GrapesJS gerencia seu próprio estado interno, mas quando salvamos, guardamos aqui ou no banco
-  const [editorData, setEditorData] = useState<{html: string, json: any} | null>(null);
+  // --- ESTADOS DE SMS ---
+  const [smsMessage, setSmsMessage] = useState('');
 
-  // --- FUNÇÃO DE SALVAR (Conectada ao GrapesJS) ---
-  const handleEditorSave = async (html: string, json: any) => {
-    setEditorData({ html, json }); // Guarda no estado local
-    
-    if (!setupData.name.trim()) {
-      toast.error('Por favor, defina um nome para a campanha na etapa 1.');
-      setStep(1); // Volta para a etapa 1 se não tiver nome
-      return;
-    }
+  // --- ESTADOS DE WHATSAPP ---
+  const [whatsappTemplate, setWhatsappTemplate] = useState('promocao_padrao');
+  const [whatsappVars, setWhatsappVars] = useState({ 1: '', 2: '' }); // Ex: Olá {{1}}, sua oferta é {{2}}
 
-    setIsSaving(true);
-    const toastId = toast.loading('Salvando campanha...');
+  // --- HANDLERS ---
 
-    try {
-      const payload = {
-        name: setupData.name,
-        subject: setupData.subject || setupData.name,
-        channel: setupData.channel,
-        content: {
-          html: html,
-          json: json
-        },
-        status: 'draft',
-        createdAt: new Date().toISOString()
-      };
-
-      // Chama sua API (substitua pela rota real)
-      const response = await fetch('/api/webhook/marketing/campaigns', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Falha ao salvar');
-
-      toast.success('Campanha salva com sucesso!', { id: toastId });
-    } catch (error) {
-      console.error(error);
-      toast.error('Erro ao salvar campanha.', { id: toastId });
-    } finally {
-      setIsSaving(false);
-    }
+  const handleEmailEditorSave = (html: string, json: any) => {
+    setSavedEmailContent({ html, json });
+    setIsEmailEditorOpen(false);
   };
 
-  // --- RENDERIZAÇÃO ---
+  const handleFinalSave = async () => {
+    // Monta o payload baseado no canal ativo
+    const payload: any = {
+      name: campaignName,
+      channel: activeChannel,
+    };
+
+    if (activeChannel === 'EMAIL') {
+      if (!savedEmailContent) return alert("Crie o visual do e-mail antes de salvar.");
+      payload.subject = emailSubject;
+      payload.contentHtml = savedEmailContent.html;
+      payload.contentJson = savedEmailContent.json;
+    } 
+    else if (activeChannel === 'SMS') {
+      if (!smsMessage) return alert("Escreva a mensagem do SMS.");
+      payload.content = smsMessage;
+    } 
+    else if (activeChannel === 'WHATSAPP') {
+      payload.template = whatsappTemplate;
+      payload.variables = whatsappVars;
+    }
+
+    console.log(`Salvando campanha de ${activeChannel}:`, payload);
+    alert(`Campanha de ${activeChannel} salva com sucesso! (Ver console)`);
+  };
+
+  // --- RENDERIZAÇÃO CONDICIONAL: SE O EDITOR ESTIVER ABERTO (SÓ EMAIL) ---
+  if (isEmailEditorOpen) {
+    return (
+      <EmailEditor 
+        initialData={savedEmailContent?.json}
+        onSave={handleEmailEditorSave}
+        onClose={() => setIsEmailEditorOpen(false)}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
+    <div className="min-h-screen bg-white font-sans text-gray-800 flex flex-col">
       
-      {/* HEADER */}
-      <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30">
+      {/* Header Fixo */}
+      <header className="bg-white px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="text-slate-400 hover:text-slate-600">
-            <ArrowLeft size={20}/>
+          <button onClick={() => window.history.back()} className="text-gray-400 hover:text-gray-600">
+            <X size={24} />
           </button>
-          <div className="flex flex-col">
-             <h1 className="font-bold text-slate-800 text-lg">
-               {setupData.name || 'Nova Campanha'}
-             </h1>
-             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-               Passo {step} de 3
-             </span>
+          <div>
+            <h1 className="text-xl font-semibold text-slate-800">Nova Campanha</h1>
+            <p className="text-xs text-gray-500">Configure sua campanha de marketing.</p>
           </div>
         </div>
-
-        {/* Stepper Visual */}
-        <div className="flex gap-2">
-          {[1, 2, 3].map(i => (
-            <div key={i} className={`h-1.5 w-10 rounded-full transition-colors ${i <= step ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-          ))}
-        </div>
-        
-        <div className="flex items-center gap-3">
-            {isSaving && <span className="text-xs text-slate-400 animate-pulse">Salvando...</span>}
+        <div className="flex gap-3">
+          <button className="px-4 py-2 text-slate-600 border border-slate-200 rounded hover:bg-slate-50 font-medium text-sm transition-colors">
+            Enviar teste
+          </button>
+          <button 
+            onClick={handleFinalSave}
+            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium text-sm transition-colors shadow-sm flex items-center gap-2"
+          >
+            <CheckCircle size={16} /> Salvar Campanha
+          </button>
         </div>
       </header>
 
-      {/* BODY PRINCIPAL */}
-      <main className="flex-1 overflow-hidden flex flex-col relative">
+      <div className="flex-1 flex overflow-hidden">
         
-        {/* --- STEP 1: CONFIGURAÇÃO INICIAL --- */}
-        {step === 1 && (
-            <div className="flex-1 flex items-center justify-center animate-in fade-in p-4">
-                <div className="bg-white p-8 rounded-2xl shadow-sm border max-w-md w-full space-y-6">
-                    <div className="text-center space-y-2">
-                        <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Settings size={24} />
-                        </div>
-                        <h2 className="text-2xl font-bold text-slate-800">Configuração da Campanha</h2>
-                        <p className="text-slate-500 text-sm">Defina os detalhes básicos antes de criar o design.</p>
-                    </div>
+        {/* Sidebar de Canais */}
+        <aside className="w-64 bg-slate-50 border-r border-gray-200 p-6 flex flex-col gap-2 shrink-0 h-[calc(100vh-80px)] overflow-y-auto">
+           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Canal de Envio</label>
+           
+           <ChannelButton 
+             active={activeChannel === 'EMAIL'} 
+             onClick={() => setActiveChannel('EMAIL')}
+             icon={<Mail size={18}/>} 
+             title="E-mail Marketing" 
+             desc="Newsletters e promoções"
+           />
+           
+           <ChannelButton 
+             active={activeChannel === 'SMS'} 
+             onClick={() => setActiveChannel('SMS')}
+             icon={<MessageSquare size={18}/>} 
+             title="SMS" 
+             desc="Mensagens de texto curtas"
+           />
+           
+           <ChannelButton 
+             active={activeChannel === 'WHATSAPP'} 
+             onClick={() => setActiveChannel('WHATSAPP')}
+             icon={<Smartphone size={18}/>} 
+             title="WhatsApp" 
+             desc="Mensagens via API Oficial"
+           />
+        </aside>
 
-                    <div className="space-y-4">
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Nome da Campanha</label>
-                            <input 
-                                type="text" 
-                                placeholder="Ex: Black Friday Geek 2026" 
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
-                                value={setupData.name} 
-                                onChange={e => setSetupData({...setupData, name: e.target.value})} 
-                            />
-                        </div>
+        {/* Área Principal de Conteúdo */}
+        <main className="flex-1 p-8 overflow-y-auto h-[calc(100vh-80px)]">
+          <div className="max-w-4xl mx-auto space-y-8">
 
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Assunto do E-mail</label>
-                            <input 
-                                type="text" 
-                                placeholder="Ex: Ofertas imperdíveis para você!" 
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
-                                value={setupData.subject} 
-                                onChange={e => setSetupData({...setupData, subject: e.target.value})} 
-                            />
-                        </div>
-                        
-                        <div className="space-y-1">
-                             <label className="text-xs font-bold text-slate-500 uppercase">Canal</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {['email', 'whatsapp', 'sms'].map(c => (
-                                    <button 
-                                        key={c} 
-                                        onClick={() => setSetupData({...setupData, channel: c})} 
-                                        className={`p-3 border rounded-lg capitalize font-bold text-sm transition-all ${setupData.channel === c ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-                                    >
-                                        {c}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+             {/* Configurações Comuns */}
+             <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+                <h2 className="text-lg font-semibold text-slate-800 mb-4">Configurações Gerais</h2>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-600">Nome Interno da Campanha</label>
+                    <input 
+                      type="text" 
+                      value={campaignName}
+                      onChange={(e) => setCampaignName(e.target.value)}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-            </div>
-        )}
+             </section>
 
-        {/* --- STEP 2: EDITOR (GRAPESJS) --- */}
-        {/* Mantemos montado mas escondido se não for o passo 2 para não perder o estado do GrapesJS ao navegar, ou usamos render condicional se preferir resetar */}
-        <div className={`flex-1 h-full w-full ${step === 2 ? 'block' : 'hidden'}`}>
-             <EmailEditor 
-                onSave={handleEditorSave} 
-                initialData={editorData?.json} // Se já tiver salvo algo, recarrega
-             />
-        </div>
+             {/* === CONTEÚDO DO CANAL SELECIONADO === */}
+             
+             {activeChannel === 'EMAIL' && (
+               <div className="animate-in fade-in duration-300 space-y-8">
+                  {/* Configurações de Email */}
+                  <section className="space-y-4">
+                    <h2 className="text-lg font-semibold text-slate-800">Configurações de E-mail</h2>
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600">Assunto</label>
+                        <div className="flex items-center border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+                          <input 
+                            type="text"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            className="flex-1 px-3 py-2 text-slate-700 outline-none rounded-md"
+                            placeholder="Ex: Oferta imperdível para você..."
+                          />
+                          <button className="p-2 text-gray-400 hover:text-blue-600"><Smile size={20}/></button>
+                        </div>
+                    </div>
+                  </section>
 
-        {/* --- STEP 3: REVISÃO E ENVIO --- */}
-        {step === 3 && (
-            <div className="flex-1 flex flex-col items-center justify-center animate-in fade-in p-8 text-center space-y-6">
-                 <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
-                    <Monitor size={40} />
-                 </div>
-                 <h2 className="text-2xl font-bold text-slate-800">Pronto para Enviar?</h2>
-                 <p className="max-w-md text-slate-500">
-                    Sua campanha <strong>{setupData.name}</strong> está salva como rascunho. 
-                    Você pode revisar o HTML ou agendar o disparo agora.
-                 </p>
-                 
-                 <div className="p-4 bg-slate-100 rounded-lg text-left w-full max-w-md text-xs font-mono text-slate-600 overflow-hidden">
-                    <p className="font-bold mb-2">Resumo Técnico:</p>
-                    <p>Channel: {setupData.channel}</p>
-                    <p>Subject: {setupData.subject}</p>
-                    <p>HTML Size: {editorData?.html?.length || 0} chars</p>
-                 </div>
+                  <hr className="border-gray-100" />
 
-                 <button className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg text-lg transition-transform hover:scale-105">
-                    Agendar Disparo
-                 </button>
-            </div>
-        )}
+                  {/* Visual do Email */}
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold text-slate-800">Conteúdo do E-mail</h2>
+                      {!savedEmailContent && (
+                        <button className="flex items-center gap-2 text-blue-600 border border-blue-600 px-4 py-2 rounded hover:bg-blue-50 font-medium text-sm transition-colors">
+                          <LayoutGrid size={18} /> Templates
+                        </button>
+                      )}
+                    </div>
 
-      </main>
-
-      {/* FOOTER NAV */}
-      <footer className="h-16 bg-white border-t border-slate-200 px-8 flex items-center justify-between shrink-0 z-30">
-        <button 
-            onClick={() => setStep(s => Math.max(1, s - 1))} 
-            disabled={step === 1} 
-            className="text-slate-500 font-bold disabled:opacity-30 hover:text-indigo-600 transition-colors"
-        >
-            Voltar
-        </button>
-
-        <div className="flex gap-4">
-             {/* No passo 2, mostramos uma dica que o botão de salvar está DENTRO do editor */}
-             {step === 2 && (
-                 <span className="text-xs text-slate-400 flex items-center mr-4">
-                    Dica: Use o ícone de disquete no painel para salvar o layout
-                 </span>
+                    {savedEmailContent ? (
+                      <div className="border border-green-200 bg-green-50/50 rounded-lg p-6 flex items-start justify-between">
+                         <div className="flex gap-4">
+                           <div className="w-20 h-20 bg-white border border-green-100 rounded flex items-center justify-center shadow-sm">
+                              <CheckCircle className="text-green-500" size={24}/>
+                           </div>
+                           <div>
+                              <h3 className="font-bold text-slate-800">Template Configurado</h3>
+                              <p className="text-sm text-gray-500 mt-1 mb-3">O visual do e-mail está pronto.</p>
+                              <div className="flex gap-4">
+                                 <button onClick={() => setIsEmailEditorOpen(true)} className="text-sm font-medium text-blue-600 hover:underline">Editar</button>
+                                 <button onClick={() => setSavedEmailContent(null)} className="text-sm font-medium text-red-500 hover:underline">Remover</button>
+                              </div>
+                           </div>
+                         </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div onClick={() => setIsEmailEditorOpen(true)} className="group border border-gray-200 hover:border-blue-400 bg-white p-6 rounded-lg cursor-pointer transition-all hover:shadow-md">
+                          <div className="mb-4 p-3 bg-blue-50 w-fit rounded-lg text-blue-600 group-hover:scale-110 transition-transform"><Monitor size={24} /></div>
+                          <h3 className="font-bold text-slate-700">Editor Visual</h3>
+                          <p className="text-sm text-gray-500 mt-1">Arraste e solte elementos para criar seu e-mail.</p>
+                        </div>
+                        <div className="group border border-gray-200 hover:border-gray-300 bg-gray-50 p-6 rounded-lg cursor-not-allowed opacity-70">
+                          <div className="mb-4 p-3 bg-gray-200 w-fit rounded-lg text-gray-500"><Code size={24} /></div>
+                          <h3 className="font-bold text-slate-700">HTML Puro</h3>
+                          <p className="text-sm text-gray-500 mt-1">Para desenvolvedores (Em breve).</p>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+               </div>
              )}
 
-             <button 
-                onClick={() => {
-                    if (step === 1 && !setupData.name) {
-                        toast.error('Dê um nome para a campanha!');
-                        return;
-                    }
-                    setStep(s => Math.min(3, s + 1));
-                }} 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-md flex items-center gap-2 transition-all"
-             >
-                {step === 3 ? 'Concluir' : 'Próximo'} <ChevronRight size={16}/>
-             </button>
-        </div>
-      </footer>
+             {activeChannel === 'SMS' && (
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-300">
+                  <div className="space-y-4">
+                     <h2 className="text-lg font-semibold text-slate-800">Mensagem de Texto</h2>
+                     <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-600">Conteúdo do SMS</label>
+                        <textarea 
+                          className="w-full h-40 border border-gray-300 rounded p-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          placeholder="Digite sua mensagem aqui..."
+                          value={smsMessage}
+                          onChange={(e) => setSmsMessage(e.target.value)}
+                          maxLength={160}
+                        ></textarea>
+                        <div className="flex justify-between text-xs text-gray-500">
+                           <span>Evite acentos para melhor compatibilidade.</span>
+                           <span className={`${smsMessage.length > 150 ? 'text-red-500 font-bold' : ''}`}>
+                             {smsMessage.length}/160
+                           </span>
+                        </div>
+                     </div>
+                     <div className="bg-yellow-50 text-yellow-800 p-4 rounded text-sm border border-yellow-100">
+                       <strong>Dica:</strong> Links curtos são gerados automaticamente se você colar uma URL longa.
+                     </div>
+                  </div>
+
+                  {/* Preview Celular SMS */}
+                  <div className="flex justify-center">
+                    <PhonePreview>
+                      <div className="bg-gray-200 p-3 rounded-lg rounded-tl-none self-start max-w-[85%] text-sm text-gray-800 shadow-sm relative">
+                        {smsMessage || "Sua mensagem aparecerá aqui..."}
+                        <span className="text-[10px] text-gray-500 block text-right mt-1">10:42</span>
+                      </div>
+                    </PhonePreview>
+                  </div>
+               </div>
+             )}
+
+             {activeChannel === 'WHATSAPP' && (
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-300">
+                  <div className="space-y-6">
+                     <h2 className="text-lg font-semibold text-slate-800">Configuração WhatsApp</h2>
+                     
+                     {/* Seleção de Template (Mock) */}
+                     <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600">Template Aprovado (Meta)</label>
+                        <select 
+                          value={whatsappTemplate}
+                          onChange={(e) => setWhatsappTemplate(e.target.value)}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-slate-700 bg-white"
+                        >
+                           <option value="promocao_padrao">promocao_padrao (Marketing)</option>
+                           <option value="aviso_vencimento">aviso_vencimento (Utilidade)</option>
+                           <option value="boas_vindas">boas_vindas (Marketing)</option>
+                        </select>
+                     </div>
+
+                     {/* Campos Dinâmicos do Template */}
+                     <div className="bg-slate-50 p-4 rounded border border-gray-200 space-y-3">
+                        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">Variáveis do Template</h3>
+                        
+                        <div className="grid grid-cols-[auto_1fr] gap-3 items-center">
+                           <span className="text-sm font-mono text-blue-600 bg-blue-50 px-2 py-1 rounded">{'{{1}}'}</span>
+                           <input 
+                             type="text" 
+                             placeholder="Nome do Cliente"
+                             value={whatsappVars[1]}
+                             onChange={(e) => setWhatsappVars({...whatsappVars, 1: e.target.value})}
+                             className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
+                           />
+                        </div>
+                        <div className="grid grid-cols-[auto_1fr] gap-3 items-center">
+                           <span className="text-sm font-mono text-blue-600 bg-blue-50 px-2 py-1 rounded">{'{{2}}'}</span>
+                           <input 
+                             type="text" 
+                             placeholder="Valor do Desconto / Link"
+                             value={whatsappVars[2]}
+                             onChange={(e) => setWhatsappVars({...whatsappVars, 2: e.target.value})}
+                             className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
+                           />
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Preview Celular WhatsApp */}
+                  <div className="flex justify-center">
+                    <PhonePreview type="whatsapp">
+                       <div className="bg-[#dcf8c6] p-3 rounded-lg rounded-tr-none self-end max-w-[85%] text-sm text-gray-800 shadow-sm relative ml-auto border border-[#cceebb]">
+                          <p className="font-bold text-xs text-green-800 mb-1">Empresa</p>
+                          <p>
+                             Olá {whatsappVars[1] || 'Maria'}, temos uma oferta especial para você!
+                             <br/><br/>
+                             Aproveite {whatsappVars[2] || '10% OFF'} na sua próxima compra.
+                          </p>
+                          <div className="flex justify-end items-center gap-1 mt-1">
+                             <span className="text-[10px] text-gray-500">10:42</span>
+                             <CheckCircle size={10} className="text-blue-500"/>
+                          </div>
+                       </div>
+                       
+                       {/* Botão do Template (Simulação) */}
+                       <div className="mt-2 bg-white rounded text-center py-2 text-blue-500 text-sm font-medium shadow-sm border border-gray-200 cursor-pointer">
+                          Ver Oferta
+                       </div>
+                    </PhonePreview>
+                  </div>
+               </div>
+             )}
+
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
+
+// --- SUBCOMPONENTES VISUAIS ---
+
+const ChannelButton = ({ active, onClick, icon, title, desc }: any) => (
+  <button 
+    onClick={onClick}
+    className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all duration-200 border ${
+      active 
+      ? 'bg-white border-blue-500 shadow-sm ring-1 ring-blue-500' 
+      : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200'
+    }`}
+  >
+    <div className={`p-2 rounded-md ${active ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+      {icon}
+    </div>
+    <div>
+      <h3 className={`text-sm font-bold ${active ? 'text-blue-700' : 'text-gray-600'}`}>{title}</h3>
+      <p className="text-[10px] text-gray-400 leading-tight">{desc}</p>
+    </div>
+  </button>
+);
+
+const PhonePreview = ({ children, type = 'sms' }: { children: React.ReactNode, type?: 'sms' | 'whatsapp' }) => (
+  <div className="w-[280px] h-[500px] bg-gray-900 rounded-[30px] p-3 shadow-xl relative border-4 border-gray-800">
+    {/* Notch */}
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-800 rounded-b-xl z-10"></div>
+    
+    {/* Tela */}
+    <div className={`w-full h-full bg-slate-100 rounded-[24px] overflow-hidden flex flex-col relative ${type === 'whatsapp' ? 'bg-[#ece5dd]' : 'bg-white'}`}>
+       
+       {/* Header do Celular */}
+       <div className={`h-12 flex items-center px-4 gap-2 text-white text-xs ${type === 'whatsapp' ? 'bg-[#075e54]' : 'bg-gray-100 border-b text-gray-600'}`}>
+          {type === 'whatsapp' ? (
+             <>
+               <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">E</div>
+               <span>Empresa</span>
+             </>
+          ) : (
+             <div className="w-full text-center font-bold">Mensagens</div>
+          )}
+       </div>
+
+       {/* Corpo da Mensagem */}
+       <div className="flex-1 p-3 flex flex-col gap-2 overflow-y-auto" style={type === 'whatsapp' ? {backgroundImage: 'radial-gradient(#cbd5e0 1px, transparent 1px)', backgroundSize: '20px 20px'} : {}}>
+          <div className="text-[10px] text-gray-400 text-center my-2">Hoje</div>
+          {children}
+       </div>
+
+       {/* Input Fake */}
+       <div className="h-12 bg-white border-t flex items-center px-3 gap-2">
+          <div className="w-6 h-6 rounded-full bg-gray-200"></div>
+          <div className="flex-1 h-8 bg-gray-100 rounded-full"></div>
+          <Send size={16} className="text-gray-400"/>
+       </div>
+    </div>
+  </div>
+);

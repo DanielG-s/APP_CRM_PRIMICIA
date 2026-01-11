@@ -3,9 +3,9 @@ import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
 import grapesjsMjml from 'grapesjs-mjml';
 import { 
-  Type, MousePointerClick, Layout, Copy, Trash2, X, 
+  Type, MousePointerClick, Copy, Trash2, X, 
   ChevronsDown, AlignLeft, AlignCenter, AlignRight, 
-  Image as ImageIcon
+  ArrowLeft
 } from 'lucide-react';
 
 // =============================================================================
@@ -18,17 +18,16 @@ const Label = ({ children }: { children: React.ReactNode }) => (
   </label>
 );
 
-// Input Contador [- 14 +] (Corrigido para permitir apagar o número)
+// Input Contador [- 14 +]
 const CounterInput = ({ value, onChange, min = 0, max = 600 }: any) => {
   const safeVal = parseInt(value) || 0;
   
   const handleDecrement = () => onChange(Math.max(min, safeVal - 1));
   const handleIncrement = () => onChange(Math.min(max, safeVal + 1));
   
-  // Permite digitar livremente
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, '');
-    onChange(val); // Passa string (pode ser vazia) ou número
+    onChange(val);
   };
 
   return (
@@ -80,7 +79,7 @@ const Toggle = ({ checked, onChange }: any) => (
 );
 
 // =============================================================================
-// 2. MODAL DE LINK (Dark Mode - Estilo solicitado)
+// 2. MODAL DE LINK
 // =============================================================================
 
 const LinkModal = ({ isOpen, onClose, onSave, initialData }: any) => {
@@ -107,7 +106,7 @@ const LinkModal = ({ isOpen, onClose, onSave, initialData }: any) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-slate-800 text-white rounded-lg shadow-2xl w-[500px] overflow-hidden border border-slate-600">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900">
@@ -181,8 +180,8 @@ const LinkModal = ({ isOpen, onClose, onSave, initialData }: any) => {
                   value={data.target}
                   onChange={e => setData({...data, target: e.target.value})}
                >
-                 <option value="_blank">Nova janela</option>
-                 <option value="_self">Mesma janela</option>
+                  <option value="_blank">Nova janela</option>
+                  <option value="_self">Mesma janela</option>
                </select>
             </div>
           </div>
@@ -199,7 +198,7 @@ const LinkModal = ({ isOpen, onClose, onSave, initialData }: any) => {
 };
 
 // =============================================================================
-// 3. PAINEL DE PROPRIEDADES (Lateral Direita)
+// 3. PAINEL DE PROPRIEDADES (O componente que faltava!)
 // =============================================================================
 
 const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor: any }) => {
@@ -214,7 +213,6 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
     selectedBlock.on('change:attributes', update);
     selectedBlock.on('change:style', update);
     
-    // Detecta se padding está expandido (tem valores individuais)
     const attrs = selectedBlock.getAttributes();
     if (attrs['padding-top'] || attrs['padding-bottom'] || attrs['padding-left'] || attrs['padding-right']) {
         setExpandPadding(true);
@@ -222,7 +220,6 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
         setExpandPadding(false);
     }
     
-    // Reseta estado de LineHeight ao mudar de bloco
     setForceCustomLH(false);
 
     return () => { 
@@ -246,10 +243,8 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
       return val ? val.replace('px', '') : def; 
   };
 
-  // --- Lógica de Padding (Todos vs Individual) ---
   const handlePadding = (side: string | null, val: any) => {
       if (side === 'all') {
-          // Define geral e limpa específicos
           selectedBlock.addAttributes({ 'padding': `${val}px`, 'padding-top': '', 'padding-bottom': '', 'padding-left': '', 'padding-right': '' });
           selectedBlock.removeStyle(['padding-top', 'padding-bottom', 'padding-left', 'padding-right']);
       } else {
@@ -262,8 +257,8 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
       let val = attributes[`padding-${side}`];
       if (!val && attributes['padding']) {
           const parts = attributes['padding'].split(' ');
-          if (parts.length === 1) val = parts[0]; // "10px"
-          else if (parts.length === 4) { // "10px 0px 5px 0px"
+          if (parts.length === 1) val = parts[0];
+          else if (parts.length === 4) { 
              if(side==='top') val=parts[0]; 
              if(side==='right') val=parts[1]; 
              if(side==='bottom') val=parts[2]; 
@@ -275,10 +270,9 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
 
   const getGenPad = () => attributes['padding'] ? attributes['padding'].split(' ')[0].replace('px', '') : '0';
 
-  // --- RENDERIZADORES DO PAINEL ---
+  // --- RENDERIZADORES ---
 
   if (['mj-text', 'custom-title', 'custom-text'].includes(tagName)) {
-    // Lógica Line Height Custom
     const rawLH = attributes['line-height']; 
     const currentLH = rawLH || '1.5';
     const isCustomLH = !['1', '1.2', '1.5', '2'].includes(currentLH);
@@ -286,7 +280,6 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
 
     return (
       <div className="flex flex-col h-full bg-white font-sans">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white">
           <span className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2"><Type size={14} className="text-indigo-500"/> Texto</span>
           <div className="flex items-center gap-1">
@@ -297,7 +290,6 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
         </div>
         
         <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
-          {/* Tipografia */}
           <div className="space-y-4">
               <div><Label>Fonte</Label><Select value={attributes['font-family'] || 'Arial, sans-serif'} onChange={(v: string) => update('font-family', v)} options={[{label:'Global (Arial)', value:'Arial, sans-serif'}, {label:'Helvetica', value:'Helvetica, sans-serif'}, {label:'Times', value:'Times New Roman, serif'}, {label:'Courier', value:'Courier New, monospace'}, {label:'Verdana', value:'Verdana, sans-serif'}]} /></div>
               <div><Label>Espessura</Label><Select value={attributes['font-weight'] || 'normal'} onChange={(v: string) => update('font-weight', v)} options={[{label:'Regular', value:'normal'}, {label:'Bold', value:'bold'}, {label:'Light', value:'300'}, {label:'Black', value:'900'}]} /></div>
@@ -316,21 +308,17 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
           </div>
           <hr className="border-gray-100" />
           
-          {/* Cores */}
           <div className="space-y-4">
               <div><Label>Cor Texto</Label><ColorInput value={attributes['color']} onChange={(v: string) => update('color', v)} /></div>
               <div><Label>Cor Link</Label><ColorInput value={attributes['link-color'] || '#0068a5'} onChange={(v: string) => update('link-color', v)} /></div>
           </div>
           <hr className="border-gray-100" />
           
-          {/* Alinhamento */}
           <div><Label>Alinhar</Label><div className="flex border border-gray-200 rounded h-9">{['left', 'center', 'right'].map((align) => (<button key={align} onClick={() => update('align', align)} className={`flex-1 flex items-center justify-center border-r last:border-r-0 ${attributes['align']===align?'bg-indigo-50 text-indigo-600':'text-gray-400'}`}>{align==='left'&&<AlignLeft size={16}/>}{align==='center'&&<AlignCenter size={16}/>}{align==='right'&&<AlignRight size={16}/>}</button>))}</div></div>
           <hr className="border-gray-100" />
           
-          {/* Espaçamento */}
           <div><Label>Esp. Letras</Label><CounterInput value={getVal('letter-spacing', '0')} onChange={(v: any) => update('letter-spacing', v+'px')} /></div>
           
-          {/* Padding */}
           <div className="bg-gray-50/80 -mx-5 px-5 py-5 border-t border-gray-200 mt-2">
               <div className="flex items-center justify-between mb-3"><Label>Preenchimento</Label><div className="flex items-center gap-2"><span className="text-[10px] text-gray-400">Mais opções</span><Toggle checked={expandPadding} onChange={(chk: boolean) => { setExpandPadding(chk); if(!chk) handlePadding('all', getPad('top')); else { const c = getGenPad(); selectedBlock.addAttributes({'padding-top':`${c}px`,'padding-bottom':`${c}px`,'padding-left':`${c}px`,'padding-right':`${c}px`}); }}} /></div></div>
               {expandPadding ? (
@@ -344,7 +332,6 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
     );
   }
 
-  // Bloco Genérico (Botão, Imagem, Seção)
   return (
     <div className="flex flex-col h-full bg-white font-sans">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white">
@@ -362,25 +349,28 @@ const PropertiesPanel = ({ selectedBlock, editor }: { selectedBlock: any, editor
 };
 
 // =============================================================================
-// 4. EDITOR PRINCIPAL
+// 4. EDITOR PRINCIPAL (ATUALIZADO)
 // =============================================================================
 
 interface EmailEditorProps {
-  initialData?: any;
-  onSave?: (html: string, json: any) => Promise<void>;
+  initialData?: any; // JSON do GrapesJS
+  onSave: (html: string, json: any) => void; // Callback quando salva
+  onClose: () => void; // Callback quando cancela/volta
 }
 
-const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave }) => {
+const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave, onClose }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [editor, setEditor] = useState<any>(null);
   const [selectedBlock, setSelectedBlock] = useState<any>(null);
-  
-  // States para Link Modal
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [currentLinkData, setCurrentLinkData] = useState<any>(null);
 
+  // Efeito de Inicialização
   useEffect(() => {
-    if (!editorRef.current || editorRef.current.innerHTML !== "") return;
+    if (!editorRef.current) return;
+
+    const blocksContainer = document.getElementById('blocks-container');
+    if (blocksContainer) blocksContainer.innerHTML = '';
 
     const editorInstance = grapesjs.init({
       container: editorRef.current,
@@ -389,27 +379,9 @@ const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave }) => {
       storageManager: false,
       plugins: [grapesjsMjml],
       pluginsOpts: { 'grapesjs-mjml': {} },
-      
-      // CONFIGURAÇÃO DO RTE (Barra de Texto)
       richTextEditor: { 
-        actions: [
-            'bold', 'italic', 'underline', 'strikethrough', 
-            'link', 'wrap'
-        ],
+        actions: ['bold', 'italic', 'underline', 'strikethrough', 'link', 'wrap'],
       },
-      
-      components: initialData ? undefined : `
-        <mjml>
-          <mj-body background-color="#f8f9fa" width="600px">
-            <mj-section padding="20px" background-color="#ffffff">
-              <mj-column>
-                <mj-text align="center" font-size="24px" color="#333333">Título</mj-text>
-                <mj-text align="center">Clique aqui para editar este texto.</mj-text>
-              </mj-column>
-            </mj-section>
-          </mj-body>
-        </mjml>
-      `,
       blockManager: { appendTo: '#blocks-container' },
       panels: { defaults: [] },
     });
@@ -421,8 +393,6 @@ const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave }) => {
     bm.add('custom-button', { label: 'Botão', content: `<mj-button background-color="#4f46e5" color="#ffffff" border-radius="4px">Clique</mj-button>`, attributes: { class: 'fa fa-square' } });
     bm.add('custom-image', { label: 'Imagem', content: `<mj-image src="https://via.placeholder.com/350x150" />`, attributes: { class: 'fa fa-image' } });
 
-    // --- CONFIGURAÇÃO AVANÇADA DA BARRA DE TEXTO (RTE) ---
-    // Adiciona Lists e Alinhamentos manualmente
     const rte = editorInstance.RichTextEditor;
     if (rte) {
         rte.add('ul', { icon: '<b class="fa fa-list-ul">UL</b>', attributes: {title:'Lista'}, result: (rte:any) => rte.exec('insertUnorderedList') });
@@ -430,8 +400,6 @@ const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave }) => {
         rte.add('justifyLeft', { icon: '<b class="fa fa-align-left">L</b>', result: (rte:any) => rte.exec('justifyLeft') });
         rte.add('justifyCenter', { icon: '<b class="fa fa-align-center">C</b>', result: (rte:any) => rte.exec('justifyCenter') });
         rte.add('justifyRight', { icon: '<b class="fa fa-align-right">R</b>', result: (rte:any) => rte.exec('justifyRight') });
-
-        // SOBRESCREVE O BOTÃO DE LINK PARA ABRIR NOSSO MODAL
         rte.add('link', {
             icon: '<b class="fa fa-link">🔗</b>',
             attributes: { title: 'Inserir Link' },
@@ -447,16 +415,64 @@ const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave }) => {
 
     editorInstance.on('component:selected', (c) => setSelectedBlock(c));
     editorInstance.on('component:deselected', () => setSelectedBlock(null));
+    
+    // --- COMANDO SAVE (VERSÃO BLINDADA) ---
     editorInstance.Commands.add('save-db', {
-      run: async (ed) => { if (onSave) await onSave(ed.runCommand('mjml-get-code').html, ed.getProjectData()); }
+      run: (ed) => { 
+        // 1. Pega o JSON (Desenho do layout) - Isso nunca falha
+        const json = ed.getProjectData();
+        
+        // 2. Tenta gerar o HTML final com segurança máxima
+        let html = '';
+        
+        try {
+            // Executa o comando do MJML
+            const result = ed.runCommand('mjml-get-code');
+            
+            // Verifica manualmente se o resultado existe E se tem a propriedade html
+            if (result && typeof result.html === 'string') {
+                html = result.html;
+            } else {
+                // Se der undefined, usa o HTML padrão do GrapesJS
+                console.warn('Plugin MJML não retornou HTML. Usando fallback.');
+                html = ed.getHtml();
+            }
+        } catch (error) {
+            // Se der qualquer erro fatal, captura aqui e não quebra a tela
+            console.error('Erro ao gerar HTML:', error);
+            html = ed.getHtml() || '<div>Erro ao gerar HTML</div>';
+        }
+
+        console.log('Dados prontos para salvar. Tamanho HTML:', html.length);
+
+        // 3. Envia para a página pai
+        onSave(html, json);
+      }
     });
 
-    if (initialData) editorInstance.loadProjectData(initialData);
-    setEditor(editorInstance);
-    return () => editorInstance.destroy();
-  }, []);
+    if (initialData && Object.keys(initialData).length > 0) {
+      editorInstance.loadProjectData(initialData);
+    } else if (!initialData) {
+       editorInstance.addComponents(`
+        <mjml>
+          <mj-body background-color="#f8f9fa" width="600px">
+            <mj-section padding="20px" background-color="#ffffff">
+              <mj-column>
+                <mj-text align="center" font-size="24px">Comece a editar</mj-text>
+              </mj-column>
+            </mj-section>
+          </mj-body>
+        </mjml>
+      `);
+    }
 
-  // --- SAVE LINK HANDLER ---
+    setEditor(editorInstance);
+
+    return () => {
+      editorInstance.destroy();
+    };
+  }, []); 
+
   const handleLinkSave = (data: any) => {
       if (!editor) return;
       const rte = editor.RichTextEditor;
@@ -464,38 +480,62 @@ const EmailEditor: React.FC<EmailEditorProps> = ({ initialData, onSave }) => {
 
       const style = data.underline ? 'text-decoration: underline;' : 'text-decoration: none;';
       const textToShow = data.text || currentLinkData?.content || 'link';
-      // Insere HTML do link seguro
       const linkHtml = `<a href="${data.url}" target="${data.target}" title="${data.title}" style="color: inherit; ${style}">${textToShow}</a>`;
       
       rte.insertHTML(linkHtml);
   };
 
   return (
-    <div className="flex h-screen overflow-hidden border-t border-gray-200 bg-white font-sans">
+    <div className="flex h-screen w-full fixed inset-0 z-50 bg-white font-sans">
       <LinkModal 
         isOpen={linkModalOpen} 
         onClose={() => setLinkModalOpen(false)} 
         onSave={handleLinkSave}
         initialData={currentLinkData}
       />
-
-      {/* Esquerda */}
-      <div className="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0 z-10">
-        <div className="p-4 border-b border-gray-100 font-bold text-gray-700 text-sm uppercase tracking-wider bg-gray-50">Componentes</div>
+      
+      {/* Sidebar Esquerda (Componentes) */}
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 z-10">
+        <div className="h-14 flex items-center px-4 border-b border-gray-200 bg-gray-50">
+           <button onClick={onClose} className="flex items-center text-gray-500 hover:text-gray-800 text-sm font-medium gap-1">
+             <ArrowLeft size={16} /> Voltar
+           </button>
+        </div>
+        <div className="p-3 bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
+          Arrastar Componentes
+        </div>
         <div id="blocks-container" className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar"></div>
       </div>
       
-      {/* Centro */}
-      <div className="flex-1 flex flex-col bg-gray-200 relative min-w-0">
-        <div className="bg-white border-b border-gray-200 p-2 flex justify-end items-center shadow-sm z-20">
-             <button onClick={() => editor?.runCommand('save-db')} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded text-xs font-bold transition-transform hover:scale-105">Salvar</button>
+      {/* Área Central (Canvas) */}
+      <div className="flex-1 flex flex-col bg-gray-100 relative min-w-0">
+        {/* Header do Editor */}
+        <div className="h-14 bg-white border-b border-gray-200 px-4 flex justify-between items-center shadow-sm z-20">
+             <div className="text-sm font-semibold text-gray-700">Editando E-mail</div>
+             <button 
+               onClick={() => editor?.runCommand('save-db')} 
+               className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded text-sm font-bold transition-all shadow-sm hover:shadow"
+             >
+               Salvar e Finalizar
+             </button>
         </div>
-        <div className="flex-1 relative overflow-hidden"><div ref={editorRef} className="h-full w-full" /></div>
+        
+        {/* Canvas GrapesJS */}
+        <div className="flex-1 relative overflow-hidden">
+           <div ref={editorRef} className="h-full w-full" />
+        </div>
       </div>
       
-      {/* Direita (W-96) */}
-      <div className="w-96 bg-white border-l border-gray-200 flex flex-col shrink-0 z-10 shadow-xl h-full">
-         <PropertiesPanel selectedBlock={selectedBlock} editor={editor} />
+      {/* Sidebar Direita (Propriedades) */}
+      <div className="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 z-10 shadow-xl h-full">
+         {selectedBlock ? (
+             <PropertiesPanel selectedBlock={selectedBlock} editor={editor} />
+         ) : (
+             <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center">
+                <MousePointerClick size={48} className="mb-4 opacity-20" />
+                <p className="text-sm">Selecione um elemento no e-mail para editar suas propriedades.</p>
+             </div>
+         )}
       </div>
     </div>
   );
