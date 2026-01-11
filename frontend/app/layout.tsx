@@ -1,22 +1,22 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css"; // <--- ESTA LINHA É OBRIGATÓRIA! SEM ELA FICA TUDO BRANCO.
+import { SidebarProvider } from "./contexts/SidebarContext"; // Ajuste o caminho
+import LayoutShell from "./components/LayoutShell"; // Ajuste o caminho
+import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Primícia CRM",
-  description: "Sistema de Gestão",
+export const metadata = {
+  title: "Quantix CRM",
+  description: "Dashboard de Performance",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-br">
-      <body className={inter.className}>{children}</body>
+    <html lang="pt-BR">
+      <body>
+        <SidebarProvider>
+            <LayoutShell>
+                {children}
+            </LayoutShell>
+        </SidebarProvider>
+      </body>
     </html>
   );
 }

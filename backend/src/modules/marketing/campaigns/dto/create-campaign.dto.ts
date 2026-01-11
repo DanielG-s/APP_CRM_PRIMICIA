@@ -1,25 +1,46 @@
-import { IsString, IsNotEmpty } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, IsNotEmpty, IsObject, ValidateNested, IsDateString } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class CreateCampaignContentDto {
+  @IsString()
+  @IsOptional()
+  subject?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  body: string;
+
+  @IsString()
+  @IsOptional()
+  mediaUrl?: string;
+
+  // --- NOVO CAMPO ---
+  @IsObject()
+  @IsOptional()
+  designJson?: Record<string, any>; // Permite passar o objeto JSON do editor
+}
 
 export class CreateCampaignDto {
-  @ApiProperty({ example: 'Promoção de Inverno' })
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'whatsapp' })
   @IsString()
+  @IsNotEmpty()
   channel: string;
 
-  @ApiProperty({ example: 'vip' })
   @IsString()
-  segment: string;
+  @IsOptional()
+  storeId?: string;
 
-  @ApiProperty({ example: 'Olá, confira nossas ofertas!' })
-  @IsString()
-  message: string;
+  // O erro "Expression Expected" geralmente acontece aqui se tiver uma vírgula extra
+  // Exemplo errado: @IsDateString(), 
+  @IsDateString()
+  @IsOptional()
+  scheduledAt?: string;
 
-  @ApiProperty({ example: 'uuid-da-loja' })
-  @IsString()
-  storeId: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateCampaignContentDto)
+  content?: CreateCampaignContentDto;
 }

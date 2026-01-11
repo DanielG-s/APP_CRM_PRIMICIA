@@ -1,28 +1,53 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { Injectable, BadRequestException } from '@nestjs/common'; // Adicione BadRequestException
+import { PrismaService } from '../../../prisma/prisma.service'; // Ajuste o caminho conforme seu projeto
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 
 @Injectable()
 export class CampaignsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
+
+  // --- CORREÇÃO DO ERRO 1: Adicionar o método findAll ---
+  async findAll(storeId: string) {
+    return this.prisma.campaign.findMany({
+      where: { storeId },
+      include: { contents: true, metrics: true },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
 
   async create(data: CreateCampaignDto) {
-    // Salva a campanha no banco
-    const campaign = await this.prisma.campaign.create({
+    // --- CORREÇÃO DO ERRO 5: Garantir que storeId existe ---
+    if (!data.storeId) {
+      throw new BadRequestException('Store ID é obrigatório para criar uma campanha.');
+    }
+
+    // --- CORREÇÃO DOS ERROS 2, 3 e 4: Mapear os campos corretos do DTO ---
+    // O DTO usa 'body' em vez de 'html' e 'designJson' em vez de 'json'
+    const bodyContent = data.content?.body || ''; 
+    const designData = data.content?.designJson || null;
+    const subject = data.content?.subject || null; // O subject está dentro de content
+
+
+    return this.prisma.campaign.create({
       data: {
         name: data.name,
         channel: data.channel,
-        storeId: data.storeId,
-        status: 'scheduled', // Começa como "Agendada"
-        conversionTrigger: 'click', // Padrão
-        contents: {
-            create: {
-                body: data.message
-            }
-        }
-      },
-    });
+        storeId: data.storeId, // Agora o TS sabe que isso é string, não undefined
+        status: 'draft',       // Valor padrão
+        conversionTrigger: 'manual', // Valor padrão ou vindo do DTO se existir
 
-    return { message: 'Campanha agendada com sucesso!', id: campaign.id };
+        // Criação do relacionamento com CampaignContent
+        contents: {
+          create: {
+            subject: subject,
+            body: bodyContent,
+            designJson: designData ?? undefined, // Prisma prefere undefined a null para campos opcionais Json
+          },
+        },
+      },
+      include: {
+        contents: true,
+      }
+    });
   }
 }

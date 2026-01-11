@@ -1,113 +1,245 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service'; 
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
-import { format, differenceInDays } from 'date-fns';
+import { Prisma } from '@prisma/client';
+import { format, differenceInDays, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 @Injectable()
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
-  // --- CRIAÇÃO DE VENDA (Mantido) ---
+  // --- MÉTODOS BÁSICOS ---
   async processSale(data: CreateSaleDto) {
     const customer = await this.prisma.customer.upsert({
       where: { email: data.customerEmail },
       update: { name: data.customerName },
-      create: {
-        name: data.customerName,
-        email: data.customerEmail,
-        cpf: data.customerCpf,
-        storeId: data.storeId,
-      },
+      create: { name: data.customerName, email: data.customerEmail, cpf: data.customerCpf, storeId: data.storeId },
     });
-
     const transaction = await this.prisma.transaction.create({
       data: {
-        storeId: data.storeId,
-        customerId: customer.id,
-        totalValue: data.totalValue,
-        date: new Date(),
-        items: data.items as any,
-        channel: data.channel || 'Loja Física',
-        isInfluenced: data.isInfluenced || false,
+        storeId: data.storeId, customerId: customer.id, totalValue: data.totalValue, date: new Date(),
+        items: data.items as any, channel: data.channel || 'Loja Física', isInfluenced: data.isInfluenced || false,
       },
     });
-
     return { message: 'Venda processada!', transactionId: transaction.id };
   }
 
-  // --- MÉTODOS SIMPLES (Mantidos para a Home) ---
   async getDailyTotal() {
-    const aggregate = await this.prisma.transaction.aggregate({ _sum: { totalValue: true } });
-    return { total: aggregate._sum.totalValue || 0 };
+    const today = new Date();
+    const aggregate = await this.prisma.transaction.aggregate({
+      _sum: { totalValue: true }, _count: { id: true },
+      where: { date: { gte: startOfDay(today), lte: endOfDay(today) } }
+    });
+    return { total: Number(aggregate._sum.totalValue) || 0, count: aggregate._count.id || 0 };
   }
 
   async getSalesHistory() {
-    const hoje = await this.getDailyTotal();
-    const valorHoje = Number(hoje.total) || 0;
-    const history: { name: string; vendas: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      history.push({ 
-        name: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), 
-        vendas: i === 0 ? valorHoje : Math.floor(Math.random() * 2000 + 1000) 
-      });
-    }
-    return history;
-  }
-
-  // --- LISTA DE LOJAS (Para o Filtro) ---
-  async getStores() {
-    return this.prisma.store.findMany({
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
+    const endDate = new Date();
+    const startDate = subDays(endDate, 6);
+    startDate.setHours(0,0,0,0);
+    const transactions = await this.prisma.transaction.findMany({
+        where: { date: { gte: startDate, lte: endDate } }, orderBy: { date: 'asc' }
     });
+    const historyMap = new Map();
+    for(let i=0; i<=6; i++) {
+        const d = subDays(endDate, 6-i);
+        const key = format(d, 'dd/MM', { locale: ptBR });
+        historyMap.set(key, { name: key, vendas: 0, total: 0 });
+    }
+    transactions.forEach(tx => {
+        const key = format(tx.date, 'dd/MM', { locale: ptBR });
+        if(historyMap.has(key)) {
+            const current = historyMap.get(key);
+            current.vendas += Number(tx.totalValue);
+            current.total += 1;
+        }
+    });
+    return Array.from(historyMap.values());
   }
 
-  // --- O CÉREBRO: CÁLCULOS REAIS DE RESULTADOS ---
+  async getRecentSales() {
+    const sales = await this.prisma.transaction.findMany({
+        take: 5, orderBy: { date: 'desc' },
+        include: { customer: { select: { name: true, email: true } }, store: { select: { name: true } } }
+    });
+    return sales.map(s => ({
+        id: s.id, customer: s.customer?.name || 'Consumidor', email: s.customer?.email,
+        store: s.store?.name, value: Number(s.totalValue), date: s.date, channel: s.channel
+    }));
+  }
+
+  async getStores() {
+    return this.prisma.store.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  }
+
+  // --- FILTROS ---
+  async getFilterOptions() {
+    const campaigns = await this.prisma.campaign.findMany({
+      select: { id: true, name: true, tags: true, type: true, channel: true }, orderBy: { date: 'desc' }, take: 2000 
+    });
+    
+    const tagsSet = new Set<string>(); campaigns.forEach(c => c.tags.forEach(t => tagsSet.add(t)));
+    const typesSet = new Set<string>(); campaigns.forEach(c => { if(c.type) typesSet.add(c.type); });
+    
+    // TEM QUE TER ESSA LINHA AQUI:
+    const stores = await this.prisma.store.findMany({ select: { id: true, name: true } });
+
+    return {
+      campaigns: campaigns.map(c => ({ id: c.id, name: c.name })),
+      tags: Array.from(tagsSet).sort(), 
+      types: Array.from(typesSet).sort(),
+      stores: stores.map(s => ({ id: s.id, name: s.name })), // E ESSA LINHA NO RETORNO
+      channels: ['E-mail', 'SMS', 'Mobile push', 'WhatsApp'] 
+    };
+  }
+
+  // --- LÓGICA DO DASHBOARD DE CANAIS (COM CÁLCULO DE DISPAROS) ---
+  async getChannelDashboard(startDate: string, endDate: string, filters?: any) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999);
+
+    const campaignWhere: Prisma.CampaignWhereInput = { date: { gte: start, lte: end } };
+    if (filters?.channel && filters.channel !== 'Todos') {
+        const map: any = { 'Mobile push': 'Push', 'E-mail': 'Email' };
+        campaignWhere.channel = map[filters.channel] || filters.channel;
+    }
+    if (filters?.campaignIds?.length) campaignWhere.id = { in: filters.campaignIds };
+    if (filters?.tags?.length) campaignWhere.tags = { hasSome: filters.tags };
+    if (filters?.campaignType?.length && !filters.campaignType.includes('Todos')) campaignWhere.type = { in: filters.campaignType };
+
+    // Busca Campanhas com Agendamentos
+    const campaignsRaw = await this.prisma.campaign.findMany({ 
+        where: campaignWhere, 
+        orderBy: { date: 'desc' },
+        include: { schedules: true } 
+    });
+
+    const salesRaw = await this.prisma.transaction.findMany({
+      where: { date: { gte: start, lte: end } },
+      select: { date: true, totalValue: true, id: true, isInfluenced: true, storeId: true, store: { select: { name: true } } }
+    });
+
+    // Calcular totais globais para atribuição proporcional de receita aos disparos
+    const totalInfluencedRevenue = salesRaw.filter(s => s.isInfluenced).reduce((acc, s) => acc + Number(s.totalValue), 0);
+    const totalConversions = salesRaw.filter(s => s.isInfluenced).length;
+    const totalClicks = campaignsRaw.reduce((acc, c) => acc + c.clicks, 0);
+
+    // --- LÓGICA DE DISPAROS (Popula tabela de disparos) ---
+    let dispatchesList: any[] = [];
+    
+    campaignsRaw.forEach(camp => {
+        // Atribuição de Receita Simples (Proporcional aos cliques da campanha na falta de tracking granular)
+        const campaignShare = totalClicks > 0 ? (camp.clicks / totalClicks) : 0;
+        const campRevenue = totalInfluencedRevenue * campaignShare;
+        const campConversions = Math.floor(totalConversions * campaignShare);
+
+        if (camp.schedules && camp.schedules.length > 0) {
+            const share = 1 / camp.schedules.length;
+            camp.schedules.forEach((sch) => {
+                const dispRev = campRevenue * share;
+                const dispConv = campConversions * share;
+                dispatchesList.push({
+                    id: sch.id,
+                    campaignName: camp.name,
+                    date: sch.sendDate,
+                    status: 'Enviado',
+                    sent: Math.floor(camp.sent * share),
+                    revenue: dispRev,
+                    conversions: dispConv,
+                    ticket: dispConv > 0 ? dispRev / dispConv : 0
+                });
+            });
+        } else {
+            dispatchesList.push({
+                id: camp.id + '-main',
+                campaignName: camp.name,
+                date: camp.date,
+                status: camp.status === 'sent' ? 'Concluído' : 'Agendado',
+                sent: camp.sent,
+                revenue: campRevenue,
+                conversions: campConversions,
+                ticket: campConversions > 0 ? campRevenue / campConversions : 0
+            });
+        }
+    });
+    dispatchesList = dispatchesList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // --- PROCESSAMENTO GRÁFICO (Mantido igual) ---
+    const chartData: any[] = [];
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const dayLabel = `${currentDate.getUTCDate()}/${(currentDate.getUTCMonth() + 1).toString().padStart(2, '0')}`;
+      const salesOfDay = salesRaw.filter(s => s.date.toISOString().split('T')[0] === dateStr);
+      const campsOfDay = campaignsRaw.filter(c => new Date(c.date).toISOString().split('T')[0] === dateStr);
+
+      const metrics = campsOfDay.reduce((acc, curr) => ({
+          sent: acc.sent + (curr.sent||0), delivered: acc.delivered + (curr.delivered||0), opens: acc.opens + (curr.opens||0), clicks: acc.clicks + (curr.clicks||0), softBounces: acc.softBounces + (curr.softBounces||0), hardBounces: acc.hardBounces + (curr.hardBounces||0), spam: acc.spam + (curr.spamReports||0), unsub: acc.unsub + (curr.unsubscribes||0),
+      }), { sent: 0, delivered: 0, opens: 0, clicks: 0, softBounces: 0, hardBounces: 0, spam: 0, unsub: 0 });
+
+      const revTotal = salesOfDay.reduce((acc, s) => acc + Number(s.totalValue), 0);
+      const revInf = salesOfDay.filter(s => s.isInfluenced).reduce((acc, s) => acc + Number(s.totalValue), 0);
+      const convs = salesOfDay.filter(s => s.isInfluenced).length;
+
+      chartData.push({
+        name: dayLabel, fullDate: dateStr,
+        envios: metrics.sent, entregues: metrics.delivered, aberturas: metrics.opens, cliques: metrics.clicks,
+        ctr: metrics.delivered > 0 ? (metrics.clicks/metrics.delivered)*100 : 0,
+        ctor: metrics.opens > 0 ? (metrics.clicks/metrics.opens)*100 : 0,
+        softBounces: metrics.softBounces, hardBounces: metrics.hardBounces, bounces: metrics.softBounces + metrics.hardBounces,
+        spam: metrics.spam, descadastro: metrics.unsub, rejeicoes: metrics.spam + metrics.unsub,
+        receitaTotal: Number(revTotal.toFixed(2)), receitaInfluenciada: Number(revInf.toFixed(2)),
+        conversoes: convs, ticket: convs > 0 ? revInf/convs : 0, vendasInfluenciadas: convs, baseInfluenciada: convs, 
+      });
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+
+    const storesMap = new Map();
+    salesRaw.forEach(s => {
+        if(!storesMap.has(s.storeId)) storesMap.set(s.storeId, { id: s.storeId, name: s.store?.name, revenue: 0, revenueInfluenced: 0, conversions: 0, salesInfluenced: 0 });
+        const d = storesMap.get(s.storeId);
+        d.revenue += Number(s.totalValue);
+        if(s.isInfluenced) { d.revenueInfluenced += Number(s.totalValue); d.conversoes++; d.salesInfluenced++; }
+    });
+
+    return { 
+        chart: chartData, 
+        campaignsList: campaignsRaw, 
+        storesList: Array.from(storesMap.values()).map((s:any) => ({...s, ticketAverage: s.conversoes > 0 ? s.revenueInfluenced/s.conversoes : 0})),
+        dispatchesList, // Lista de disparos com receita calculada
+        filterOptions: await this.getFilterOptions()
+    };
+  }
+
+  // --- 3. LÓGICA DE VAREJO (PRESERVADA E ROBUSTA) ---
   async getRetailMetrics(startStr?: string, endStr?: string, storesStr?: string) {
-    // 1. Definição de Datas
     const today = new Date();
     const endDate = endStr ? new Date(endStr) : today;
     endDate.setUTCHours(23, 59, 59, 999);
-    
-    // Pega um período maior para trás para identificar clientes "Novos" vs "Recorrentes" corretamente
     const startDate = startStr ? new Date(startStr) : new Date(new Date().setDate(today.getDate() - 365));
     startDate.setUTCHours(0, 0, 0, 0);
 
-    const whereClause: any = {
-      date: { gte: startDate, lte: endDate },
-    };
+    const whereClause: any = { date: { gte: startDate, lte: endDate } };
+    if (storesStr && storesStr.length > 0) whereClause.storeId = { in: storesStr.split(',') };
 
-    if (storesStr && storesStr.length > 0) {
-      whereClause.storeId = { in: storesStr.split(',') };
-    }
-
-    // 2. Busca Ordenada (Crucial para lógica de Recorrência)
     const transactions = await this.prisma.transaction.findMany({
-      where: whereClause,
-      include: { store: true },
-      orderBy: { date: 'asc' }, // Antigos primeiro
+      where: whereClause, include: { store: true }, orderBy: { date: 'asc' },
     });
 
-    // 3. Estruturas de Dados (Acumuladores)
     let totalRevenue = 0;
     let totalTransactions = transactions.length;
     
+    // Maps para agregação
     const historyMap = new Map();
     const storesMap = new Map();
     const channelsMap = new Map();
-    
-    // Rastreamento de Clientes (Map<CustomerId, LastPurchaseDate>)
-    const customerHistory = new Map<string, Date>();
+    const customerHistory = new Map<string, Date>(); 
 
-    // Detectar se é visão diária ou mensal
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const isDaily = diffDays <= 60;
+    const isDaily = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) <= 60;
 
-    // 4. Loop Único de Processamento
     for (const tx of transactions) {
       const val = Number(tx.totalValue);
       const storeId = tx.storeId;
@@ -117,138 +249,79 @@ export class SalesService {
 
       totalRevenue += val;
 
-      // --- Lógica de Recorrência (Global) ---
-      let isRecurrent = false;
       let groupType = 'new';
-      
       const lastPurchase = customerHistory.get(tx.customerId);
-      
-      if (!lastPurchase) {
-        groupType = 'new';
-      } else {
+      if (lastPurchase) {
         const daysSinceLast = differenceInDays(txDate, lastPurchase);
-        if (daysSinceLast > 90) {
-            groupType = 'recovered';
-        } else {
-            groupType = 'recurrent';
-            isRecurrent = true; // Flag para usar na loja
-        }
+        if (daysSinceLast > 90) groupType = 'recovered'; 
+        else groupType = 'recurrent';
       }
-      // Atualiza a última data de compra
       customerHistory.set(tx.customerId, txDate);
 
-      // --- A. HISTÓRICO (Agrupamento) ---
-      const dateKey = isDaily 
-        ? format(txDate, 'dd/MM', { locale: ptBR }) 
-        : format(txDate, 'MMM yyyy', { locale: ptBR });
+      const dateKey = isDaily ? format(txDate, 'dd/MM', { locale: ptBR }) : format(txDate, 'MMM yyyy', { locale: ptBR });
 
       if (!historyMap.has(dateKey)) {
         historyMap.set(dateKey, { 
-            name: dateKey,
-            sortDate: txDate, 
-            revenue: 0, revenueInfluenced: 0, transactions: 0,
-            customerSet: new Set(),
-            groupNew: 0, groupRecurrent: 0, groupRecovered: 0
+            name: dateKey, sortDate: txDate, revenue: 0, revenueInfluenced: 0, transactions: 0,
+            customerSet: new Set(), groupNew: 0, groupRecurrent: 0, groupRecovered: 0
         });
       }
       const hist = historyMap.get(dateKey);
-      
       hist.revenue += val;
       hist.transactions += 1;
       if (isInfluenced) hist.revenueInfluenced += val;
       hist.customerSet.add(tx.customerId);
-
-      // Soma nos grupos do histórico
+      
       if (groupType === 'new') hist.groupNew++;
       else if (groupType === 'recurrent') hist.groupRecurrent++;
       else hist.groupRecovered++;
 
-      // --- B. LOJAS (Agrupamento) ---
       if (!storesMap.has(storeId)) {
         storesMap.set(storeId, {
           id: storeId, name: tx.store.name, code: tx.store.cnpj ? tx.store.cnpj.slice(0,4) : 'LOJA',
-          revenue: 0, revenueInfluenced: 0, transactions: 0,
-          recurrentCount: 0 // Novo acumulador
+          revenue: 0, revenueInfluenced: 0, transactions: 0, recurrentCount: 0 
         });
       }
       const st = storesMap.get(storeId);
       st.revenue += val;
       st.transactions += 1;
       if (isInfluenced) st.revenueInfluenced += val;
-      if (isRecurrent) st.recurrentCount += 1; // Soma se for recorrente
+      if (groupType === 'recurrent') st.recurrentCount += 1;
 
-      // --- C. CANAIS ---
-      if (!channelsMap.has(channel)) {
-        channelsMap.set(channel, { name: channel, value: 0 });
-      }
+      if (!channelsMap.has(channel)) channelsMap.set(channel, { name: channel, value: 0 });
       channelsMap.get(channel).value += val;
     }
 
-    // 5. Cálculos Finais e Formatação
-
     const channels = Array.from(channelsMap.values()).map((ch: any) => ({
-      ...ch,
-      percent: totalRevenue > 0 ? ((ch.value / totalRevenue) * 100).toFixed(2) : "0.00"
+      ...ch, percent: totalRevenue > 0 ? ((ch.value / totalRevenue) * 100).toFixed(2) : "0.00"
     })).sort((a, b) => b.value - a.value);
 
-    // --- CÁLCULO DE LOJAS COM PA E RECOMPRA ---
     const stores = Array.from(storesMap.values()).map((s: any) => {
         const ticket = s.transactions > 0 ? s.revenue / s.transactions : 0;
-        
-        // PA (Itens por Venda): Garante que é número. 
-        // Se ticket for 0, PA é 0. Senão, divide por 150 (regra de negócio MVP).
-        const paValue = ticket > 0 ? (ticket / 150) : 0;
-        
-        // Recompra: Garante que recurrentCount existe
-        const recurrent = s.recurrentCount || 0;
-        const repurchaseRate = s.transactions > 0 ? (recurrent / s.transactions) * 100 : 0;
-
         return {
             ...s,
             ticket: ticket,
-            // Formatamos para string fixa com 2 casas decimais para o Front não ter erro
             percentInfluenced: s.revenue > 0 ? ((s.revenueInfluenced / s.revenue) * 100).toFixed(2) : "0.00",
-            
-            // Força string "0.0" se der erro
-            repurchase: isNaN(repurchaseRate) ? "0.0" : repurchaseRate.toFixed(1),
-            
-            // Força string "0.00" se der erro
-            itemsPerTicket: isNaN(paValue) ? "0.00" : paValue.toFixed(2) 
+            repurchase: s.transactions > 0 ? ((s.recurrentCount / s.transactions) * 100).toFixed(1) : "0.0",
+            itemsPerTicket: ticket > 0 ? (ticket / 150).toFixed(2) : "0.00" 
         };
     }).sort((a, b) => b.revenue - a.revenue);
 
-    const history = Array.from(historyMap.values())
-      .sort((a: any, b: any) => a.sortDate - b.sortDate) 
-      .map((h: any) => {
+    const history = Array.from(historyMap.values()).sort((a: any, b: any) => a.sortDate - b.sortDate).map((h: any) => {
         const uniqueConsumers = h.customerSet.size;
         const ticket = h.transactions > 0 ? h.revenue / h.transactions : 0;
-
         return {
-            name: h.name,
-            revenue: h.revenue,
-            revenueLastYear: h.revenue * 0.85, 
-            revenueInfluenced: h.revenueInfluenced,
+            ...h,
             revenueOrganic: h.revenue - h.revenueInfluenced,
-            transactions: h.transactions,
-            
-            // Dados calculados para os gráficos
             ticket: Math.round(ticket),
             itemsPerTicket: ticket > 0 ? Number((ticket / 150).toFixed(1)) : 0,
-            repurchase: h.transactions > 0 
-                ? Number(((h.groupRecurrent / h.transactions) * 100).toFixed(1)) 
-                : 0,
-
+            repurchase: h.transactions > 0 ? Number(((h.groupRecurrent / h.transactions) * 100).toFixed(1)) : 0,
+            revenueLastYear: h.revenue * 0.85, 
             consumers: uniqueConsumers,
             consumersActive: Math.floor(uniqueConsumers * 0.9),
-            
             avgSpend: uniqueConsumers > 0 ? Math.round(h.revenue / uniqueConsumers) : 0,
             frequency: uniqueConsumers > 0 ? Number((h.transactions / uniqueConsumers).toFixed(2)) : 0,
             interval: uniqueConsumers > 0 ? Math.round(30 / (h.transactions / uniqueConsumers)) : 0,
-
-            groupNew: h.groupNew,
-            groupRecurrent: h.groupRecurrent,
-            groupRecovered: h.groupRecovered,
-            
             revenueNew: Math.round((h.groupNew / h.transactions) * h.revenue) || 0,
             revenueRecurrent: Math.round((h.groupRecurrent / h.transactions) * h.revenue) || 0,
             revenueRecovered: Math.round((h.groupRecovered / h.transactions) * h.revenue) || 0,
@@ -266,6 +339,184 @@ export class SalesService {
       history,
       channels,
       stores
+    };
+  }
+
+  // --- 5. MÉTRICAS DE AGENDA ---
+  async getScheduleMetrics(startDate: string, endDate: string, filters?: any) {
+    // CORREÇÃO: Forçar interpretação como data local (ou adicionar T12:00:00 para segurança de fuso)
+    // Ao receber "2025-12-01", concatenamos o horário para garantir que seja o início do dia LOCAL
+    const start = new Date(`${startDate}T00:00:00`);
+    const end = new Date(`${endDate}T23:59:59.999`);
+
+    // 1. Where Clauses
+    const campaignWhere: Prisma.CampaignWhereInput = { date: { gte: start, lte: end } };
+    const transactionWhere: Prisma.TransactionWhereInput = { date: { gte: start, lte: end }, isInfluenced: true };
+
+    if (filters?.channel && filters.channel !== 'Todos') {
+        const map: any = { 'Mobile push': 'Push', 'E-mail': 'Email' };
+        const val = map[filters.channel] || filters.channel;
+        campaignWhere.channel = val;
+        transactionWhere.channel = val;
+    }
+    if (filters?.campaignIds?.length) campaignWhere.id = { in: filters.campaignIds };
+    if (filters?.tags?.length) campaignWhere.tags = { hasSome: filters.tags };
+    if (filters?.campaignType?.length) campaignWhere.type = { in: filters.campaignType };
+    if (filters?.storeIds?.length) {
+        campaignWhere.storeId = { in: filters.storeIds };
+        transactionWhere.storeId = { in: filters.storeIds };
+    }
+
+    // 2. Buscas
+    const campaigns = await this.prisma.campaign.findMany({
+        where: campaignWhere, orderBy: { date: 'desc' },
+        include: { store: { select: { id: true, name: true } } }
+    });
+    const sales = await this.prisma.transaction.findMany({
+        where: transactionWhere,
+        select: { totalValue: true, date: true, storeId: true, salespersonId: true }
+    });
+
+    // 3. Totais Gerais
+    let totalDisponibilizados = 0, totalRealizados = 0, totalConfirmados = 0, totalDescadastros = 0;
+    campaigns.forEach(c => {
+        totalDisponibilizados += c.sent || 0;
+        totalRealizados += c.delivered || 0;
+        totalConfirmados += c.clicks || 0;
+        totalDescadastros += c.unsubscribes || 0;
+    });
+    const receitaInfluenciada = sales.reduce((acc, s) => acc + Number(s.totalValue), 0);
+    const conversoes = sales.length;
+    const naoConfirmados = totalRealizados - totalConfirmados;
+
+    // 4. Histórico Diário (CORRIGIDO)
+    const daysMap = new Map();
+    // Loop dia a dia usando uma data auxiliar segura
+    // Usamos T12:00:00 para garantir que o dia não "vire" por causa de fuso horário
+    for (let d = new Date(`${startDate}T12:00:00`); d <= new Date(`${endDate}T12:00:00`); d.setDate(d.getDate() + 1)) {
+        const key = format(d, 'dd/MM', { locale: ptBR });
+        // Salvamos a chave formatada e a data ISO para ordenação
+        daysMap.set(key, { 
+            name: key, 
+            // Precisamos da data ISO correta para comparação abaixo
+            // O slice(0,10) garante YYYY-MM-DD
+            isoDate: d.toISOString().split('T')[0], 
+            receitaInf: 0, 
+            vendasInf: 0,
+            realizados: 0, 
+            confirmados: 0, 
+            disponibilizados: 0, 
+            descadastros: 0 
+        });
+    }
+
+    // Popula Campanhas no dia
+    campaigns.forEach(c => {
+        // Formata a data da campanha para comparar com a chave do mapa
+        const key = format(c.date, 'dd/MM', { locale: ptBR });
+        if (daysMap.has(key)) {
+            const d = daysMap.get(key);
+            d.realizados += c.delivered;
+            d.confirmados += c.clicks;
+            d.descadastros += c.unsubscribes;
+            d.disponibilizados += c.sent;
+        }
+    });
+
+    // Popula Vendas no dia
+    sales.forEach(s => {
+        const key = format(s.date, 'dd/MM', { locale: ptBR });
+        if (daysMap.has(key)) {
+            const d = daysMap.get(key);
+            d.receitaInf += Number(s.totalValue);
+            d.vendasInf += 1;
+        }
+    });
+
+    // Função Auxiliar
+    const safeDiv = (a: number, b: number) => b > 0 ? a / b : 0;
+
+    // Converte Map para Array e calcula campos derivados
+    const dailyData = Array.from(daysMap.values()).map((d: any) => ({
+        ...d,
+        receita: d.receitaInf, // Alias para o gráfico
+        conversoes: safeDiv(d.vendasInf, d.realizados), 
+        receitaCont: safeDiv(d.receitaInf, d.realizados),
+        vendasCont: safeDiv(d.vendasInf, d.realizados),
+        naoConf: d.realizados - d.confirmados
+    }));
+
+    // 5. Outras Tabelas
+    const campaignsTable = campaigns.map(c => {
+        const share = safeDiv(c.clicks, totalConfirmados);
+        const recInf = share * receitaInfluenciada;
+        const vendInf = Math.floor(share * conversoes);
+        return {
+            id: c.id, name: c.name, date: c.date, channel: c.channel,
+            receitaInf: recInf, receitaCont: safeDiv(recInf, c.delivered),
+            vendasInf: vendInf, vendasCont: safeDiv(vendInf, c.delivered),
+            conversoes: safeDiv(vendInf, c.delivered),
+            disponibilizados: c.sent, realizados: c.delivered, confirmados: c.clicks,
+            naoConf: c.delivered - c.clicks
+        };
+    });
+
+    const storesMap = new Map();
+    campaigns.forEach(c => {
+        if (!storesMap.has(c.storeId)) storesMap.set(c.storeId, { id: c.storeId, name: c.store?.name || 'Loja', receitaInf: 0, vendasInf: 0, realizados: 0, confirmados: 0, disponibilizados: 0 });
+        const st = storesMap.get(c.storeId);
+        st.disponibilizados += c.sent; st.realizados += c.delivered; st.confirmados += c.clicks;
+    });
+    sales.forEach(s => {
+        if (storesMap.has(s.storeId)) {
+            const st = storesMap.get(s.storeId);
+            st.receitaInf += Number(s.totalValue); st.vendasInf += 1;
+        }
+    });
+    const storesTable = Array.from(storesMap.values()).map((s: any) => ({
+        ...s,
+        receitaCont: safeDiv(s.receitaInf, s.realizados),
+        vendasCont: safeDiv(s.vendasInf, s.realizados),
+        conversoes: safeDiv(s.vendasInf, s.realizados),
+        naoConf: s.realizados - s.confirmados
+    }));
+
+    const sellersMap = new Map();
+    sales.forEach(s => {
+        const sellerId = s.salespersonId || 'N/A';
+        if (!sellersMap.has(sellerId)) {
+            const storeName = storesMap.get(s.storeId)?.name || 'Loja';
+            sellersMap.set(sellerId, { id: sellerId, name: sellerId === 'N/A' ? 'Vendedor' : `Vend. ${sellerId.substring(0,4)}`, storeName, storeId: s.storeId, receitaInf: 0, vendasInf: 0, disponibilizados: 0, realizados: 0, confirmados: 0 });
+        }
+        const seller = sellersMap.get(sellerId);
+        seller.receitaInf += Number(s.totalValue); seller.vendasInf += 1;
+    });
+    const sellersTable = Array.from(sellersMap.values()).map((s: any) => {
+        const storeStats = storesMap.get(s.storeId);
+        if (storeStats) {
+            const share = 0.2; 
+            s.disponibilizados = Math.floor(storeStats.disponibilizados * share);
+            s.realizados = Math.floor(storeStats.realizados * share);
+            s.confirmados = Math.floor(storeStats.confirmados * share);
+        }
+        return {
+            ...s,
+            receitaCont: safeDiv(s.receitaInf, s.realizados),
+            vendasCont: safeDiv(s.vendasInf, s.realizados),
+            conversoes: safeDiv(s.vendasInf, s.realizados),
+            naoConf: s.realizados - s.confirmados
+        };
+    });
+
+    return {
+        kpis: {
+            receitaInfluenciada, contatosRealizados: totalRealizados, contatosConfirmados: totalConfirmados,
+            conversoes: conversoes, descadastros: totalDescadastros, disponibilizados: totalDisponibilizados,
+            naoConfirmados: naoConfirmados, clientesUnicos: Math.floor(totalRealizados * 0.95),
+            frequencia: safeDiv(totalRealizados, totalDisponibilizados).toFixed(1)
+        },
+        history: dailyData,
+        tables: { campaigns: campaignsTable, stores: storesTable, sellers: sellersTable, daily: dailyData }
     };
   }
 }

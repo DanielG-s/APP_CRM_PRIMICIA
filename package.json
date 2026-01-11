@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "grapesjs": "^0.22.14",
+    "grapesjs-mjml": "^1.0.7",
+    "lucide-react": "^0.556.0",
+    "recharts": "^3.5.1",
+    "tailwind-merge": "^3.4.0"
+  }
+}
