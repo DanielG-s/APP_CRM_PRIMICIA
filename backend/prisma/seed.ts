@@ -1,233 +1,264 @@
 import { PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { fakerPT_BR as faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
 
-// --- CONFIGURAÇÕES ---
-const TOTAL_CUSTOMERS = 5000;
-const BATCH_SIZE = 1000;
-
-// --- DADOS PARA GERAÇÃO ---
-const CITIES_STATE = [
-  { city: 'São Paulo', state: 'SP' }, { city: 'Campinas', state: 'SP' }, { city: 'Santos', state: 'SP' },
-  { city: 'Rio de Janeiro', state: 'RJ' }, { city: 'Niterói', state: 'RJ' },
-  { city: 'Belo Horizonte', state: 'MG' }, { city: 'Uberlândia', state: 'MG' },
-  { city: 'Curitiba', state: 'PR' }, { city: 'Porto Alegre', state: 'RS' },
-  { city: 'Salvador', state: 'BA' }, { city: 'Recife', state: 'PE' },
-  { city: 'Brasília', state: 'DF' }, { city: 'Manaus', state: 'AM' }
+// Configuração de Canais
+const SALES_CHANNELS = [
+  { value: 'Loja Física', weight: 40 }, 
+  { value: 'WhatsApp', weight: 30 },
+  { value: 'E-commerce', weight: 20 },
+  { value: 'Instagram', weight: 5 },
+  { value: 'Marketplace', weight: 5 }
 ];
 
-const FIRST_NAMES = ['Ana', 'Bruno', 'Carlos', 'Daniela', 'Eduardo', 'Fernanda', 'Gabriel', 'Helena', 'Igor', 'Julia', 'Lucas', 'Mariana', 'Nicolas', 'Olivia', 'Pedro', 'Rafaela', 'Samuel', 'Tatiana', 'Vitor', 'Yasmin'];
-const LAST_NAMES = ['Silva', 'Santos', 'Oliveira', 'Souza', 'Pereira', 'Costa', 'Rodrigues', 'Almeida', 'Nascimento', 'Lima', 'Araujo', 'Fernandes', 'Carvalho', 'Gomes'];
-
-const DEPARTMENTS = ['Tecnologia', 'Vestuário', 'Móveis', 'Lazer', 'Cosméticos'];
-const CATEGORIES = ['Moda Masculina', 'Moda Feminina', 'Esportes', 'Eletrônicos', 'Casa & Jardim', 'Beleza', 'Brinquedos'];
-const PRODUCTS = [
-  { id: '1001', name: 'Camiseta Básica', price: 49.90, category: 'Moda Masculina', dept: 'Vestuário' },
-  { id: '1002', name: 'Tênis Esportivo', price: 299.90, category: 'Esportes', dept: 'Vestuário' },
-  { id: '1003', name: 'Smartphone X', price: 1999.00, category: 'Eletrônicos', dept: 'Tecnologia' },
-  { id: '1004', name: 'Calça Jeans', price: 129.90, category: 'Moda Feminina', dept: 'Vestuário' },
-  { id: '1005', name: 'Geladeira Frost', price: 2500.00, category: 'Casa & Jardim', dept: 'Móveis' },
-  { id: '1006', name: 'Notebook Pro', price: 4500.00, category: 'Eletrônicos', dept: 'Tecnologia' },
-  { id: '1007', name: 'Batom Matte', price: 39.90, category: 'Beleza', dept: 'Cosméticos' },
-  { id: '1008', name: 'Bola de Futebol', price: 89.90, category: 'Esportes', dept: 'Lazer' },
-];
-
-const CAMPAIGNS = ['CMP-001 (Boas vindas)', 'CMP-002 (Carrinho abandonado)', 'CMP-003 (Black Friday)', 'CMP-004 (Dia das Mães)'];
-const SEARCH_TERMS = ['iphone', 'geladeira', 'tênis', 'camiseta', 'notebook', 'promoção', 'frete grátis', 'presente'];
-
-// --- LISTA COMPLETA DE EVENTOS PARA COBERTURA 100% ---
-const ALL_EVENT_TYPES = [
-  // NAV
-  'acessou-home', 'acessou-departamento', 'acessou-categoria', 'acessou-produto', 'acessou-carrinho',
-  // CHECKOUT
-  'acessou-checkout-dados-pessoais', 'acessou-checkout-email', 'acessou-checkout-endereco-entrega', 'acessou-checkout-pagamento',
-  // SEARCH
-  'buscou-produto', 'adicionou-produto-ao-carrinho',
-  // TRANSACTION
-  'fez-pedido', 'fez-pedido-produto', 'comprou', 'comprou-produto', 'devolveu', 'devolveu-produto',
-  // COMMUNICATION
-  'open-notification', 'click-notification', 'receive-email-notification', 'recebeu-notificacao-sms', 'recebeu-contato',
-  // RELATION
-  'register', 'descadastrou-agenda', 'descadastrou-notificacao', 'nao-conseguiu-contato', 'erro-entrega-notificacao', 'reportou-spam'
-];
-
-// --- FUNÇÕES AUXILIARES ---
-const randomItem = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
-const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-const randomDate = (daysAgo: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() - randomInt(0, daysAgo));
-  return date;
-};
-
-// Gera payload específico para cada tipo de evento
-function generatePayload(eventType: string, contextId: string | null = null) {
-  const product = randomItem(PRODUCTS);
-  const qtd = randomInt(1, 3);
-  const total = Number((product.price * qtd).toFixed(2));
-
-  switch (eventType) {
-    // NAV
-    case 'acessou-home': return { device: Math.random() > 0.6 ? 'mobile' : 'desktop' };
-    case 'acessou-departamento': return { nome_departamento: product.dept };
-    case 'acessou-categoria': return { nome_categoria: product.category };
-    case 'acessou-produto': return { produto_id: product.name, categoria: product.category };
-    case 'acessou-carrinho': return { quantidade_produtos: qtd, subtotal: total };
-    
-    // CHECKOUT
-    case 'acessou-checkout-dados-pessoais': 
-    case 'acessou-checkout-email':
-    case 'acessou-checkout-endereco-entrega': return {};
-    case 'acessou-checkout-pagamento': return { metodo: Math.random() > 0.5 ? 'Cartão' : 'Pix', valor: total };
-
-    // SEARCH
-    case 'buscou-produto': return { termo_busca: randomItem(SEARCH_TERMS), total_resultados: randomInt(0, 100) };
-    case 'adicionou-produto-ao-carrinho': return { produto_id: product.name, preco: product.price };
-
-    // TRANSACTION
-    case 'fez-pedido': return { context_id: contextId, subtotal: total, quantidade_produtos: qtd };
-    case 'fez-pedido-produto': return { context_id: contextId, produto_id: product.name, categoria: product.category };
-    case 'comprou': return { context_id: contextId, total: total, metodo_pagamento: 'Cartão de Crédito' };
-    case 'comprou-produto': return { context_id: contextId, produto_id: product.name, categoria: product.category, subtotal: total };
-    case 'devolveu': return { context_id: contextId, motivo: 'Tamanho errado', total_estornado: total };
-    case 'devolveu-produto': return { context_id: contextId, produto_id: product.name, categoria: product.category };
-
-    // COMMUNICATION
-    case 'open-notification':
-    case 'click-notification':
-    case 'receive-email-notification': return { campaign_id: randomItem(CAMPAIGNS), subject: 'Oferta Imperdível' };
-    case 'recebeu-notificacao-sms': return { campaign_id: randomItem(CAMPAIGNS), mensagem: 'Seu cupom chegou!' };
-    case 'recebeu-contato': return { canal: 'Whatsapp', motivo: 'Dúvida sobre produto' };
-
-    // RELATION
-    case 'register': return { origem: 'Google Ads' };
-    case 'descadastrou-agenda': return { motivo: 'Muitas mensagens' };
-    case 'descadastrou-notificacao': return { canal: 'Email' };
-    case 'nao-conseguiu-contato': return { tentativa: randomInt(1, 3) };
-    case 'erro-entrega-notificacao': return { erro: 'Email inválido / Bounce' };
-    case 'reportou-spam': return { campanha: randomItem(CAMPAIGNS) };
-
-    default: return {};
-  }
-}
-
-async function createInChunks(modelName: string, data: any[]) {
-  console.log(`   > Inserindo ${data.length} registros em ${modelName}...`);
-  for (let i = 0; i < data.length; i += BATCH_SIZE) {
-    const chunk = data.slice(i, i + BATCH_SIZE);
-    // @ts-ignore
-    await prisma[modelName].createMany({ data: chunk, skipDuplicates: true });
+// Helper para Gerar Datas Controladas (O Segredo!)
+function getWeightedDate() {
+  const rand = Math.random();
+  
+  if (rand < 0.20) {
+    // 20% em 2024 (Histórico distante)
+    return faker.date.between({ 
+      from: '2024-01-01T00:00:00.000Z', 
+      to: '2024-12-31T23:59:59.000Z' 
+    });
+  } else if (rand < 0.85) {
+    // 65% em 2025 (O ANO INTEIRO PREENCHIDO)
+    // Isso garante que o intervalo Jan/25 - Jan/26 tenha muitos dados
+    return faker.date.between({ 
+      from: '2025-01-01T00:00:00.000Z', 
+      to: '2025-12-31T23:59:59.000Z' 
+    });
+  } else {
+    // 15% em Jan/2026 (Dados recentes)
+    return faker.date.between({ 
+      from: '2026-01-01T00:00:00.000Z', 
+      to: '2026-01-30T23:59:59.000Z' 
+    });
   }
 }
 
 async function main() {
-  console.log(`🚀 Iniciando Seed Completo (${TOTAL_CUSTOMERS} clientes)...`);
+  console.log('🚀 Iniciando Seed "Ano Completo" (2025 Preenchido)...');
 
   // 1. Limpeza
-  console.log('🧹 Limpando dados antigos...');
-  try {
-    await prisma.customerEvent.deleteMany();
-    await prisma.transaction.deleteMany();
-    await prisma.customer.deleteMany();
-    await prisma.store.deleteMany();
-  } catch (e) {}
+  const cleanTable = async (model: any) => { try { await model.deleteMany(); } catch (e) {} };
+  await cleanTable(prisma.campaignMetric);
+  await cleanTable(prisma.campaignContent);
+  await cleanTable(prisma.campaignSchedule);
+  await cleanTable(prisma.campaign);
+  await cleanTable(prisma.segmentHistory);
+  await cleanTable(prisma.segment);
+  await cleanTable(prisma.transaction);
+  await cleanTable(prisma.storeWhatsappNumber);
+  await cleanTable(prisma.emailSettings);
+  await cleanTable(prisma.conversation);
+  await cleanTable(prisma.customerEvent);
+  await cleanTable(prisma.rfmHistory);
+  await cleanTable(prisma.customer);
+  await cleanTable(prisma.user);
+  await cleanTable(prisma.store);
 
-  // 2. Loja
+  // 2. Loja e Admin
   const store = await prisma.store.create({
-    data: { name: 'Primícia Matriz', cityNormalized: 'São Paulo', cnpj: '12.345.678/0001-90' }
+    data: {
+      name: 'Primícia Modas - Matriz',
+      cnpj: '12.345.678/0001-90',
+      cityNormalized: 'sao paulo',
+      users: {
+        create: { name: 'Daniel Admin', email: 'admin@primicia.com', password: 'admin', role: 'ADMIN' },
+      },
+      emailSettings: {
+        create: {
+          senderName: 'Equipe Primícia', senderEmail: 'news@primicia.com.br',
+          host: 'smtp.sendgrid.net', port: 587, user: 'apikey', pass: 'SG.fake', secure: true
+        }
+      },
+      whatsappNumbers: {
+        create: [
+          { name: 'Loja 01', number: '5511999998888', provider: 'evolution', status: 'CONNECTED', isDefault: true }
+        ]
+      }
+    },
   });
 
-  // 3. Gerar Clientes
-  console.log('👥 Gerando clientes...');
-  const customersData: any[] = [];
-  const customerIds: string[] = [];
+  console.log(`🏪 Loja criada: ${store.name}`);
 
-  for (let i = 0; i < TOTAL_CUSTOMERS; i++) {
-    const id = uuidv4();
-    const loc = randomItem(CITIES_STATE);
-    customerIds.push(id);
-    
-    customersData.push({
-      id,
-      storeId: store.id,
-      name: `${randomItem(FIRST_NAMES)} ${randomItem(LAST_NAMES)}`,
-      email: `cli.${i}@seed.com`,
-      phone: `119${randomInt(1000, 9999)}${randomInt(1000, 9999)}`,
-      city: loc.city,
-      state: loc.state,
-      cpf: `${randomInt(100, 999)}.${randomInt(100, 999)}.${randomInt(100, 999)}-${randomInt(10, 99)}`,
-      totalSpent: 0,
-      dataQualityIssues: {
-        has_android: Math.random() > 0.4,
-        gender: Math.random() > 0.5 ? 'Feminino' : 'Masculino',
-        channels: { email: true, whatsapp: Math.random() > 0.3 }
+  // 3. Produtos
+  const products = [
+    { name: 'Camiseta Básica', price: 49.90 },
+    { name: 'Calça Jeans Premium', price: 149.90 },
+    { name: 'Vestido Verão', price: 199.90 },
+    { name: 'Tênis Casual', price: 299.90 },
+  ];
+
+  // 4. Clientes e Transações (Focados em 2025)
+  const customersToCreate = 3000; 
+  console.log(`⏳ Gerando ${customersToCreate} clientes e forçando dados em 2025...`);
+
+  for (let i = 0; i < customersToCreate; i++) {
+    const hasOrders = Math.random() > 0.1; 
+    let totalSpent = 0;
+    let ordersCount = 0;
+    let lastOrderDate: Date | null = null;
+    let rfmStatus = 'Novos / Sem Dados';
+
+    // Criação do Cliente (Cadastro também distribuído)
+    // 50% cadastrados antes de 2025 (base antiga), 50% durante 2025/26
+    const createdAt = Math.random() > 0.5 
+        ? faker.date.past({ years: 3, refDate: '2025-01-01T00:00:00.000Z' }) // Base antiga
+        : getWeightedDate(); // Base nova
+
+    const firstName = faker.person.firstName();
+    const lastName = faker.person.lastName();
+    const uniqueEmail = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${i}@exemplo.com`;
+
+    const createdCustomer = await prisma.customer.create({
+      data: {
+        storeId: store.id,
+        name: `${firstName} ${lastName}`,
+        email: uniqueEmail,
+        phone: faker.phone.number({ style: 'national' }),
+        city: faker.helpers.arrayElement(['São Paulo', 'Rio de Janeiro', 'Curitiba']),
+        state: faker.helpers.arrayElement(['SP', 'RJ', 'PR']),
+        birthDate: faker.date.birthdate({ min: 18, max: 65, mode: 'age' }),
+        isRegistrationComplete: true,
+        createdAt: createdAt
       }
     });
-  }
-  await createInChunks('customer', customersData);
 
-  // 4. Gerar Transações e Eventos (GARANTIA DE COBERTURA)
-  console.log('⚡ Gerando eventos (Cobertura 100% dos tipos)...');
-  const eventsData: any[] = [];
-  const transactionsData: any[] = [];
+    if (hasOrders) {
+      const numOrders = faker.number.int({ min: 1, max: 12 });
+      
+      for (let j = 0; j < numOrders; j++) {
+        // AQUI ESTÁ A MÁGICA: Usamos a função ponderada
+        // Isso vai jogar 60% das vendas dentro de 2025
+        const date = getWeightedDate();
 
-  // PARTE A: GARANTIA DE COBERTURA (Pelo menos 10 eventos de CADA tipo espalhados)
-  console.log('   > Garantindo todos os tipos de evento...');
-  for (const eventType of ALL_EVENT_TYPES) {
-    const iterations = randomInt(50, 150); // Pelo menos 50 clientes terão esse evento específico
-    for (let k = 0; k < iterations; k++) {
-      const custId = randomItem(customerIds);
-      const date = randomDate(90);
-      let contextId: string | null = null;
+        // Evita venda antes do cadastro (opcional, mas bom pra realismo)
+        const transactionDate = date < createdAt ? createdAt : date;
 
-      // Se for transacional, cria a transaction para bater com o evento
-      if (['fez-pedido', 'comprou', 'devolveu', 'comprou-produto'].includes(eventType)) {
-         contextId = uuidv4();
-         const product = randomItem(PRODUCTS);
-         transactionsData.push({
-            id: contextId,
+        const numItems = faker.number.int({ min: 1, max: 3 });
+        const items: any[] = [];
+        let orderTotal = 0;
+
+        for (let k = 0; k < numItems; k++) {
+          const prod = faker.helpers.arrayElement(products);
+          items.push(prod);
+          orderTotal += prod.price;
+        }
+
+        const channelName = faker.helpers.weightedArrayElement(SALES_CHANNELS);
+
+        await prisma.transaction.create({
+          data: {
             storeId: store.id,
-            customerId: custId,
-            totalValue: product.price,
-            date: date,
-            channel: 'E-commerce',
-            items: [{ sku: product.id, name: product.name, price: product.price }]
-         });
+            customerId: createdCustomer.id,
+            date: transactionDate,
+            totalValue: orderTotal,
+            channel: channelName,
+            items: items, 
+            status: 'PAID', 
+            isInfluenced: Math.random() > 0.6
+          }
+        });
+
+        totalSpent += orderTotal;
+        ordersCount++;
+        if (!lastOrderDate || transactionDate > lastOrderDate) lastOrderDate = transactionDate;
       }
 
-      eventsData.push({
-        customerId: custId,
-        eventType: eventType,
-        createdAt: date,
-        payload: generatePayload(eventType, contextId)
+      // RFM Calculation
+      const todayMs = new Date('2026-02-01').getTime(); // Simulando que estamos em Fev/26
+      const lastOrderMs = lastOrderDate ? lastOrderDate.getTime() : 0;
+      const daysSince = lastOrderDate ? Math.floor((todayMs - lastOrderMs) / 86400000) : 999;
+      
+      if (totalSpent > 1500 && daysSince < 30) rfmStatus = 'Champions';
+      else if (totalSpent > 500 && daysSince < 60) rfmStatus = 'Leais';
+      else if (daysSince < 30) rfmStatus = 'Recentes';
+      else if (daysSince > 90) rfmStatus = 'Em Risco';
+      else rfmStatus = 'Novos / Sem Dados';
+
+      await prisma.customer.update({
+        where: { id: createdCustomer.id },
+        data: { totalSpent, ordersCount, lastOrderDate, rfmStatus }
+      });
+    }
+    
+    if((i+1) % 500 === 0) console.log(`✅ ${i+1} clientes...`);
+  }
+
+  // 5. Segmentos e Histórico (365 Dias - Para cobrir o ano todo)
+  console.log('📊 Gerando Segmentos (Histórico de 1 ano)...');
+  const segmentsList = [
+    { name: 'Champions (VIP)', baseCount: 150 },
+    { name: 'Em Risco (Churn)', baseCount: 420 },
+    { name: 'Novos Clientes', baseCount: 85 },
+    { name: 'Engajados WhatsApp', baseCount: 650 },
+  ];
+
+  for (const seg of segmentsList) {
+    const createdSeg = await prisma.segment.create({
+      data: {
+        storeId: store.id, name: seg.name, active: true, isDynamic: true, rules: [], lastCount: seg.baseCount
+      }
+    });
+
+    // Gera 365 dias de histórico (Jan 25 até hoje)
+    for (let d = 365; d >= 0; d--) {
+      const date = new Date();
+      date.setDate(date.getDate() - d); // Volta 365 dias
+      
+      const variation = Math.floor(Math.random() * 30) - 15;
+      // Tendência de leve alta
+      const trend = Math.floor((365 - d) * 0.2); 
+      const historyCount = Math.max(0, seg.baseCount + variation + trend);
+
+      await prisma.segmentHistory.create({
+        data: { segmentId: createdSeg.id, date: date, count: historyCount }
       });
     }
   }
 
-  // PARTE B: VOLUME DE JORNADAS (Para preencher gráficos)
-  console.log('   > Gerando volume de navegação...');
-  for (const custId of customerIds) {
-    if (Math.random() > 0.7) continue; // 30% inativos
-
-    // Navegação comum
-    const visits = randomInt(1, 5);
-    for (let v = 0; v < visits; v++) {
-      const d = randomDate(60);
-      eventsData.push({ customerId: custId, eventType: 'acessou-home', createdAt: d, payload: { device: 'mobile' } });
-      
-      if (Math.random() > 0.5) {
-        eventsData.push({ customerId: custId, eventType: 'acessou-produto', createdAt: d, payload: generatePayload('acessou-produto') });
-      }
-    }
+  // 6. Campanhas (Preenchendo 2025 inteiro)
+  console.log('📅 Gerando Agenda (Todas os meses de 2025)...');
+  const campTypes = ['email', 'whatsapp'];
+  
+  // Gera uma campanha por mês em 2025
+  for(let month = 0; month < 12; month++) {
+     const date = new Date(2025, month, 15); // Dia 15 de cada mês de 2025
+     
+     await prisma.campaign.create({
+        data: {
+            storeId: store.id,
+            name: `Campanha Mensal - ${date.toLocaleString('default', { month: 'long' })}/25`,
+            channel: faker.helpers.arrayElement(campTypes),
+            status: 'sent',
+            type: 'promotional',
+            date: date,
+            audienceSize: 1000 + (month * 100), // Crescendo ao longo do ano
+            sent: 1000 + (month * 100), delivered: 980 + (month * 100),
+            metrics: { create: { sentCount: 1000, revenueInfluenced: 5000 + (month*500), repurchaseRate: 10 } },
+            contents: { create: { body: 'Oferta' } }
+        }
+     });
   }
 
-  await createInChunks('transaction', transactionsData);
-  await createInChunks('customerEvent', eventsData);
+  // Campanhas Futuras (2026)
+  for(let i=1; i<=3; i++) {
+    await prisma.campaign.create({
+       data: {
+           storeId: store.id,
+           name: `Lançamento 2026 - Fase ${i}`,
+           channel: 'whatsapp',
+           status: 'scheduled',
+           scheduledAt: new Date(2026, i, 10), // Fev, Mar, Abr 2026
+           contents: { create: { body: 'Em breve' } }
+       }
+    });
+ }
 
-  console.log('✅ Seed finalizado!');
-  console.log(`📊 Clientes: ${TOTAL_CUSTOMERS}`);
-  console.log(`📊 Total Eventos: ${eventsData.length}`);
+  console.log('✅ Seed Finalizado! Login: admin@primicia.com / admin');
 }
 
 main()

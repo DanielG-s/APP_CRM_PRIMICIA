@@ -32,7 +32,7 @@ export class SalesController {
 
   @Get('dashboard-history')
   @ApiOperation({ summary: 'Retorna histórico de 7 dias' })
-  async getDashboardHistory() {
+  async getSalesHistory() {
     return this.salesService.getSalesHistory();
   }
 
@@ -69,7 +69,6 @@ export class SalesController {
     const startDate = start || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
     const endDate = end || new Date().toISOString();
 
-    // Normalização de arrays (garante que string única vire array)
     const campaignIds = campaigns ? (Array.isArray(campaigns) ? campaigns : [campaigns]) : undefined;
     const tagsList = tags ? (Array.isArray(tags) ? tags : [tags]) : undefined;
     const typesList = campaignType ? (Array.isArray(campaignType) ? campaignType : [campaignType]) : undefined;
@@ -85,6 +84,7 @@ export class SalesController {
   }
 
   // --- 3. DASHBOARD DE VAREJO (RETAIL) ---
+  // AQUI FOI FEITA A CORREÇÃO PRINCIPAL
   @Get('retail-metrics')
   @ApiOperation({ summary: 'Métricas de Varejo filtradas' })
   @ApiQuery({ name: 'start', required: false })
@@ -95,11 +95,24 @@ export class SalesController {
     @Query('end') end?: string,
     @Query('stores') stores?: string, 
   ) {
-    return this.salesService.getRetailMetrics(start, end, stores);
+    // 1. Definição de Datas Segura
+    // Se não vier data, pega os últimos 30 dias
+    const endDate = end ? new Date(end) : new Date();
+    const startDate = start ? new Date(start) : new Date(new Date().setDate(endDate.getDate() - 30));
+
+    // 2. Ajuste Fino do Horário (00:00 -> 23:59)
+    // Isso garante que pegamos as vendas do último dia inteiro
+    const endFinal = new Date(endDate);
+    endFinal.setHours(23, 59, 59, 999);
+
+    // 3. Tratamento de Lojas (String -> Array)
+    const storeIds = stores ? stores.split(',') : undefined;
+
+    // Passamos Objetos Date reais para o Service agora
+    return this.salesService.getRetailMetrics(startDate, endFinal, storeIds);
   }
 
-  // ...
-  // ...
+  // --- 4. DASHBOARD DE AGENDA ---
   @Get('schedule-metrics')
   @ApiOperation({ summary: 'Métricas da página de Agenda' })
   async getScheduleMetrics(
@@ -110,13 +123,11 @@ export class SalesController {
     @Query('tags') tags?: string | string[],
     @Query('campaignType') campaignType?: string | string[],
     @Query('stores') stores?: string | string[],
-    // conversionWindow afeta lógica de negócio futura, por enquanto repassamos
     @Query('conversionWindow') conversionWindow?: string,
   ) {
     const startDate = start || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
     const endDate = end || new Date().toISOString();
 
-    // Normalização
     const campaignIds = campaigns ? (Array.isArray(campaigns) ? campaigns : [campaigns]) : undefined;
     const tagsList = tags ? (Array.isArray(tags) ? tags : [tags]) : undefined;
     const typesList = campaignType ? (Array.isArray(campaignType) ? campaignType : [campaignType]) : undefined;
