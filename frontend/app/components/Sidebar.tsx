@@ -7,7 +7,7 @@ import { useSidebar } from "../contexts/SidebarContext";
 import {
   Home, Users, BarChart2, PieChart as PieIcon, 
   CalendarRange, MessageCircle, Target, ChevronLeft, ChevronRight, 
-  Layers // <--- 1. Importei o ícone Layers para Segmentos
+  Layers, Settings // <--- 1. ADICIONEI O ÍCONE SETTINGS
 } from "lucide-react";
 
 // O componente NavItem permanece igual
@@ -62,7 +62,7 @@ export function Sidebar() {
         </div>
         
         {/* NAVEGAÇÃO */}
-        <nav className="flex-1 py-6 space-y-1 overflow-y-auto overflow-x-hidden px-1">
+        <nav className="flex-1 py-6 space-y-1 overflow-y-auto overflow-x-hidden px-1 scrollbar-hide">
             <NavItem href="/" icon={<Home size={20}/>} label="Visão Geral" isCollapsed={isCollapsed} />
             <NavItem href="/clients" icon={<Users size={20}/>} label="Carteira de Clientes" isCollapsed={isCollapsed} />
             
@@ -78,12 +78,14 @@ export function Sidebar() {
             <div className={`mt-6 mb-2 px-5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-opacity ${isCollapsed ? 'opacity-0 hidden' : 'opacity-100 block'}`}>Engajamento</div>
             {isCollapsed && <div className="my-4 border-t border-slate-800 mx-4"></div>}
             
-            <NavItem href="/campaigns/new" icon={<MessageCircle size={20}/>} label="Campanhas" isCollapsed={isCollapsed} />
-            
-            {/* Segmentos */}
+            <NavItem href="/campaigns" icon={<MessageCircle size={20}/>} label="Campanhas" isCollapsed={isCollapsed} />
             <NavItem href="/segments/list" icon={<Layers size={20}/>} label="Segmentos" isCollapsed={isCollapsed} />
+
+            {/* SISTEMA / CONFIGURAÇÕES */}
+            <div className={`mt-6 mb-2 px-5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-opacity ${isCollapsed ? 'opacity-0 hidden' : 'opacity-100 block'}`}>Sistema</div>
+            {isCollapsed && <div className="my-4 border-t border-slate-800 mx-4"></div>}
             
-            <NavItem href="/goals" icon={<Target size={20}/>} label="Metas & Objetivos" isCollapsed={isCollapsed} />
+            <NavItem href="/settings" icon={<Settings size={20}/>} label="Configurações" isCollapsed={isCollapsed} />
         </nav>
     </aside>
   );

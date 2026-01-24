@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { Prisma } from '@prisma/client';
-import { format, differenceInDays, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 @Injectable()
@@ -20,6 +20,7 @@ export class SalesService {
       data: {
         storeId: data.storeId, customerId: customer.id, totalValue: data.totalValue, date: new Date(),
         items: data.items as any, channel: data.channel || 'Loja Física', isInfluenced: data.isInfluenced || false,
+        status: 'PAID' // Garante status pago
       },
     });
     return { message: 'Venda processada!', transactionId: transaction.id };
@@ -29,7 +30,7 @@ export class SalesService {
     const today = new Date();
     const aggregate = await this.prisma.transaction.aggregate({
       _sum: { totalValue: true }, _count: { id: true },
-      where: { date: { gte: startOfDay(today), lte: endOfDay(today) } }
+      where: { date: { gte: startOfDay(today), lte: endOfDay(today) }, status: 'PAID' }
     });
     return { total: Number(aggregate._sum.totalValue) || 0, count: aggregate._count.id || 0 };
   }
@@ -39,7 +40,7 @@ export class SalesService {
     const startDate = subDays(endDate, 6);
     startDate.setHours(0,0,0,0);
     const transactions = await this.prisma.transaction.findMany({
-        where: { date: { gte: startDate, lte: endDate } }, orderBy: { date: 'asc' }
+        where: { date: { gte: startDate, lte: endDate }, status: 'PAID' }, orderBy: { date: 'asc' }
     });
     const historyMap = new Map();
     for(let i=0; i<=6; i++) {
@@ -61,6 +62,7 @@ export class SalesService {
   async getRecentSales() {
     const sales = await this.prisma.transaction.findMany({
         take: 5, orderBy: { date: 'desc' },
+        where: { status: 'PAID' },
         include: { customer: { select: { name: true, email: true } }, store: { select: { name: true } } }
     });
     return sales.map(s => ({
@@ -81,20 +83,18 @@ export class SalesService {
     
     const tagsSet = new Set<string>(); campaigns.forEach(c => c.tags.forEach(t => tagsSet.add(t)));
     const typesSet = new Set<string>(); campaigns.forEach(c => { if(c.type) typesSet.add(c.type); });
-    
-    // TEM QUE TER ESSA LINHA AQUI:
     const stores = await this.prisma.store.findMany({ select: { id: true, name: true } });
 
     return {
       campaigns: campaigns.map(c => ({ id: c.id, name: c.name })),
       tags: Array.from(tagsSet).sort(), 
       types: Array.from(typesSet).sort(),
-      stores: stores.map(s => ({ id: s.id, name: s.name })), // E ESSA LINHA NO RETORNO
+      stores: stores.map(s => ({ id: s.id, name: s.name })), 
       channels: ['E-mail', 'SMS', 'Mobile push', 'WhatsApp'] 
     };
   }
 
-  // --- LÓGICA DO DASHBOARD DE CANAIS (COM CÁLCULO DE DISPAROS) ---
+  // --- LÓGICA DO DASHBOARD DE CANAIS ---
   async getChannelDashboard(startDate: string, endDate: string, filters?: any) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -109,7 +109,6 @@ export class SalesService {
     if (filters?.tags?.length) campaignWhere.tags = { hasSome: filters.tags };
     if (filters?.campaignType?.length && !filters.campaignType.includes('Todos')) campaignWhere.type = { in: filters.campaignType };
 
-    // Busca Campanhas com Agendamentos
     const campaignsRaw = await this.prisma.campaign.findMany({ 
         where: campaignWhere, 
         orderBy: { date: 'desc' },
@@ -117,20 +116,17 @@ export class SalesService {
     });
 
     const salesRaw = await this.prisma.transaction.findMany({
-      where: { date: { gte: start, lte: end } },
+      where: { date: { gte: start, lte: end }, status: 'PAID' },
       select: { date: true, totalValue: true, id: true, isInfluenced: true, storeId: true, store: { select: { name: true } } }
     });
 
-    // Calcular totais globais para atribuição proporcional de receita aos disparos
     const totalInfluencedRevenue = salesRaw.filter(s => s.isInfluenced).reduce((acc, s) => acc + Number(s.totalValue), 0);
     const totalConversions = salesRaw.filter(s => s.isInfluenced).length;
     const totalClicks = campaignsRaw.reduce((acc, c) => acc + c.clicks, 0);
 
-    // --- LÓGICA DE DISPAROS (Popula tabela de disparos) ---
     let dispatchesList: any[] = [];
     
     campaignsRaw.forEach(camp => {
-        // Atribuição de Receita Simples (Proporcional aos cliques da campanha na falta de tracking granular)
         const campaignShare = totalClicks > 0 ? (camp.clicks / totalClicks) : 0;
         const campRevenue = totalInfluencedRevenue * campaignShare;
         const campConversions = Math.floor(totalConversions * campaignShare);
@@ -166,7 +162,6 @@ export class SalesService {
     });
     dispatchesList = dispatchesList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // --- PROCESSAMENTO GRÁFICO (Mantido igual) ---
     const chartData: any[] = [];
     const currentDate = new Date(start);
     while (currentDate <= end) {
@@ -208,21 +203,21 @@ export class SalesService {
         chart: chartData, 
         campaignsList: campaignsRaw, 
         storesList: Array.from(storesMap.values()).map((s:any) => ({...s, ticketAverage: s.conversoes > 0 ? s.revenueInfluenced/s.conversoes : 0})),
-        dispatchesList, // Lista de disparos com receita calculada
+        dispatchesList,
         filterOptions: await this.getFilterOptions()
     };
   }
 
-  // --- 3. LÓGICA DE VAREJO (PRESERVADA E ROBUSTA) ---
-  async getRetailMetrics(startStr?: string, endStr?: string, storesStr?: string) {
-    const today = new Date();
-    const endDate = endStr ? new Date(endStr) : today;
-    endDate.setUTCHours(23, 59, 59, 999);
-    const startDate = startStr ? new Date(startStr) : new Date(new Date().setDate(today.getDate() - 365));
-    startDate.setUTCHours(0, 0, 0, 0);
+  // --- 3. DASHBOARD DE VAREJO (CORRIGIDO PARA RECEBER DATE) ---
+  async getRetailMetrics(start: Date, end: Date, storeIds?: string[]) {
+    // Debug para verificar as datas que chegam
+    console.log(`📊 Buscando dados de ${start.toISOString()} até ${end.toISOString()}`);
 
-    const whereClause: any = { date: { gte: startDate, lte: endDate } };
-    if (storesStr && storesStr.length > 0) whereClause.storeId = { in: storesStr.split(',') };
+    const whereClause: any = { 
+        date: { gte: start, lte: end },
+        status: 'PAID' 
+    };
+    if (storeIds && storeIds.length > 0) whereClause.storeId = { in: storeIds };
 
     const transactions = await this.prisma.transaction.findMany({
       where: whereClause, include: { store: true }, orderBy: { date: 'asc' },
@@ -237,8 +232,8 @@ export class SalesService {
     const channelsMap = new Map();
     const customerHistory = new Map<string, Date>(); 
 
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const isDaily = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) <= 60;
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const isDaily = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) <= 60; // Se for menos de 60 dias, mostra por dia
 
     for (const tx of transactions) {
       const val = Number(tx.totalValue);
@@ -252,17 +247,20 @@ export class SalesService {
       let groupType = 'new';
       const lastPurchase = customerHistory.get(tx.customerId);
       if (lastPurchase) {
-        const daysSinceLast = differenceInDays(txDate, lastPurchase);
+        const daysSinceLast = Math.floor((txDate.getTime() - lastPurchase.getTime()) / (1000 * 3600 * 24));
         if (daysSinceLast > 90) groupType = 'recovered'; 
         else groupType = 'recurrent';
       }
       customerHistory.set(tx.customerId, txDate);
 
+      // Chave de agrupamento: Dia/Mês (Daily) ou Mês/Ano (Monthly)
       const dateKey = isDaily ? format(txDate, 'dd/MM', { locale: ptBR }) : format(txDate, 'MMM yyyy', { locale: ptBR });
 
       if (!historyMap.has(dateKey)) {
         historyMap.set(dateKey, { 
-            name: dateKey, sortDate: txDate, revenue: 0, revenueInfluenced: 0, transactions: 0,
+            name: dateKey, 
+            sortDate: txDate.getTime(), // Importante para ordenar corretamente jan/25 antes de fev/25
+            revenue: 0, revenueInfluenced: 0, transactions: 0,
             customerSet: new Set(), groupNew: 0, groupRecurrent: 0, groupRecovered: 0
         });
       }
@@ -328,6 +326,12 @@ export class SalesService {
         };
     });
 
+    // Capitalize names (ex: "jan 2025" -> "Jan 2025")
+    const formattedHistory = history.map(h => ({
+        ...h,
+        name: h.name.charAt(0).toUpperCase() + h.name.slice(1)
+    }));
+
     return {
       kpis: {
         revenue: totalRevenue,
@@ -336,7 +340,7 @@ export class SalesService {
         ticketAverage: totalTransactions > 0 ? totalRevenue / totalTransactions : 0,
         repurchaseRate: totalTransactions > 0 ? ((totalTransactions - customerHistory.size) / totalTransactions * 100).toFixed(2) : 0,
       },
-      history,
+      history: formattedHistory,
       channels,
       stores
     };
@@ -344,14 +348,11 @@ export class SalesService {
 
   // --- 5. MÉTRICAS DE AGENDA ---
   async getScheduleMetrics(startDate: string, endDate: string, filters?: any) {
-    // CORREÇÃO: Forçar interpretação como data local (ou adicionar T12:00:00 para segurança de fuso)
-    // Ao receber "2025-12-01", concatenamos o horário para garantir que seja o início do dia LOCAL
     const start = new Date(`${startDate}T00:00:00`);
     const end = new Date(`${endDate}T23:59:59.999`);
 
-    // 1. Where Clauses
     const campaignWhere: Prisma.CampaignWhereInput = { date: { gte: start, lte: end } };
-    const transactionWhere: Prisma.TransactionWhereInput = { date: { gte: start, lte: end }, isInfluenced: true };
+    const transactionWhere: Prisma.TransactionWhereInput = { date: { gte: start, lte: end }, isInfluenced: true, status: 'PAID' };
 
     if (filters?.channel && filters.channel !== 'Todos') {
         const map: any = { 'Mobile push': 'Push', 'E-mail': 'Email' };
@@ -367,7 +368,6 @@ export class SalesService {
         transactionWhere.storeId = { in: filters.storeIds };
     }
 
-    // 2. Buscas
     const campaigns = await this.prisma.campaign.findMany({
         where: campaignWhere, orderBy: { date: 'desc' },
         include: { store: { select: { id: true, name: true } } }
@@ -377,7 +377,6 @@ export class SalesService {
         select: { totalValue: true, date: true, storeId: true, salespersonId: true }
     });
 
-    // 3. Totais Gerais
     let totalDisponibilizados = 0, totalRealizados = 0, totalConfirmados = 0, totalDescadastros = 0;
     campaigns.forEach(c => {
         totalDisponibilizados += c.sent || 0;
@@ -389,30 +388,17 @@ export class SalesService {
     const conversoes = sales.length;
     const naoConfirmados = totalRealizados - totalConfirmados;
 
-    // 4. Histórico Diário (CORRIGIDO)
     const daysMap = new Map();
-    // Loop dia a dia usando uma data auxiliar segura
-    // Usamos T12:00:00 para garantir que o dia não "vire" por causa de fuso horário
     for (let d = new Date(`${startDate}T12:00:00`); d <= new Date(`${endDate}T12:00:00`); d.setDate(d.getDate() + 1)) {
         const key = format(d, 'dd/MM', { locale: ptBR });
-        // Salvamos a chave formatada e a data ISO para ordenação
         daysMap.set(key, { 
             name: key, 
-            // Precisamos da data ISO correta para comparação abaixo
-            // O slice(0,10) garante YYYY-MM-DD
             isoDate: d.toISOString().split('T')[0], 
-            receitaInf: 0, 
-            vendasInf: 0,
-            realizados: 0, 
-            confirmados: 0, 
-            disponibilizados: 0, 
-            descadastros: 0 
+            receitaInf: 0, vendasInf: 0, realizados: 0, confirmados: 0, disponibilizados: 0, descadastros: 0 
         });
     }
 
-    // Popula Campanhas no dia
     campaigns.forEach(c => {
-        // Formata a data da campanha para comparar com a chave do mapa
         const key = format(c.date, 'dd/MM', { locale: ptBR });
         if (daysMap.has(key)) {
             const d = daysMap.get(key);
@@ -423,7 +409,6 @@ export class SalesService {
         }
     });
 
-    // Popula Vendas no dia
     sales.forEach(s => {
         const key = format(s.date, 'dd/MM', { locale: ptBR });
         if (daysMap.has(key)) {
@@ -433,20 +418,17 @@ export class SalesService {
         }
     });
 
-    // Função Auxiliar
     const safeDiv = (a: number, b: number) => b > 0 ? a / b : 0;
 
-    // Converte Map para Array e calcula campos derivados
     const dailyData = Array.from(daysMap.values()).map((d: any) => ({
         ...d,
-        receita: d.receitaInf, // Alias para o gráfico
+        receita: d.receitaInf, 
         conversoes: safeDiv(d.vendasInf, d.realizados), 
         receitaCont: safeDiv(d.receitaInf, d.realizados),
         vendasCont: safeDiv(d.vendasInf, d.realizados),
         naoConf: d.realizados - d.confirmados
     }));
 
-    // 5. Outras Tabelas
     const campaignsTable = campaigns.map(c => {
         const share = safeDiv(c.clicks, totalConfirmados);
         const recInf = share * receitaInfluenciada;

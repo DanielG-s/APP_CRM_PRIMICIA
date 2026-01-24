@@ -8,6 +8,7 @@ import { SalesModule } from 'src/modules/erp/sales/sales.module';
 import { CustomersModule } from './modules/erp/customers/customers.module';
 import { IntelligenceModule } from './modules/crm/intelligence/intelligence.module';
 import { CampaignsModule } from './modules/marketing/campaigns/campaigns.module';
+import { SettingsModule } from './modules/config/settings/settings.module';
 
 @Global()
 @Module({
@@ -17,6 +18,7 @@ import { CampaignsModule } from './modules/marketing/campaigns/campaigns.module'
     CustomersModule,
     IntelligenceModule,
     CampaignsModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
