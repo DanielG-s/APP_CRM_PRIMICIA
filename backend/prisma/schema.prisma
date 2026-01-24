@@ -1,260 +1,278 @@
-generator client {
-  provider = "prisma-client-js"
-}
+import { PrismaClient } from '@prisma/client';
+import { fakerPT_BR as faker } from '@faker-js/faker';
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+const prisma = new PrismaClient();
 
-// --- 1. ACESSO & SEGURANÇA ---
-model User {
-  id              String    @id @default(uuid())
-  name            String?
-  email           String    @unique
-  password        String
-  role            String
-  twoFactorSecret String?
-  storeId         String?
-  store           Store?    @relation(fields: [storeId], references: [id])
-  createdAt       DateTime  @default(now())
-  segmentsUpdated Segment[] @relation("SegmentUpdater")
-}
+// Definição dos canais com Pesos
+const SALES_CHANNELS = [
+  { value: 'Loja Física', weight: 40 }, 
+  { value: 'WhatsApp', weight: 30 },
+  { value: 'E-commerce', weight: 20 },
+  { value: 'Instagram', weight: 5 },
+  { value: 'Marketplace', weight: 5 }
+];
 
-model Store {
-  id              String                @id @default(uuid())
-  name            String
-  cnpj            String?
-  cityNormalized  String?
-  whatsappNumbers StoreWhatsappNumber[]
-  goals           StoreGoal[]
-  users           User[]
-  customers       Customer[]
-  transactions    Transaction[]
-  campaigns       Campaign[]
-  segments        Segment[]
-}
+async function main() {
+  console.log('🚀 Iniciando Seed FINAL (Histórico 2024-2026)...');
 
-// --- 2. CLIENTES ---
-model Customer {
-  id                     String           @id @default(uuid())
-  storeId                String
-  store                  Store            @relation(fields: [storeId], references: [id])
-  externalId             String?
-  name                   String
-  email                  String?          @unique
-  phone                  String?
-  cpf                    String?
-  birthDate              DateTime?
-  age                    Int?
-  city                   String?
-  state                  String?
+  // 1. Limpeza de tabelas
+  const cleanTable = async (model: any) => { try { await model.deleteMany(); } catch (e) {} };
+
+  await cleanTable(prisma.campaignMetric);
+  await cleanTable(prisma.campaignContent);
+  await cleanTable(prisma.campaignSchedule);
+  await cleanTable(prisma.campaign);
+  await cleanTable(prisma.segmentHistory);
+  await cleanTable(prisma.segment);
+  await cleanTable(prisma.transaction);
+  await cleanTable(prisma.storeWhatsappNumber);
+  await cleanTable(prisma.emailSettings);
+  await cleanTable(prisma.conversation);
+  await cleanTable(prisma.customerEvent);
+  await cleanTable(prisma.rfmHistory);
+  await cleanTable(prisma.customer);
+  await cleanTable(prisma.user);
+  await cleanTable(prisma.store);
+
+  // 2. Loja e Usuário Admin
+  const store = await prisma.store.create({
+    data: {
+      name: 'Primícia Modas - Matriz',
+      cnpj: '12.345.678/0001-90',
+      cityNormalized: 'sao paulo',
+      users: {
+        create: {
+          name: 'Daniel Admin',
+          email: 'admin@primicia.com',
+          password: 'admin', 
+          role: 'ADMIN',
+        },
+      },
+      emailSettings: {
+        create: {
+          senderName: 'Equipe Primícia',
+          senderEmail: 'news@primicia.com.br',
+          host: 'smtp.sendgrid.net',
+          port: 587,
+          user: 'apikey',
+          pass: 'SG.fake_key_123',
+          secure: true,
+        }
+      },
+      whatsappNumbers: {
+        create: [
+          {
+            name: 'Comercial Loja 01',
+            number: '5511999998888',
+            provider: 'evolution',
+            status: 'CONNECTED',
+            isDefault: true,
+            instanceName: 'primicia_main',
+            token: 'xyz-token-123'
+          }
+        ]
+      }
+    },
+  });
+
+  console.log(`🏪 Loja criada: ${store.name}`);
+
+  // 3. Produtos Exemplo
+  const products = [
+    { name: 'Camiseta Básica Algodão', price: 49.90, category: 'Roupas' },
+    { name: 'Camisa Polo Premium', price: 89.90, category: 'Roupas' },
+    { name: 'Calça Jeans Skinny', price: 129.90, category: 'Roupas' },
+    { name: 'Vestido Floral', price: 199.90, category: 'Roupas' },
+    { name: 'Tênis Casual', price: 299.90, category: 'Calçados' },
+  ];
+
+  // 4. Clientes e Transações (Base Histórica)
+  const customersToCreate = 2500; 
+  console.log(`⏳ Gerando ${customersToCreate} clientes e histórico de vendas desde 2024...`);
+
+  const today = new Date();
+  const startOf2024 = new Date('2024-01-01T00:00:00.000Z');
+  const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  for (let i = 0; i < customersToCreate; i++) {
+    const hasOrders = Math.random() > 0.15; 
+    
+    let totalSpent = 0;
+    let ordersCount = 0;
+    let lastOrderDate: Date | null = null;
+    let rfmStatus = 'Novos / Sem Dados';
+
+    const firstName = faker.person.firstName();
+    const lastName = faker.person.lastName();
+    const uniqueEmail = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${i}@exemplo.com`;
+
+    // Data de cadastro aleatória entre 2023 e hoje
+    const createdAt = faker.date.between({ from: '2023-01-01', to: today });
+
+    const createdCustomer = await prisma.customer.create({
+      data: {
+        storeId: store.id,
+        name: `${firstName} ${lastName}`,
+        email: uniqueEmail,
+        phone: faker.phone.number({ style: 'national' }),
+        city: faker.helpers.arrayElement(['São Paulo', 'Rio de Janeiro', 'Curitiba', 'Belo Horizonte']),
+        state: faker.helpers.arrayElement(['SP', 'RJ', 'PR', 'MG']),
+        birthDate: faker.date.birthdate({ min: 18, max: 65, mode: 'age' }),
+        isRegistrationComplete: true,
+        createdAt: createdAt
+      }
+    });
+
+    if (hasOrders) {
+      const numOrders = faker.number.int({ min: 1, max: 15 }); // Até 15 compras por cliente
+      
+      for (let j = 0; j < numOrders; j++) {
+        // DISTRIBUIÇÃO DE DATA IMPORTANTE:
+        // 20% das vendas caem no mês atual (para o dashboard inicial ser útil)
+        // 80% das vendas caem entre Jan/2024 e Hoje (para preencher o histórico)
+        let date;
+        if (Math.random() < 0.2) {
+             date = faker.date.between({ from: startOfCurrentMonth, to: today });
+        } else {
+             date = faker.date.between({ from: startOf2024, to: today });
+        }
+
+        // Se a data da compra for antes do cadastro, "ajustamos" a lógica (opcional, mas bom pra consistência)
+        if (date < createdAt) {
+            // Ignora ou assume que comprou como convidado antes
+        }
+
+        const numItems = faker.number.int({ min: 1, max: 3 });
+        const items: any[] = [];
+        let orderTotal = 0;
+
+        for (let k = 0; k < numItems; k++) {
+          const prod = faker.helpers.arrayElement(products);
+          items.push(prod);
+          orderTotal += prod.price;
+        }
+
+        const channelName = faker.helpers.weightedArrayElement(SALES_CHANNELS);
+
+        await prisma.transaction.create({
+          data: {
+            storeId: store.id,
+            customerId: createdCustomer.id,
+            date: date,
+            totalValue: orderTotal,
+            channel: channelName,
+            items: items, 
+            status: 'PAID',
+            isInfluenced: Math.random() > 0.6
+          }
+        });
+
+        totalSpent += orderTotal;
+        ordersCount++;
+        if (!lastOrderDate || date > lastOrderDate) lastOrderDate = date;
+      }
+
+      // Cálculo RFM Atual
+      const daysSince = lastOrderDate ? Math.floor((new Date().getTime() - lastOrderDate.getTime()) / 86400000) : 999;
+      if (totalSpent > 1500 && daysSince < 30) rfmStatus = 'Champions';
+      else if (totalSpent > 500 && daysSince < 60) rfmStatus = 'Leais';
+      else if (daysSince < 30) rfmStatus = 'Recentes';
+      else if (daysSince > 90) rfmStatus = 'Em Risco';
+      else rfmStatus = 'Novos / Sem Dados';
+
+      await prisma.customer.update({
+        where: { id: createdCustomer.id },
+        data: { totalSpent, ordersCount, lastOrderDate, rfmStatus }
+      });
+    }
+    
+    if((i+1) % 500 === 0) console.log(`✅ ${i+1} clientes processados...`);
+  }
+
+  // 5. Segmentos e Histórico (Expandido para 90 dias)
+  console.log('📊 Gerando Segmentos e Histórico (90 dias)...');
   
-  // --- CAMPOS ANTIGOS ---
-  rfmScoreId             String?
-  rfmScore               RfmScore?        @relation(fields: [rfmScoreId], references: [id])
-  propensityScore        Float?
-  propensityLabel        String?
-  isRegistrationComplete Boolean          @default(false)
-  dataQualityIssues      Json?
+  const segmentsList = [
+    { name: 'Champions (VIP)', baseCount: 150 },
+    { name: 'Em Risco (Churn)', baseCount: 420 },
+    { name: 'Novos Clientes (30d)', baseCount: 85 },
+    { name: 'Leais (Recorrentes)', baseCount: 300 },
+    { name: 'Engajados no WhatsApp', baseCount: 650 },
+    { name: 'Ticket Médio Alto', baseCount: 120 }
+  ];
 
-  // --- CAMPOS DE PERFORMANCE (CACHE) ---
-  totalSpent             Decimal          @default(0) @db.Decimal(10, 2)
-  ordersCount            Int              @default(0)
-  lastOrderDate          DateTime?
-  rfmStatus              String?          @default("Novos / Sem Dados")
+  for (const seg of segmentsList) {
+    const createdSeg = await prisma.segment.create({
+      data: {
+        storeId: store.id,
+        name: seg.name,
+        active: true,
+        isDynamic: true,
+        rules: [],
+        lastCount: seg.baseCount
+      }
+    });
 
-  // --- RELACIONAMENTOS ---
-  events                 CustomerEvent[]
-  transactions           Transaction[]
-  rfmHistory             RfmHistory[]
-  responses              SurveyResponse[]
-  conversations          Conversation[]
-}
+    // 90 dias de histórico
+    for (let d = 90; d >= 0; d--) {
+      const date = new Date();
+      date.setDate(date.getDate() - d);
+      
+      const variation = Math.floor(Math.random() * 20) - 10;
+      // Adiciona uma leve tendência de crescimento ao longo do tempo
+      const trend = Math.floor((90 - d) * 0.5); 
+      const historyCount = Math.max(0, seg.baseCount + variation + trend);
 
-model CustomerEvent {
-  id         String   @id @default(uuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  eventType  String
-  payload    Json?
-  createdAt  DateTime @default(now())
-}
+      await prisma.segmentHistory.create({
+        data: {
+          segmentId: createdSeg.id,
+          date: date,
+          count: historyCount
+        }
+      });
+    }
+  }
 
-model Transaction {
-  id            String   @id @default(uuid())
-  customerId    String
-  customer      Customer @relation(fields: [customerId], references: [id])
-  storeId       String
-  store         Store    @relation(fields: [storeId], references: [id])
-  salespersonId String?
-  totalValue    Decimal
-  items         Json
-  date          DateTime
-
-  // --- NOVOS CAMPOS ---
-  channel       String   @default("Loja Física")
-  isInfluenced  Boolean  @default(false)
-}
-
-// --- 3. SEGMENTAÇÃO ---
-model Segment {
-  id          String   @id @default(uuid())
-  name        String
-  logic       String?
-  rules       Json
-  isDynamic   Boolean  @default(true)
-  storeId     String
-  store       Store    @relation(fields: [storeId], references: [id])
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  // 6. Campanhas (2024, 2025 e Futuro)
+  console.log('📅 Gerando Agenda de Campanhas (2024-2026)...');
+  const campTypes = ['email', 'whatsapp'];
   
-  // Cache de tamanho (para a listagem rápida) - NOVO
-  lastCount   Int      @default(0)
-
-  // Quem alterou pela última vez?
-  updatedById String?
-  updatedBy   User?    @relation("SegmentUpdater", fields: [updatedById], references: [id])
-
-  // Histórico de evolução - NOVO
-  history     SegmentHistory[]
-}
-
-// TABELA NOVA: Histórico Diário de Segmentos
-model SegmentHistory {
-  id        String   @id @default(uuid())
-  segmentId String
-  segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  // Campanhas Antigas (2024 e início de 2025)
+  for(let i=0; i<12; i++) {
+     const pastDate = faker.date.between({ from: startOf2024, to: today });
+     await prisma.campaign.create({
+        data: {
+            storeId: store.id,
+            name: `Oferta Mensal - ${pastDate.getMonth()+1}/${pastDate.getFullYear()}`,
+            channel: faker.helpers.arrayElement(campTypes),
+            status: 'sent',
+            type: 'promotional',
+            date: pastDate,
+            audienceSize: 1000 + (i*50),
+            sent: 1000 + (i*50), delivered: 980 + (i*50), opens: 400 + (i*20), clicks: 100 + (i*10),
+            metrics: { create: { sentCount: 1000 + (i*50), revenueInfluenced: 5000.00 + (i*100), repurchaseRate: 10 } },
+            contents: { create: { body: 'Oferta Passada' } }
+        }
+     });
+  }
   
-  count     Int      // Tamanho do público neste dia
-  date      DateTime @default(now()) // Data do registro
+  // Futuro
+  for(let i=0; i<5; i++) {
+    await prisma.campaign.create({
+       data: {
+           storeId: store.id,
+           name: `Lançamento Futuro #${i+1}`,
+           channel: faker.helpers.arrayElement(campTypes),
+           status: 'scheduled',
+           scheduledAt: faker.date.soon({ days: 60 }),
+           contents: { create: { body: 'Em breve' } }
+       }
+    });
+ }
 
-  @@index([segmentId, date])
+  console.log('✅ Seed Finalizado! Login: admin@primicia.com / admin');
 }
 
-// --- 4. CAMPANHAS ---
-model Campaign {
-  id                String             @id @default(uuid())
-  storeId           String
-  store             Store              @relation(fields: [storeId], references: [id])
-  name              String
-  channel           String 
-  status            String             @default("draft") 
-  date              DateTime @default(now()) 
-  type              String?  
-  tags              String[] 
-  
-  segmentId         String? 
-  audienceSize      Int?               @default(0)
-
-  config            Json? 
-  content           Json? 
-
-  scheduledAt       DateTime?
-
-  sent              Int                @default(0)
-  delivered         Int                @default(0)
-  opens             Int                @default(0)
-  clicks            Int                @default(0)
-  softBounces       Int                @default(0)
-  hardBounces       Int                @default(0)
-  spamReports       Int                @default(0)
-  unsubscribes      Int                @default(0)
-
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-
-  metrics           CampaignMetric?
-  schedules         CampaignSchedule[]
-  contents          CampaignContent[]
-
-  attributionWindow Int?               @default(7)
-  conversionTrigger String?
-}
-
-model CampaignSchedule {
-  id         String   @id @default(uuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
-  sendDate   DateTime
-}
-
-model CampaignContent {
-  id          String   @id @default(uuid())
-  campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
-  subject     String?
-  body        String   // Aqui vai o HTML final
-  mediaUrl    String?
-  designJson  Json?    // <--- ADICIONE ESTA LINHA (Guarda o estado do editor)
-}
-
-model CampaignMetric {
-  id                String   @id @default(uuid())
-  campaignId        String   @unique
-  campaign          Campaign @relation(fields: [campaignId], references: [id])
-  sentCount         Int      @default(0)
-  revenueInfluenced Decimal  @default(0.0)
-  repurchaseRate    Float    @default(0.0)
-}
-
-// --- 5. RFM ---
-model RfmScore {
-  id         String     @id @default(uuid())
-  name       String
-  minRecency Int
-  maxRecency Int
-  customers  Customer[]
-}
-
-model RfmHistory {
-  id         String   @id @default(uuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  oldScoreId String?
-  newScoreId String
-  changedAt  DateTime @default(now())
-}
-
-// --- 6. WHATSAPP ---
-model StoreWhatsappNumber {
-  id           String @id @default(uuid())
-  storeId      String
-  store        Store  @relation(fields: [storeId], references: [id])
-  number       String
-  provider     String
-  routingRules Json?
-}
-
-model Conversation {
-  id         String   @id @default(uuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  storeId    String
-  status     String
-  messages   Json
-}
-
-// --- 7. PESQUISAS ---
-model SurveyResponse {
-  id            String   @id @default(uuid())
-  customerId    String
-  customer      Customer @relation(fields: [customerId], references: [id])
-  salespersonId String?
-  score         Int
-  comment       String?
-  channel       String
-  createdAt     DateTime @default(now())
-}
-
-// --- 8. METAS ---
-model StoreGoal {
-  id            String @id @default(uuid())
-  storeId       String
-  store         Store  @relation(fields: [storeId], references: [id])
-  month         Int
-  year          Int
-  whatsappLimit Int
-  emailLimit    Int
-}
+main()
+  .catch((e) => { console.error(e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });
