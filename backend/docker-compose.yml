@@ -2,14 +2,14 @@ version: '3.8'
 services:
   postgres:
     image: postgres:13
-    container_name: QUANTIX_db
+    container_name: Merxios_db
     restart: always
     ports:
       - '5432:5432'
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: adminpassword
-      POSTGRES_DB: QUANTIX_erp
+      POSTGRES_DB: Merxios_erp
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

@@ -13,7 +13,7 @@ async function bootstrap() {
 
   // 2. Configuração do Swagger (A Documentação)
   const config = new DocumentBuilder()
-    .setTitle('CRM QUANTIX API')
+    .setTitle('CRM Merxios API')
     .setDescription('Documentação oficial da API do CRM/ERP')
     .setVersion('1.0')
     .build();
