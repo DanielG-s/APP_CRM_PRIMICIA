@@ -49,7 +49,7 @@ export function Sidebar() {
                 <div className="w-10 h-10 bg-violet-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shrink-0">Q</div>
                 
                 <span className={`font-bold text-xl tracking-tight text-white transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
-                    QUANTIX
+                    Merxios
                 </span>
             </div>
 

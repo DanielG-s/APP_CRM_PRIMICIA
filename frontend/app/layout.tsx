@@ -3,7 +3,7 @@ import LayoutShell from "./components/LayoutShell"; // Ajuste o caminho
 import "./globals.css";
 
 export const metadata = {
-  title: "Quantix CRM",
+  title: "Merxios CRM",
   description: "Dashboard de Performance",
 };
 
