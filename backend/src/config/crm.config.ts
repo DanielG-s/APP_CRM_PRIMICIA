@@ -1,0 +1,17 @@
+export const CRM_CONFIG = {
+  RFM: {
+    CHURN_DAYS: 180,
+    RISK_DAYS: 90,
+    LOYAL_ORDER_COUNT: 5,
+    LOYAL_TOTAL_SPENT: 1000,
+    MIN_ORDERS_FOR_LOYALTY: 1,
+  },
+  SEGMENTATION: {
+    DEFAULT_PAGE_SIZE: 10,
+    EXPORT_LIMIT: 10000,
+    CACHE_TTL: 3600, // 1 hour
+  },
+  VENDAS: {
+    TAXA_CONVERSAO_PADRAO: 0.015,
+  },
+};

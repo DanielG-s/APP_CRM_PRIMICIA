@@ -17,9 +17,9 @@ async function bootstrap() {
     .setDescription('Documentação oficial da API do CRM/ERP')
     .setVersion('1.0')
     .build();
-    
+
   const document = SwaggerModule.createDocument(app, config);
-  
+
   // Essa linha aqui cria a rota /api
   SwaggerModule.setup('api', app, document);
 

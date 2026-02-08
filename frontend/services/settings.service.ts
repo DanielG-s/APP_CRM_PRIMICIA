@@ -1,7 +1,9 @@
 import axios from "axios";
 
 // Ajuste para sua URL base
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { API_BASE_URL } from '../lib/config';
+
+const API_URL = API_BASE_URL;
 
 export const settingsService = {
   // --- E-MAIL ---
@@ -32,7 +34,7 @@ export const settingsService = {
   },
 
   // --- SMS (Visual / Futuro) ---
-  saveSmsSettings: async (data: any) => {
+  saveSmsSettings: async (_data: any) => {
     // Como ainda não criamos a rota no backend, vamos simular um delay
     return new Promise((resolve) => setTimeout(resolve, 1000));
     // Quando criar o backend: return axios.post(`${API_URL}/settings/sms`, data);

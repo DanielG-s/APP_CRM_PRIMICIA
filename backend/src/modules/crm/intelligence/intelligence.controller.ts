@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Delete, Param, Put, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Delete,
+  Param,
+  Put,
+  Res,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IntelligenceService } from './intelligence.service';
 import type { Response } from 'express';
@@ -6,8 +16,11 @@ import type { Response } from 'express';
 @ApiTags('Inteligência (RFM)')
 @Controller('webhook/crm/intelligence') // Mantendo sua rota original
 export class IntelligenceController {
-  constructor(private readonly intelligenceService: IntelligenceService) {}
+  constructor(private readonly intelligenceService: IntelligenceService) { }
 
+  /**
+   * Returns the RFM analysis (Recency, Frequency, Monetary) for the customer base.
+   */
   @Get('rfm')
   @ApiOperation({ summary: 'Retorna a distribuição da base por RFM' })
   getRFM() {
@@ -19,12 +32,18 @@ export class IntelligenceController {
     return this.intelligenceService.getSegmentationData();
   }
 
+  /**
+   * Retrieves available options for filtering segments (Cities, States, Products, etc.).
+   */
   @Get('filters')
   async getFilterOptions() {
     return this.intelligenceService.getFilterOptions();
   }
 
   // --- MUDANÇA PRINCIPAL AQUI ---
+  /**
+   * Lists all segments with their trend analysis (growth/shrinkage compared to last snapshot).
+   */
   @Get('segments')
   @ApiOperation({ summary: 'Lista segmentos com dados de tendência e alcance' })
   async listSegments() {
@@ -34,10 +53,16 @@ export class IntelligenceController {
 
   // --- NOVO ENDPOINT DE TESTE ---
   @Post('segments/snapshot')
-  @ApiOperation({ summary: 'Força o snapshot diário manualmente (Para testar histórico agora)' })
+  @ApiOperation({
+    summary:
+      'Força o snapshot diário manualmente (Para testar histórico agora)',
+  })
   async forceSnapshot() {
     await this.intelligenceService.handleDailySegmentSnapshot();
-    return { message: 'Snapshot diário executado com sucesso. Verifique a tabela SegmentHistory.' };
+    return {
+      message:
+        'Snapshot diário executado com sucesso. Verifique a tabela SegmentHistory.',
+    };
   }
 
   @Get('segments/:id')
@@ -46,10 +71,10 @@ export class IntelligenceController {
   }
 
   @Put('segments/:id')
-  async updateSegment(@Param('id') id: string, @Body() body: any) {
+  async updateSegment(@Param('id') id: string, @Body() body: { name: string; rules: any; isDynamic: boolean }) {
     // --- ATENÇÃO: MOCK DE USUÁRIO ---
     // Em produção, pegue isso do req.user.id (via AuthGuard)
-    const mockUserId = undefined; 
+    const mockUserId = undefined;
 
     return this.intelligenceService.updateSegment(id, body, mockUserId);
   }
@@ -64,28 +89,42 @@ export class IntelligenceController {
     return this.intelligenceService.deleteSegment(id);
   }
 
+  /**
+   * Creates a new customer segment.
+   * @param body.name Name of the segment.
+   * @param body.rules Array of rules.
+   * @param body.isDynamic Whether it updates automatically.
+   */
   @Post('segments')
-  async createSegment(@Body() body: { name: string; rules: any; isDynamic: boolean }) {
+  async createSegment(
+    @Body() body: { name: string; rules: any; isDynamic: boolean },
+  ) {
     return this.intelligenceService.createSegment(body);
   }
 
+  /**
+   * Previews the result of a segmentation rule without saving it.
+   */
   @Post('preview')
   async previewSegment(@Body() body: { rules: any[] }) {
     return this.intelligenceService.calculatePreview(body.rules);
   }
 
   // --- ROTA DE DOWNLOAD ---
+  /**
+   * Exports a segment's customer list to CSV.
+   */
   @Get('segments/:id/export')
   async exportCsv(@Param('id') id: string, @Res() res: Response) {
     const csvContent = await this.intelligenceService.exportSegmentToCsv(id);
-    
+
     // Define o nome do arquivo
     const fileName = `export_segment_${id.substring(0, 8)}.csv`;
 
     // Headers para forçar download
     res.header('Content-Type', 'text/csv');
     res.attachment(fileName);
-    
+
     // Envia o conteúdo
     return res.send(csvContent);
   }

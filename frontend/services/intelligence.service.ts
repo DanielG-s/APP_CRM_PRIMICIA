@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+import { API_BASE_URL } from '../lib/config';
+
 // Ajuste a URL base conforme sua configuração (localhost ou produção)
-const API_URL = 'http://localhost:3000/webhook/crm/intelligence';
+const API_URL = `${API_BASE_URL}/webhook/crm/intelligence`;
 
 export const intelligenceService = {
   // Listar todos os segmentos (com tendência)

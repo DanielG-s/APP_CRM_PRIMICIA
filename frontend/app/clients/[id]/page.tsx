@@ -9,6 +9,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { API_BASE_URL } from "@/lib/config";
 
 export default function ClientDetailPage() {
     const { id } = useParams();
@@ -21,7 +22,8 @@ export default function ClientDetailPage() {
         if (!id) return;
         async function fetchClient() {
             try {
-                const res = await fetch(`http://localhost:3000/webhook/erp/customers/${id}`);
+                // ... inside the component
+                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers/${id}`);
                 if (res.ok) setClient(await res.json());
             } catch (e) {
                 console.error(e);

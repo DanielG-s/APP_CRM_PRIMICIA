@@ -5,10 +5,12 @@ import { CustomersService } from './customers.service';
 @ApiTags('Clientes (CRM)')
 @Controller('webhook/erp/customers')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) { }
+  constructor(private readonly customersService: CustomersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista carteira de clientes com Status, LTV e Recência calculados' })
+  @ApiOperation({
+    summary: 'Lista carteira de clientes com Status, LTV e Recência calculados',
+  })
   async getAllCustomers() {
     return this.customersService.findAll();
   }

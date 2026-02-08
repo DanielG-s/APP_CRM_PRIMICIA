@@ -1,4 +1,10 @@
-import { IsString, IsNumber, IsEmail, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsEmail,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateSaleDto {
@@ -18,7 +24,7 @@ export class CreateSaleDto {
   @IsString()
   customerCpf: string;
 
-  @ApiProperty({ example: 150.50 })
+  @ApiProperty({ example: 150.5 })
   @IsNumber()
   totalValue: number;
 
@@ -26,12 +32,20 @@ export class CreateSaleDto {
   items: any; // Mantendo como any por enquanto, idealmente seria um DTO aninhado
 
   // --- NOVOS CAMPOS QUE FALTAVAM ---
-  @ApiProperty({ example: 'WhatsApp', description: 'Canal de origem da venda', required: false })
+  @ApiProperty({
+    example: 'WhatsApp',
+    description: 'Canal de origem da venda',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   channel?: string;
 
-  @ApiProperty({ example: true, description: 'Se a venda foi influenciada por marketing', required: false })
+  @ApiProperty({
+    example: true,
+    description: 'Se a venda foi influenciada por marketing',
+    required: false,
+  })
   @IsBoolean()
   @IsOptional()
   isInfluenced?: boolean;
