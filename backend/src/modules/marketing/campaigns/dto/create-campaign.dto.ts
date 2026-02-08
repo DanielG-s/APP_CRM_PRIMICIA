@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsNotEmpty, IsObject, ValidateNested, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNotEmpty,
+  IsObject,
+  ValidateNested,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class CreateCampaignContentDto {
@@ -34,7 +41,7 @@ export class CreateCampaignDto {
   storeId?: string;
 
   // O erro "Expression Expected" geralmente acontece aqui se tiver uma vírgula extra
-  // Exemplo errado: @IsDateString(), 
+  // Exemplo errado: @IsDateString(),
   @IsDateString()
   @IsOptional()
   scheduledAt?: string;

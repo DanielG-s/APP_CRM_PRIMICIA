@@ -8,6 +8,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { API_BASE_URL } from "@/lib/config";
 
 // --- CORES DAS TAGS ---
 const RFM_COLORS: any = {
@@ -21,6 +22,10 @@ const RFM_COLORS: any = {
 
 const SEGMENTS_OPTIONS = ['VIP', 'Leal', 'Novo', 'Em Risco', 'Inativo', 'Lead'];
 
+/**
+ * Clients Page Component.
+ * Displays a paginated list of customers with filtering (text, RFM segment) and sorting capabilities.
+ */
 export default function ClientsPage() {
     const router = useRouter();
     const [clients, setClients] = useState<any[]>([]);
@@ -40,10 +45,15 @@ export default function ClientsPage() {
 
     // --- FETCHING ---
     useEffect(() => {
+        /**
+         * Fetches all customers from the backend.
+         * Sets loading state and handles errors.
+         */
         async function fetchClients() {
             setLoading(true);
             try {
-                const res = await fetch('http://localhost:3000/webhook/erp/customers');
+                // ... inside the component
+                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers`);
                 if (res.ok) setClients(await res.json());
             } catch (error) { console.error(error); }
             finally { setLoading(false); }
@@ -69,6 +79,10 @@ export default function ClientsPage() {
         }));
     };
 
+    /**
+     * Toggles a segment filter on/off.
+     * Resets pagination to page 1 when filters change.
+     */
     const toggleSegment = (segment: string) => {
         setActiveSegments(prev =>
             prev.includes(segment) ? prev.filter(s => s !== segment) : [...prev, segment]
@@ -77,6 +91,10 @@ export default function ClientsPage() {
     };
 
     // --- FILTER & SORT ---
+    /**
+     * Memoized list of clients after filtering and sorting.
+     * Dependencies: clients, search, sortConfig, activeSegments.
+     */
     const processedData = useMemo(() => {
         let data = [...clients];
 
@@ -95,7 +113,7 @@ export default function ClientsPage() {
         if (sortConfig.key) {
             data.sort((a, b) => {
                 let valA = a[sortConfig.key];
-                let valB = b[sortConfig.key];
+                const valB = b[sortConfig.key];
                 if (valA === null) return 1; if (valB === null) return -1;
                 if (typeof valA === 'string' && !isNaN(Number(valA))) valA = Number(valA);
                 if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;

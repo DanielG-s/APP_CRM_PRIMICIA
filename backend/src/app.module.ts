@@ -28,4 +28,4 @@ import { ErpModule } from './modules/erp/erp.module';
   providers: [AppService, PrismaService],
   exports: [PrismaService],
 })
-export class AppModule { }
+export class AppModule {}

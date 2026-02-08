@@ -14,8 +14,13 @@ export class MilleniumService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.apiUrl = this.configService.get<string>('MILLENIUM_API_URL', 'http://api.millenium.com.br/api/millenium_eco');
-    this.vitrineId = Number(this.configService.get<number>('MILLENIUM_VITRINE_ID', 2));
+    this.apiUrl = this.configService.get<string>(
+      'MILLENIUM_API_URL',
+      'http://api.millenium.com.br/api/millenium_eco',
+    );
+    this.vitrineId = Number(
+      this.configService.get<number>('MILLENIUM_VITRINE_ID', 2),
+    );
 
     // Configure Authentication Interceptor
     const username = this.configService.get<string>('MILLENIUM_API_USERNAME');
@@ -30,7 +35,9 @@ export class MilleniumService {
       });
       this.logger.log('Basic Auth configured for Millenium API');
     } else {
-      this.logger.warn('No credentials found for Millenium API (MILLENIUM_API_USERNAME/PASSWORD)');
+      this.logger.warn(
+        'No credentials found for Millenium API (MILLENIUM_API_USERNAME/PASSWORD)',
+      );
     }
   }
 
@@ -45,6 +52,13 @@ export class MilleniumService {
     return null;
   }
 
+  /**
+   * Fetches sales orders from Millenium API using pagination.
+   * Supports filtering by date, status, etc.
+   *
+   * @param params Query parameters (limit, $top, custom filters).
+   * @returns {Promise<any[]>} List of sales orders with parsed dates.
+   */
   async getSales(params: any = {}) {
     const allSales: any[] = [];
     let skip = 0;
@@ -65,7 +79,7 @@ export class MilleniumService {
               ...apiParams,
               $format: 'json',
               $skip: skip,
-              $top: batchSize
+              $top: batchSize,
             },
           }),
         );
@@ -85,7 +99,9 @@ export class MilleniumService {
 
         // Check user defined limit
         if (allSales.length >= maxItems) {
-          this.logger.log(`Reached requested limit of ${maxItems} items. Stopping.`);
+          this.logger.log(
+            `Reached requested limit of ${maxItems} items. Stopping.`,
+          );
           break;
         }
       }
@@ -106,6 +122,10 @@ export class MilleniumService {
     }
   }
 
+  /**
+   * Fetches details for a specific customer by ID.
+   * @returns {Promise<any | null>} Customer object or null if not found.
+   */
   async getCustomer(clienteId: string | number) {
     try {
       const response = await lastValueFrom(
@@ -115,11 +135,17 @@ export class MilleniumService {
       );
       return response.data.value?.[0] || null;
     } catch (error) {
-      this.logger.warn(`Error fetching customer ${clienteId}: ${error.message}`);
+      this.logger.warn(
+        `Error fetching customer ${clienteId}: ${error.message}`,
+      );
       return null;
     }
   }
 
+  /**
+   * Retrieves list of available Vitrines (Catalogs/Storefronts).
+   * Caches the result in memory.
+   */
   async getVitrines(): Promise<number[]> {
     try {
       if (this.vitrinesCache.length > 0) return this.vitrinesCache;
@@ -133,7 +159,7 @@ export class MilleniumService {
       const vitrines = response.data.value || [];
       // Store IDs. If user configured a PREFERRED id, maybe put it first?
       // For now, just trust the list order or sort.
-      this.vitrinesCache = vitrines.map(v => v.vitrine);
+      this.vitrinesCache = vitrines.map((v) => v.vitrine);
       this.logger.log(`Loaded vitrines: ${this.vitrinesCache.join(', ')}`);
       return this.vitrinesCache;
     } catch (error) {
@@ -143,6 +169,10 @@ export class MilleniumService {
     }
   }
 
+  /**
+   * Searches for product details across all available vitrines.
+   * Returns the first match found.
+   */
   async getProductDetails(produtoId: string | number) {
     const vitrines = await this.getVitrines();
 
@@ -169,7 +199,9 @@ export class MilleniumService {
       }
     }
 
-    this.logger.warn(`Product ${produtoId} not found in any vitrine (${vitrines.join(',')})`);
+    this.logger.warn(
+      `Product ${produtoId} not found in any vitrine (${vitrines.join(',')})`,
+    );
     return null;
   }
 }
