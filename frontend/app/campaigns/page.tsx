@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Search, Calendar, Filter, Plus, MoreHorizontal, 
+import {
+  Search, Calendar, Filter, Plus, MoreHorizontal,
   Mail, MessageSquare, Smartphone, Trash2, Copy, FileEdit,
   ChevronDown
 } from 'lucide-react';
@@ -79,6 +79,8 @@ const MOCK_DATA: Campaign[] = [
   }
 ];
 
+const generateId = () => Math.random().toString(36).substr(2, 9).toUpperCase();
+
 export default function CampaignListPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -104,7 +106,7 @@ export default function CampaignListPage() {
   const handleDuplicate = (campaign: Campaign) => {
     const newCampaign: Campaign = {
       ...campaign,
-      id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+      id: generateId(),
       name: `${campaign.name} (Cópia)`,
       status: 'RASCUNHO',
       createdAt: new Date().toLocaleString('pt-BR'),
@@ -117,7 +119,7 @@ export default function CampaignListPage() {
   const handleEdit = (id: string) => {
     // Redireciona para a página de edição (usando a mesma estrutura do /new mas passando ID)
     // Você precisará adaptar o page.tsx do /new para aceitar edição ou criar uma rota [id]
-    router.push(`/campaigns/${id}`); 
+    router.push(`/campaigns/${id}`);
   };
 
   const handleCreateNew = () => {
@@ -125,14 +127,14 @@ export default function CampaignListPage() {
   };
 
   // --- FILTROS ---
-  const filteredCampaigns = campaigns.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredCampaigns = campaigns.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // --- HELPER VISUAL ---
   const getChannelIcon = (channel: string) => {
-    switch(channel) {
+    switch (channel) {
       case 'EMAIL': return <Mail size={18} className="text-gray-500" />;
       case 'WHATSAPP': return <Smartphone size={18} className="text-green-600" />;
       case 'SMS': return <MessageSquare size={18} className="text-blue-500" />;
@@ -156,12 +158,12 @@ export default function CampaignListPage() {
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] font-sans text-gray-800 p-6">
-      
+
       {/* HEADER E ABAS */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold text-slate-800">Canais</h1>
-          <button 
+          <button
             onClick={handleCreateNew}
             className="bg-[#00C475] hover:bg-[#00a865] text-white px-4 py-2 rounded font-medium text-sm transition-colors flex items-center gap-2"
           >
@@ -180,7 +182,7 @@ export default function CampaignListPage() {
 
       {/* ÁREA DE FILTROS */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-6 space-y-4">
-        
+
         {/* Filtros de Data e Botões */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2 bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-600 w-full md:w-auto">
@@ -204,7 +206,7 @@ export default function CampaignListPage() {
         {/* Barra de Busca */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input 
+          <input
             type="text"
             placeholder="Buscar por nome ou ID"
             value={searchTerm}
@@ -267,21 +269,21 @@ export default function CampaignListPage() {
                     <td className="p-4 text-right">
                       {/* Botões de Ação (Aparecem no Hover ou fixos) */}
                       <div className="flex justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <button 
+                        <button
                           onClick={() => handleDuplicate(campaign)}
                           title="Duplicar"
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
                         >
                           <Copy size={16} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleEdit(campaign.id)}
                           title="Editar"
                           className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
                         >
                           <FileEdit size={16} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDelete(campaign.id)}
                           title="Excluir"
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"

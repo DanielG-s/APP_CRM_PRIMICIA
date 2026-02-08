@@ -7,33 +7,43 @@ export class CampaignsService {
   constructor(private readonly prisma: PrismaService) {}
 
   // --- CORREÇÃO DO ERRO 1: Adicionar o método findAll ---
+  /**
+   * Retrieves all campaigns for a specific store.
+   * Includes related content and metrics.
+   * @param storeId The ID of the store to filter by.
+   */
   async findAll(storeId: string) {
     return this.prisma.campaign.findMany({
       where: { storeId },
       include: { contents: true, metrics: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
+  /**
+   * Creates a new campaign with associated content.
+   * Validates store ID and maps DTO fields to Prisma schema.
+   */
   async create(data: CreateCampaignDto) {
     // --- CORREÇÃO DO ERRO 5: Garantir que storeId existe ---
     if (!data.storeId) {
-      throw new BadRequestException('Store ID é obrigatório para criar uma campanha.');
+      throw new BadRequestException(
+        'Store ID é obrigatório para criar uma campanha.',
+      );
     }
 
     // --- CORREÇÃO DOS ERROS 2, 3 e 4: Mapear os campos corretos do DTO ---
     // O DTO usa 'body' em vez de 'html' e 'designJson' em vez de 'json'
-    const bodyContent = data.content?.body || ''; 
+    const bodyContent = data.content?.body || '';
     const designData = data.content?.designJson || null;
     const subject = data.content?.subject || null; // O subject está dentro de content
-
 
     return this.prisma.campaign.create({
       data: {
         name: data.name,
         channel: data.channel,
         storeId: data.storeId, // Agora o TS sabe que isso é string, não undefined
-        status: 'draft',       // Valor padrão
+        status: 'draft', // Valor padrão
         conversionTrigger: 'manual', // Valor padrão ou vindo do DTO se existir
 
         // Criação do relacionamento com CampaignContent
@@ -47,7 +57,7 @@ export class CampaignsService {
       },
       include: {
         contents: true,
-      }
+      },
     });
   }
 }

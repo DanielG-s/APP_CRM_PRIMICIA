@@ -22,7 +22,8 @@ export class SettingsService {
 
   async upsertEmailSettings(data: UpdateEmailSettingsDto) {
     const store = await this.prisma.store.findFirst();
-    if (!store) throw new NotFoundException('Nenhuma loja cadastrada no sistema.');
+    if (!store)
+      throw new NotFoundException('Nenhuma loja cadastrada no sistema.');
 
     // Upsert: Atualiza se existe, Cria se não existe
     return this.prisma.emailSettings.upsert({

@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
 
@@ -8,8 +8,16 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista carteira de clientes com Status, LTV e Recência calculados' })
+  @ApiOperation({
+    summary: 'Lista carteira de clientes com Status, LTV e Recência calculados',
+  })
   async getAllCustomers() {
     return this.customersService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Detalhes de um cliente específico' })
+  async getCustomerById(@Param('id') id: string) {
+    return this.customersService.findById(id);
   }
 }
