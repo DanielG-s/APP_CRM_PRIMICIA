@@ -14,7 +14,7 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 @ApiTags('Integração ERP')
 @Controller('sales')
 export class SalesController {
-  constructor(private readonly salesService: SalesService) {}
+  constructor(private readonly salesService: SalesService) { }
 
   // --- WEBHOOKS & INGESTÃO ---
   /**
@@ -164,6 +164,7 @@ export class SalesController {
     @Query('tags') tags?: string | string[],
     @Query('campaignType') campaignType?: string | string[],
     @Query('stores') stores?: string | string[],
+    @Query('vendedores') vendedores?: string | string[],
     @Query('conversionWindow') conversionWindow?: string,
   ) {
     const startDate =
@@ -191,6 +192,11 @@ export class SalesController {
         ? stores
         : [stores]
       : undefined;
+    const salespersonIds = vendedores
+      ? Array.isArray(vendedores)
+        ? vendedores
+        : [vendedores]
+      : undefined;
 
     return this.salesService.getScheduleMetrics(startDate, endDate, {
       channel,
@@ -198,6 +204,7 @@ export class SalesController {
       tags: tagsList,
       campaignType: typesList,
       storeIds,
+      salespersonIds,
       conversionWindow,
     });
   }

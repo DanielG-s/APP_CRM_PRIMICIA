@@ -5,7 +5,18 @@ import { CreateWhatsappInstanceDto } from './dto/create-whatsapp.dto';
 
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(private readonly settingsService: SettingsService) { }
+
+  // --- Rotas da Loja (Geral) ---
+  @Get('store')
+  getStore() {
+    return this.settingsService.getStore();
+  }
+
+  @Post('store')
+  updateStore(@Body() data: any) {
+    return this.settingsService.updateStore(data);
+  }
 
   // --- Rotas de E-mail ---
   @Get('email')

@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule'; // IMPORTANTE
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { MilleniumService } from '../millenium/millenium.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { subDays, startOfDay, endOfDay } from 'date-fns'; // IMPORTANTE
+import { subDays, startOfDay, endOfDay } from 'date-fns';
 
 @Injectable()
 export class SyncService {
@@ -13,82 +13,44 @@ export class SyncService {
   constructor(
     private readonly milleniumService: MilleniumService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   @Cron('0 3 * * *') // 3 AM every day
   async handleNightlySync() {
-    this.logger.log('Running nightly sales sync...');
-    // Sync Yesterday's data
+    this.logger.log('Running nightly sales sync (Listafaturamentos)...');
+
+    // Strict 24h Window: Yesterday 00:00 to 23:59
     const yesterday = subDays(new Date(), 1);
     const startDate = startOfDay(yesterday);
     const endDate = endOfDay(yesterday);
 
-    // Convert to whatever format ERP expects or pass Dates if MilleniumService handles it.
-    // MilleniumService.getSales accepts params object.
-    // Note: Analysis didn't specify EXACT date param names supported by ERP (data_emissao?),
-    // but usually it's passed as OData filter or specific params.
-    // Assuming we might need to filter manually or pass generic params.
-    // For now, let's assume we fetch by a date range param if known, or fetch recent and filter.
-    // Given the endpoint is /pedido_venda/consulta, likely accepts params like 'data_inicial' etc?
-    // User sample URL was `?pedidov=52`.
-    // Without doc, tricky. BUT user asked to "get segmented".
-    // I will pass these simply as params for now, assuming MilleniumService or the ERP handles them.
-    // IF NOT, we might need value based $filter=data_emissao gt ...
-    // Example: $filter=data_emissao ge datetime'...'
-    // I'll construct a basic OData filter.
-
-    // ASP.NET dates are tricky in filters.
-    // Safer bet: Pass custom params and log it.
-    await this.syncSales({
-      // Example hypothetical params.
-      // If ERP is OData v3/v4 standard:
-      // $filter: `data_emissao ge datetime'${startDate.toISOString()}'`
-    });
+    await this.syncSales(startDate, endDate);
   }
 
-  async syncSales(customParams: any = {}) {
-    this.logger.log('Starting Sales Sync...');
+  /**
+   * Syncs sales from 'listafaturamentos' for a specific period.
+   * Treating this endpoint as Single Source of Truth for:
+   * 1. Transactions
+   * 2. Active Customers (who bought in this period)
+   * 3. Sold Products (embedded in transaction)
+   */
+  async syncSales(start: Date, end: Date) {
+    this.logger.log(`Starting Sync from ${start.toISOString()} to ${end.toISOString()}...`);
 
-    // Strategy: ID Range Sync (Fallback if list/date filtering fails)
-    if (customParams.startId && customParams.endId) {
-      const startStr = Number(customParams.startId);
-      const end = Number(customParams.endId);
-      let processed = 0;
+    const sales = await this.milleniumService.getFaturamentos(start, end);
 
-      this.logger.log(`Syncing by ID Range: ${startStr} to ${end}`);
+    this.logger.log(`Fetched ${sales.length} invoices from ERP.`);
 
-      for (let id = startStr; id <= end; id++) {
-        try {
-          // Fetch specific ID
-          const sales = await this.milleniumService.getSales({ pedidov: id });
-          if (sales && sales.length > 0) {
-            await this.processSale(sales[0]);
-            processed++;
-          }
-        } catch (e) {
-          // Ignore 404/Empty for specific ID
-        }
-      }
-      return { status: 'success', processed, strategy: 'id_range' };
-    }
-
-    // Standard Sync
-    // ...
-    const sales = await this.milleniumService.getSales(customParams);
-
-    this.logger.log(`Fetched ${sales.length} sales from ERP.`);
-
-    const newTransactions = 0;
+    let newTransactions = 0;
     let updatedTransactions = 0;
 
     for (const sale of sales) {
       try {
-        await this.processSale(sale);
-        // Simple counter logic (real upsert result might differ)
+        await this.processInvoice(sale);
         updatedTransactions++;
       } catch (error) {
         this.logger.error(
-          `Failed to process sale ${sale.pedidov}: ${error.message}`,
+          `Failed to process invoice ${sale.cod_pedidov || sale.pedidov}: ${error.message}`,
         );
       }
     }
@@ -102,168 +64,167 @@ export class SyncService {
     };
   }
 
-  private async processSale(sale: any) {
-    // 1. Resolve Customer
-    const customerId = sale.cliente_id_safe; // mapped in MilleniumService
-    let customerData = sale.dados_cliente?.[0];
+  private async processInvoice(sale: any) {
+    // 0. Resolve Store (Filial)
+    // PRIORIDADE: nome_emissor (conforme solicitado) > nome_filial > cod_filial
+    const storeName = sale.nome_emissor || sale.nome_filial || (sale.cod_filial ? `Filial ${sale.cod_filial}` : 'Loja Principal');
 
-    // Fallback if no customer data in payload
-    if (!customerData && customerId) {
-      this.logger.debug(`Fetching missing customer data for ID ${customerId}`);
-      const fetchedCustomer =
-        await this.milleniumService.getCustomer(customerId);
-      if (fetchedCustomer) {
-        customerData = fetchedCustomer;
-      }
+    // Check if we already have this store cached or in DB
+    let store = await this.prisma.store.findFirst({
+      where: { name: storeName }
+    });
+
+    if (!store) {
+      this.logger.debug(`Creating new Store from ERP: ${storeName}`);
+      store = await this.prisma.store.create({
+        data: {
+          name: storeName,
+        }
+      });
     }
 
-    // Should we skip if no customer?
-    // For now, we proceed only if we have minimum data.
-    // Mapping:
-    // email is key. If no email, we can't create a 'uniquely identifiable' customer easily in this specific CRM schema
-    // (assuming email @unique).
-    // Logic: If no email, maybe generate a placeholder or skip.
-    // Check schema requirement: `email String @unique`.
+    const storeId = store.id;
 
-    const email = customerData?.e_mail;
-    if (!email) {
-      this.logger.warn(
-        `Skipping sale ${sale.pedidov} - Customer ${customerId} has no email.`,
-      );
+    // 1. Resolve Customer from Embedded Data
+    // 'listafaturamentos' returns 'cliente' as an array of objects
+    const customerRaw = sale.cliente?.[0];
+
+    // Safety check: Needs minimum data to be a valid customer in CRM
+    if (!customerRaw || !customerRaw.cod_cliente) {
+      this.logger.warn(`Skipping invoice ${sale.cod_pedidov}: No customer data.`);
       return;
     }
 
-    // Upsert Customer
-    // NOTE: In a real scenario, we might want to check if phone/etc changed.
-    const customer = await this.prisma.customer.upsert({
-      where: { email: email },
-      update: {
-        name: customerData.nome,
-        phone: customerData.cel || customerData.fone, // simple mapping // TODO: Refine phone extraction
-        city: customerData.enderecos?.[0]?.cidade,
-        state: customerData.enderecos?.[0]?.estado,
-        // Extra Fields
-        neighborhood: customerData.enderecos?.[0]?.bairro,
-        zipCode: customerData.enderecos?.[0]?.cep,
-        address: customerData.enderecos?.[0]?.logradouro
-          ? `${customerData.enderecos[0].logradouro}, ${customerData.enderecos[0].numero || 'S/N'}`
-          : null,
-        personType: customerData.tipo_pessoa || 'PF', // Default to PF
-        externalId: String(
-          customerData.id_conta || customerData.cod_cliente || customerId,
-        ), // Try to stick with one ID
-      },
-      create: {
-        storeId: 'DEFAULT',
-        name: customerData.nome,
-        email: email,
-        phone: customerData.cel || customerData.fone,
-        city: customerData.enderecos?.[0]?.cidade,
-        state: customerData.enderecos?.[0]?.estado,
-        // Extra Fields
-        neighborhood: customerData.enderecos?.[0]?.bairro,
-        zipCode: customerData.enderecos?.[0]?.cep,
-        address: customerData.enderecos?.[0]?.logradouro
-          ? `${customerData.enderecos[0].logradouro}, ${customerData.enderecos[0].numero || 'S/N'}`
-          : null,
-        personType: customerData.tipo_pessoa || 'PF',
-        externalId: String(
-          customerData.id_conta || customerData.cod_cliente || customerId,
-        ),
+    // Resolve Address from 'endereco' or 'endereco_entrega' arrays
+    // Use optional chaining carefully
+    const addressData = customerRaw.endereco?.[0] || customerRaw.endereco_entrega?.[0] || {};
 
-        isRegistrationComplete: true,
-      },
+    // CPF/CNPJ Mapping
+    const cpfCnpj = customerRaw.cpf || customerRaw.cgc;
+
+    // Mapping Strategy:
+    // We use 'cod_cliente' as externalId to link them.
+    const externalId = String(customerRaw.cod_cliente);
+    // Email is optional (can be null if not provided)
+    const email = customerRaw.e_mail || null;
+
+    let customer = await this.prisma.customer.findFirst({
+      where: { externalId: externalId }
     });
 
-    // 2. Resolve Products (Embed Names)
-    const enrichedItems: any[] = [];
-    if (Array.isArray(sale.produtos)) {
-      for (const item of sale.produtos) {
-        const prodId = item.produto;
-        let prodName = String(prodId); // Default to ID
+    const customerData = {
+      storeId: storeId,
+      name: customerRaw.nome || 'Cliente Sem Nome',
+      email: email, // Can be null
+      phone: customerRaw.cel || customerRaw.fone,
+      city: addressData.cidade || customerRaw.cidade,
+      state: addressData.estado || customerRaw.estado,
+      externalId: externalId,
+      cpf: cpfCnpj,
+      address: addressData.logradouro ? `${addressData.logradouro}, ${addressData.numero || ''}` : null,
+      neighborhood: addressData.bairro || customerRaw.bairro,
+      zipCode: addressData.cep || customerRaw.cep,
+      personType: 'PF',
+      isRegistrationComplete: true,
+    };
 
-        if (prodId) {
-          if (this.productCache.has(prodId)) {
-            prodName = this.productCache.get(prodId)!;
-          } else {
-            // Fetch from Vitrine
-            const prodDetails =
-              await this.milleniumService.getProductDetails(prodId);
-            if (prodDetails) {
-              // Priority: nome_produto_site > descricao1 > descricao
-              const nameReceived =
-                prodDetails.nome_produto_site ||
-                prodDetails.descricao1 ||
-                prodDetails.descricao;
-              if (nameReceived) {
-                prodName = nameReceived;
-                this.productCache.set(prodId, prodName);
-              }
-            }
-          }
+    if (customer) {
+      // Update existing
+      customer = await this.prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          ...customerData,
+          // Only update email if it's explicitly provided from ERP, or keep existing?
+          // User said "leave as null", implying if ERP is null, CRM should be null?
+          // Safer to overwrite with ERP truth.
+          email: email,
         }
-
-        enrichedItems.push({
-          ...item,
-          name: prodName, // This puts the real name into the JSON
-        });
+      });
+    } else {
+      // Create new
+      // Handle potential email conflict if email exists but externalId doesn't match?
+      // If email is unique and not null, we must ensure it doesn't conflict.
+      if (email) {
+        const existingEmail = await this.prisma.customer.findUnique({ where: { email } });
+        if (existingEmail) {
+          this.logger.warn(`Email conflict for ${email} (New ID: ${externalId}, Existing ID: ${existingEmail.externalId}). Skipping creation.`);
+          return; // Skip or handle merge? For now skip to avoid crash.
+        }
       }
+
+      customer = await this.prisma.customer.create({
+        data: customerData,
+      });
     }
 
+    // 2. Resolve Items
+    const rawItems = sale.produtos || sale.lancamentos || [];
+
+    const enrichedItems = rawItems.map((item: any) => ({
+      sku: item.sku || item.cod_produto,
+      name: item.descricao || item.nome_produto || 'Produto Sem Nome',
+      quantity: item.quantidade,
+      price: item.preco || item.valor_unitario,
+      total: item.valor_total || (item.quantidade * (item.preco || 0)),
+    }));
+
     // 3. Save Transaction
-    // Map status. ERP has 'status' (int) or 'aprovado' (bool).
-    // Mapping:
-    // status 2 usually means confirmed/shipped?
-    // For now, if "aprovado": true -> PAID, else PENDING.
-    const status = sale.aprovado ? 'PAID' : 'PENDING';
+    const isCancelled = sale.cancelada === true || sale.cancelada === 'True';
+    let status = isCancelled ? 'CANCELLED' : 'PAID';
 
-    // Check duplicate by some ID?
-    // We don't have a unique ID in Transaction schema besides `id` (cuid).
-    // We should probably check if transaction exists by `date` + `customerId` + `totalValue`
-    // OR add an externalId field to Transaction.
-    // For MVP, we presume one-way sync (create new).
-    // RISK: Duplicates if we run sync multiple times on same range.
-    // WORKAROUND: Check if we have a transaction for this customer with same date/value.
+    // PRIORITIZA DATA DE ATUALIZAÇÃO (Real do Faturamento/Movimentação no ERP)
+    const date = sale.data_atualizacao_parsed || sale.data_emissao_parsed || new Date();
 
-    const date = sale.data_emissao_parsed || new Date(); // fallback
+    // REGRA DE NEGÓCIO: DEVOLUÇÃO (tipo_operacao = 'E')
+    // Se for devolução, valor deve ser negativo para LTV correto.
+    let totalValue = Number(sale.total || 0);
+    if (sale.tipo_operacao === 'E') {
+      totalValue = -Math.abs(totalValue); // Garante que seja negativo
+      status = 'REFUNDED'; // Opcional: Marcar status como devolvido/estornado para Clientes verem
+    }
 
-    // HACK: Bring old ERP data to present for Dashboard visibility
-    // If data is older than 2024, shift to 2025/2026 based on month
+    // HACK: Date Shift for Dev Visibility
     if (date.getFullYear() < 2024) {
-      const currentYear = new Date().getFullYear(); // 2026 in sim
-      const targetYear =
-        date.getMonth() > new Date().getMonth() ? currentYear - 1 : currentYear;
+      const currentYear = new Date().getFullYear();
+      const targetYear = date.getMonth() > new Date().getMonth() ? currentYear - 1 : currentYear;
       date.setFullYear(targetYear);
     }
 
+    const externalTxId = String(sale.cod_pedidov || sale.pedidov || sale.trans_id);
+
     const existing = await this.prisma.transaction.findFirst({
       where: {
-        customerId: customer.id,
-        totalValue: sale.total,
-        date: date,
+        AND: [
+          { customerId: customer.id },
+          { totalValue: totalValue }, // Check against signed value
+          { date: date }
+        ]
       },
     });
 
     if (!existing) {
       await this.prisma.transaction.create({
         data: {
-          storeId: customer.storeId,
+          storeId: storeId,
           customerId: customer.id,
           date: date,
-          totalValue: sale.total,
+          totalValue: totalValue,
           status: status,
-          items: enrichedItems, // JSON
-          channel: sale.nome_vendedor || 'ERP', // Attendant mapping
+          items: enrichedItems,
+          channel: 'ERP',
         },
       });
-      this.logger.debug(
-        `Created transaction for ${customer.email} - ${date.toISOString()}`,
-      );
+      this.logger.debug(`Imported Invoice ${externalTxId} (${totalValue}) for ${customer.email}`);
     } else {
-      // Option: Update status if changed?
-      this.logger.debug(
-        `Transaction already exists for ${customer.email} (Sale ID ${sale.pedidov})`,
-      );
+      // Update if status changed (e.g. from PAID to REFUNDED/CANCELLED later?) 
+      // Millenium usually creates a NEW transaction for devolução, but good to keep this.
+      if (existing.status !== status) {
+        await this.prisma.transaction.update({
+          where: { id: existing.id },
+          data: { status: status }
+        });
+        this.logger.debug(`Updated Status for Invoice ${externalTxId}`);
+      }
     }
   }
 }

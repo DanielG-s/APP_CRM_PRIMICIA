@@ -5,7 +5,7 @@ import { CreateWhatsappInstanceDto } from './dto/create-whatsapp.dto';
 
 @Injectable()
 export class SettingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // ==========================
   // E-MAIL
@@ -75,6 +75,26 @@ export class SettingsService {
   async deleteWhatsappInstance(id: string) {
     return this.prisma.storeWhatsappNumber.delete({
       where: { id },
+    });
+  }
+  // ==========================
+  // STORE (GERAL)
+  // ==========================
+  async getStore() {
+    return this.prisma.store.findFirst();
+  }
+
+  async updateStore(data: any) {
+    const store = await this.prisma.store.findFirst();
+    if (!store) throw new NotFoundException('Loja não encontrada.');
+
+    return this.prisma.store.update({
+      where: { id: store.id },
+      data: {
+        name: data.name,
+        cnpj: data.cnpj,
+        cityNormalized: data.cityNormalized,
+      },
     });
   }
 }

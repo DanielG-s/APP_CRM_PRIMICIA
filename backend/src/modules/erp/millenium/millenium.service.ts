@@ -170,6 +170,107 @@ export class MilleniumService {
   }
 
   /**
+   * Fetches invoiced sales (faturamentos) from Millenium API.
+   * STRICTLY filters by 24h window.
+   *
+   * @param start DateTime start of the window
+   * @param end DateTime end of the window
+   * @returns {Promise<any[]>} List of faturamentos with parsed dates.
+   */
+  async getFaturamentos(start: Date, end: Date) {
+    const allSales: any[] = [];
+    let skip = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    // Helper to format Date to Millenium specific format if needed,
+    // or ISO string if supported.
+    // Based on docs, usually expects ISO-like or specific format.
+    // Let's rely on standard ISO string first, interceptor might handle it or
+    // we use a simple formatter.
+    // Check previous usage? No previous usage of date range param confirmed.
+    // We will use toISOString().
+    const params = {
+      data_emissao_inicial: start.toISOString(),
+      data_emissao_final: end.toISOString(),
+      lancamentos_pedido: true, // IMPORTANT: Get items
+      $format: 'json',
+      $top: batchSize,
+    };
+
+    this.logger.log(
+      `Fetching faturamentos from ${params.data_emissao_inicial} to ${params.data_emissao_final}`,
+    );
+
+    try {
+      while (hasMore) {
+        const response = await lastValueFrom(
+          this.httpService.get(
+            `${this.apiUrl}/pedido_venda/listafaturamentos`,
+            {
+              params: {
+                ...params,
+                $skip: skip,
+              },
+              timeout: 30000, // 30 seconds
+            },
+          ),
+        );
+
+        const batch = response.data.value || [];
+
+        if (batch.length > 0) {
+          allSales.push(...batch);
+          skip += batchSize;
+          if (batch.length < batchSize) {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      this.logger.log(`Total faturamentos fetched: ${allSales.length}`);
+
+      return allSales.map((sale, index) => {
+        if (index === 0) {
+          this.logger.debug(`[DEBUG] Raw Sale Item 0: data_emissao=${sale.data_emissao}, data_atualizacao=${sale.data_atualizacao}, pedidov=${sale.cod_pedidov}`);
+        }
+        // 1. Data Emissao (Original)
+        let dateEmissaoParsed = this.parseAspNetDate(sale.data_emissao);
+        if (!dateEmissaoParsed && sale.data_emissao) {
+          dateEmissaoParsed = new Date(sale.data_emissao);
+        }
+
+        // 2. Data Atualizacao (Real Chronology for History)
+        let dateAtualizacaoParsed = this.parseAspNetDate(sale.data_atualizacao);
+        if (!dateAtualizacaoParsed && sale.data_atualizacao) {
+          dateAtualizacaoParsed = new Date(sale.data_atualizacao);
+        }
+
+        // Fallback for invalid dates
+        if (!dateEmissaoParsed || isNaN(dateEmissaoParsed.getTime())) {
+          dateEmissaoParsed = new Date();
+        }
+
+        return {
+          ...sale,
+          data_emissao_parsed: dateEmissaoParsed,
+          data_atualizacao_parsed: dateAtualizacaoParsed, // New field
+          // Parse items if they exist/needed
+        };
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error fetching faturamentos: ${error.message}`,
+        error.stack,
+      );
+      // Clean error rethrow
+      throw new Error(`Millenium API Error: ${error.message}`);
+    }
+  }
+
+  /**
    * Searches for product details across all available vitrines.
    * Returns the first match found.
    */

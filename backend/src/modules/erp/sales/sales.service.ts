@@ -7,7 +7,7 @@ import { ptBR } from 'date-fns/locale';
 
 @Injectable()
 export class SalesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // --- MÉTODOS BÁSICOS ---
   /**
@@ -530,10 +530,10 @@ export class SalesService {
         repurchaseRate:
           totalTransactions > 0
             ? (
-                ((totalTransactions - customerHistory.size) /
-                  totalTransactions) *
-                100
-              ).toFixed(2)
+              ((totalTransactions - customerHistory.size) /
+                totalTransactions) *
+              100
+            ).toFixed(2)
             : 0,
       },
       history: formattedHistory,
@@ -574,6 +574,9 @@ export class SalesService {
     if (filters?.storeIds?.length) {
       campaignWhere.storeId = { in: filters.storeIds };
       transactionWhere.storeId = { in: filters.storeIds };
+    }
+    if (filters?.salespersonIds?.length) {
+      transactionWhere.salespersonId = { in: filters.salespersonIds };
     }
 
     const campaigns = await this.prisma.campaign.findMany({

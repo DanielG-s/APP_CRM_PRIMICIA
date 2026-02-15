@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { differenceInDays } from 'date-fns';
 
@@ -19,7 +19,7 @@ function rfmLabelToScore(label: string): number {
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async findAll() {
     const customers = await this.prisma.customer.findMany({
@@ -108,13 +108,15 @@ export class CustomersService {
             date: true,
             items: true,
             channel: true,
+            status: true,
+            store: { select: { name: true } },
           },
           orderBy: { date: 'desc' },
         },
       },
     });
 
-    if (!customer) return null;
+    if (!customer) throw new NotFoundException(`Customer with ID ${id} not found`);
 
     const today = new Date();
     const ltv = customer.transactions.reduce(
@@ -157,12 +159,22 @@ export class CustomersService {
         : null,
       registrationDate: customer.createdAt,
       preferredStore: null, // TODO: Calculate from transactions
-      history: customer.transactions.map((t) => ({
-        type: 'purchase',
+      history: customer.transactions.map((t) => {
+        const isReturn = Number(t.totalValue) < 0 || t.status === 'REFUNDED';
+        return {
+          type: isReturn ? 'return' : 'purchase',
+          date: t.date,
+          description: isReturn ? 'Devolução Realizada' : 'Compra Realizada',
+          value: Number(t.totalValue),
+          meta: `Canal: ${t.channel || 'Loja'} `,
+          store: t.store?.name || 'Loja Física',
+        };
+      }),
+      recentTransactions: customer.transactions.slice(0, 3).map((t) => ({
+        id: t.id,
         date: t.date,
-        description: 'Compra Realizada',
         value: Number(t.totalValue),
-        meta: `Canal: ${t.channel || 'Loja'} `,
+        status: t.status,
       })),
     };
   }

@@ -10,6 +10,7 @@ import { CustomersModule } from './modules/erp/customers/customers.module';
 import { IntelligenceModule } from './modules/crm/intelligence/intelligence.module';
 import { CampaignsModule } from './modules/marketing/campaigns/campaigns.module';
 import { SettingsModule } from './modules/config/settings/settings.module';
+import { UsersModule } from './modules/config/users/users.module';
 import { ErpModule } from './modules/erp/erp.module';
 
 @Global()
@@ -22,10 +23,11 @@ import { ErpModule } from './modules/erp/erp.module';
     IntelligenceModule,
     CampaignsModule,
     SettingsModule,
+    UsersModule,
     ErpModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
   exports: [PrismaService],
 })
-export class AppModule {}
+export class AppModule { }

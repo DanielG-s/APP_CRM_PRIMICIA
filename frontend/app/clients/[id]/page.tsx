@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
     User, Mail, Phone, Calendar, CreditCard, ShoppingBag,
     MessageCircle, Clock, AlertCircle, ChevronLeft, Target,
-    ArrowLeft, Smartphone, Hash, Edit2, Search
+    ArrowLeft, Smartphone, Hash, Edit2, Search, Store as StoreIcon
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
@@ -24,9 +24,18 @@ export default function ClientDetailPage() {
             try {
                 // ... inside the component
                 const res = await fetch(`${API_BASE_URL}/webhook/erp/customers/${id}`);
-                if (res.ok) setClient(await res.json());
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        setClient(null);
+                        return;
+                    }
+                    throw new Error(`Failed to fetch client: ${res.statusText}`);
+                }
+                const data = await res.json();
+                setClient(data);
             } catch (e) {
-                console.error(e);
+                console.error("Error fetching client:", e);
+                setClient(null);
             } finally {
                 setLoading(false);
             }
@@ -192,7 +201,12 @@ export default function ClientDetailPage() {
                             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Clock size={16} /> Últimas compras</h3>
-                                    <span className="text-xs font-bold text-green-600 cursor-pointer hover:underline">Ver todas</span>
+                                    <span
+                                        onClick={() => setActiveTab('behavior')}
+                                        className="text-xs font-bold text-green-600 cursor-pointer hover:underline"
+                                    >
+                                        Ver todas
+                                    </span>
                                 </div>
                                 <div className="space-y-4">
                                     {client.recentTransactions?.map((tx: any) => (
@@ -201,7 +215,7 @@ export default function ClientDetailPage() {
                                                 <p className="text-xs font-bold text-slate-600">{formatDistanceToNow(new Date(tx.date), { addSuffix: true, locale: ptBR })}</p>
                                                 <p className="text-[10px] text-slate-400">{new Date(tx.date).toLocaleDateString()}</p>
                                             </div>
-                                            <span className="text-sm font-bold text-slate-700">{tx.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                            <span className={`text-sm font-bold ${Number(tx.value) < 0 ? 'text-red-500' : 'text-slate-700'}`}>{Number(tx.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                         </div>
                                     ))}
                                     {(!client.recentTransactions || client.recentTransactions.length === 0) && <p className="text-slate-400 text-xs text-center py-4">Nenhuma compra registrada</p>}
@@ -233,13 +247,25 @@ export default function ClientDetailPage() {
                                 {/* Mocked Timelines */}
                                 {client.history?.map((event: any, idx: number) => (
                                     <div key={idx} className="relative pl-8">
-                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white ${event.type === 'purchase' ? 'bg-emerald-500' : 'bg-violet-500'} ring-1 ring-slate-100`}></div>
-                                        <div className="flex justify-between">
-                                            <div>
-                                                <p className="text-ms font-bold text-slate-700">{event.description}</p>
+                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white ${event.type === 'purchase' ? 'bg-emerald-500' : event.type === 'return' ? 'bg-red-500' : 'bg-violet-500'} ring-1 ring-slate-100`}></div>
+                                        <div className="grid grid-cols-12 gap-4 items-center">
+                                            <div className="col-span-5">
+                                                <p className="text-sm font-bold text-slate-700">{event.description}</p>
                                                 <p className="text-xs text-slate-500 mt-1">{formatDistanceToNow(new Date(event.date), { addSuffix: true, locale: ptBR })}</p>
                                             </div>
-                                            {event.value && <span className="text-sm font-bold text-emerald-600">+{event.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>}
+                                            <div className="col-span-4">
+                                                <div className="flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-50 px-2 py-1 rounded w-fit">
+                                                    <StoreIcon size={12} />
+                                                    {event.store || 'Loja Física'}
+                                                </div>
+                                            </div>
+                                            <div className="col-span-3 text-right">
+                                                {event.value && (
+                                                    <span className={`text-sm font-bold ${Number(event.value) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                        {Number(event.value) > 0 ? '+' : ''}{Number(event.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
