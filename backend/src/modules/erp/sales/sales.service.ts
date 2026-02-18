@@ -16,16 +16,29 @@ export class SalesService {
    * @param data DTO containing sale details (customer info, items, total).
    */
   async processSale(data: CreateSaleDto) {
-    const customer = await this.prisma.customer.upsert({
-      where: { email: data.customerEmail },
-      update: { name: data.customerName },
-      create: {
-        name: data.customerName,
-        email: data.customerEmail,
-        cpf: data.customerCpf,
-        storeId: data.storeId,
-      },
+    // UPSERT Replacement (Email is not unique anymore)
+    let customer = await this.prisma.customer.findFirst({
+      where: { email: data.customerEmail }
     });
+
+    if (customer) {
+      customer = await this.prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          name: data.customerName,
+          // Do not overwrite other fields like storeId if they exist
+        }
+      });
+    } else {
+      customer = await this.prisma.customer.create({
+        data: {
+          name: data.customerName,
+          email: data.customerEmail,
+          cpf: data.customerCpf,
+          storeId: data.storeId,
+        },
+      });
+    }
     const transaction = await this.prisma.transaction.create({
       data: {
         storeId: data.storeId,

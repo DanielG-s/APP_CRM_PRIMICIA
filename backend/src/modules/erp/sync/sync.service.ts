@@ -27,6 +27,17 @@ export class SyncService {
     await this.syncSales(startDate, endDate);
   }
 
+  @Cron(CronExpression.EVERY_HOUR) // Every hour
+  async handleHourlySync() {
+    this.logger.log('Running hourly sales sync...');
+    // Sync Today only (since midnight)
+    // This catches new sales during the day.
+    const now = new Date();
+    const startDate = startOfDay(now);
+
+    await this.syncSales(startDate, now);
+  }
+
   /**
    * Syncs sales from 'listafaturamentos' for a specific period.
    * Treating this endpoint as Single Source of Truth for:
@@ -126,6 +137,9 @@ export class SyncService {
       zipCode: addressData.cep || customerRaw.cep,
       personType: 'PF',
       isRegistrationComplete: true,
+      // Note: We do NOT set updatedAt here, so we don't interfere with the timestamp of the Customer Sync?
+      // Actually, if we update them here, we SHOULD update updatedAt.
+      // Prisma @updatedAt handles it automatically if we don't touch it.
     };
 
     if (customer) {
@@ -134,21 +148,16 @@ export class SyncService {
         where: { id: customer.id },
         data: {
           ...customerData,
-          // Only update email if it's explicitly provided from ERP, or keep existing?
-          // User said "leave as null", implying if ERP is null, CRM should be null?
-          // Safer to overwrite with ERP truth.
           email: email,
         }
       });
     } else {
       // Create new
-      // Handle potential email conflict if email exists but externalId doesn't match?
-      // If email is unique and not null, we must ensure it doesn't conflict.
       if (email) {
-        const existingEmail = await this.prisma.customer.findUnique({ where: { email } });
+        const existingEmail = await this.prisma.customer.findFirst({ where: { email } });
         if (existingEmail) {
           this.logger.warn(`Email conflict for ${email} (New ID: ${externalId}, Existing ID: ${existingEmail.externalId}). Skipping creation.`);
-          return; // Skip or handle merge? For now skip to avoid crash.
+          return;
         }
       }
 
@@ -196,7 +205,7 @@ export class SyncService {
       where: {
         AND: [
           { customerId: customer.id },
-          { totalValue: totalValue }, // Check against signed value
+          { totalValue: totalValue },
           { date: date }
         ]
       },
@@ -216,8 +225,6 @@ export class SyncService {
       });
       this.logger.debug(`Imported Invoice ${externalTxId} (${totalValue}) for ${customer.email}`);
     } else {
-      // Update if status changed (e.g. from PAID to REFUNDED/CANCELLED later?) 
-      // Millenium usually creates a NEW transaction for devolução, but good to keep this.
       if (existing.status !== status) {
         await this.prisma.transaction.update({
           where: { id: existing.id },
