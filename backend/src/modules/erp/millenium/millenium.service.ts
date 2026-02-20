@@ -41,9 +41,20 @@ export class MilleniumService {
       // Need to add Auth here too!
       try {
         const response = await lastValueFrom(
-          this.httpService.get(`${this.apiUrl}/faturamento/listafaturamentos`, {
-            params,
-            auth: { username: this.username, password: this.pass }
+          this.httpService.get(`${this.apiUrl}/pedido_venda/listafaturamentos`, {
+            params: {
+              ...params,
+              // Map 'atualizacao' to 'emissao' as required by this specific endpoint
+              data_emissao_inicial: params.data_atualizacao_inicial,
+              data_atualizacao_inicial: undefined, // Remove original to avoid confusion
+              data_emissao_final: params.data_atualizacao_final,
+              data_atualizacao_final: undefined,
+
+              aprovado: true,
+              $format: 'json'
+            },
+            auth: { username: this.username, password: this.pass },
+            timeout: 60000 // Extended timeout for sales
           }),
         );
         const data = response.data;

@@ -233,6 +233,7 @@ model SurveyResponse {
 
 model Transaction {
   id            String   @id @default(cuid())
+  externalId    String?  @unique
   customerId    String
   storeId       String
   salespersonId String?

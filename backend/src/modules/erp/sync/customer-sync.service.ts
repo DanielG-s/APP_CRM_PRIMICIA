@@ -27,35 +27,49 @@ export class CustomerSyncService {
      */
     async syncCustomers(full: boolean = true) {
         try {
+            // "Turbo Mode": Use larger batch for ERP, but process via `processBatch`
             const batchSize = Number(this.configService.get<number>('CUSTOMER_SYNC_BATCH_SIZE', 1000));
+            // Use a smaller batch size for the first test run as requested by user
+            // const batchSize = 100;
+
             let params: any = { $top: batchSize };
 
             this.logger.log(`Syncing customers (Full: ${full}, BatchSize: ${batchSize})`);
 
-            // 2. Fetch from ERP using Keyset Strategy (trans_id)
+            // 1. Fetch from ERP using Keyset Strategy (trans_id)
+            const limit = Number(this.configService.get<number>('CUSTOMER_SYNC_LIMIT', 1000000));
+
             const milleniumCustomers = await this.milleniumService.getCustomersKeyset({
                 ...params,
-                limit: 1000000
+                limit: limit
             });
 
             this.logger.log(`Processing ${milleniumCustomers.length} customers from ERP...`);
 
-            // 3. Upsert into CRM
-            let updatedCount = 0;
+            // 2. Get Default Store Once (Optimization)
+            const defaultStore = await this.prisma.store.findFirst();
+            const defaultStoreId = defaultStore?.id;
 
-            // Process in chunks to avoid overwhelming Prisma
-            const chunkSize = 100;
+            if (!defaultStoreId) {
+                this.logger.warn("No default store found. Sync might fail for new customers.");
+            }
+
+            // 3. Process in Optimal Batches
+            let updatedCount = 0;
+            const chunkSize = 50; // Smaller chunk size for validation as requested
+
             for (let i = 0; i < milleniumCustomers.length; i += chunkSize) {
                 const chunk = milleniumCustomers.slice(i, i + chunkSize);
+                try {
+                    await this.processBatch(chunk, defaultStoreId);
+                    updatedCount += chunk.length;
 
-                await Promise.all(chunk.map(async (raw) => {
-                    try {
-                        await this.processCustomer(raw);
-                        updatedCount++;
-                    } catch (e) {
-                        this.logger.error(`Failed to process customer ${raw.cod_cliente}: ${e.message}`);
+                    if (updatedCount % 1000 === 0) {
+                        this.logger.log(`Processed ${updatedCount} / ${milleniumCustomers.length} records...`);
                     }
-                }));
+                } catch (e) {
+                    this.logger.error(`Failed to process batch ${i}: ${e.message}`);
+                }
             }
 
             this.logger.log(`Sync Finished. Processed ${updatedCount}.`);
@@ -65,103 +79,155 @@ export class CustomerSyncService {
         }
     }
 
-    private async processCustomer(raw: any) {
-        const externalId = String(raw.cod_cliente);
-        if (!externalId) return;
+    private async processBatch(batch: any[], defaultStoreId: string | undefined) {
+        // A. Extract Keys for Bulk Lookup
+        const externalIds = batch.map(c => String(c.cod_cliente)).filter(id => !!id);
+        const cpfs = batch.map(c => c.cpf || c.cnpj).filter(cpf => !!cpf);
+        const emails = batch.map(c => c.e_mail?.toLowerCase()).filter((email): email is string => !!email);
 
-        // Address Mapping
-        const addressData = raw.enderecos?.[0] || {};
-        let addressStr: string | null = null;
-        if (addressData.logradouro) {
-            addressStr = `${addressData.logradouro}, ${addressData.numero || ''}`;
-        }
+        // B. Bulk Fetch Existing Recrods form CRM
+        // 1. Existing by External ID
+        const existingCustomers = await this.prisma.customer.findMany({
+            where: { externalId: { in: externalIds } },
+            select: { id: true, externalId: true }
+        });
+        const existingMap = new Map(existingCustomers.map(c => [c.externalId, c]));
 
-        // Phone Normalization
-        const phone = raw.cel || raw.ddd_celular ? `${raw.ddd_celular || ''}${raw.cel || ''}` : raw.fone;
+        // 2. Potential Duplicates by CPF
+        const duplicatesByCpf = await this.prisma.customer.findMany({
+            where: { cpf: { in: cpfs } },
+            select: { id: true, cpf: true, name: true, externalId: true }
+        });
+        const cpfMap = new Map(duplicatesByCpf.map(c => [c.cpf, c]));
 
-        // BirthDate
-        let birthDate: Date | null = null;
-        if (raw.data_aniversario) {
-            if (typeof raw.data_aniversario === 'string' && raw.data_aniversario.includes('/Date(')) {
-                const match = raw.data_aniversario.match(/\/Date\((\d+)([+-]\d+)?\)\//);
-                if (match) birthDate = new Date(parseInt(match[1], 10));
-            } else {
-                birthDate = new Date(raw.data_aniversario);
-            }
-        }
+        // 3. Potential Duplicates by Email
+        const duplicatesByEmail = await this.prisma.customer.findMany({
+            where: { email: { in: emails } },
+            select: { id: true, email: true, name: true, externalId: true }
+        });
+        const emailMap = new Map(duplicatesByEmail.map(c => [c.email, c]));
 
-        const customerData: any = {
-            name: raw.nome?.trim() || 'Cliente Sem Nome',
-            email: raw.e_mail?.toLowerCase() || null,
-            phone: phone,
-            cpf: raw.cpf || raw.cnpj,
-            neighborhood: addressData.bairro,
-            city: addressData.cidade,
-            state: addressData.estado,
-            zipCode: addressData.cep,
-            address: addressStr,
-            personType: raw.pf_pj === 'PJ' ? 'PJ' : 'PF',
-            birthDate: birthDate,
-            externalId: externalId,
-            isRegistrationComplete: true,
-            updatedAt: new Date(),
-        };
+        // C. Process Each Record in Memory
+        const operations = batch.map(async (raw) => {
+            const externalId = String(raw.cod_cliente);
+            if (!externalId) return;
 
-        // Check for "Real Duplicate" (Same Email + Same Name)
-        // Since email is no longer unique at DB level, we must check manually.
-        let potentialDuplicate: any = null;
-        if (customerData.email) {
-            potentialDuplicate = await this.prisma.customer.findFirst({
-                where: {
-                    email: customerData.email,
-                    name: customerData.name // Exact match on name
+            // Normalize Data
+            const addressData = raw.enderecos?.[0] || {};
+            const addressStr = addressData.logradouro ? `${addressData.logradouro}, ${addressData.numero || ''}` : null;
+            const phone = raw.cel || raw.ddd_celular ? `${raw.ddd_celular || ''}${raw.cel || ''}` : raw.fone;
+
+            // Date Parsing (BirthDate)
+            const birthDateStr = raw.data_aniversario;
+            let birthDate: Date | null = null;
+            if (birthDateStr && typeof birthDateStr === 'string' && birthDateStr.includes('/Date(')) {
+                const match = birthDateStr.match(/\d+/);
+                if (match && match[0]) {
+                    const timestamp = parseInt(match[0]);
+                    birthDate = new Date(timestamp);
                 }
-            });
-        }
+            } else if (birthDateStr) {
+                const d = new Date(birthDateStr);
+                if (!isNaN(d.getTime())) birthDate = d;
+            }
 
-        const existing = await this.prisma.customer.findFirst({
-            where: { externalId: externalId }
+            // Date Parsing (Registration Date / data_cadastro)
+            const registrationDateStr = raw.data_cadastro;
+            let registrationDate: Date = new Date(); // Default to now if missing
+            if (registrationDateStr && typeof registrationDateStr === 'string' && registrationDateStr.includes('/Date(')) {
+                const match = registrationDateStr.match(/\d+/);
+                if (match && match[0]) {
+                    const timestamp = parseInt(match[0]);
+                    registrationDate = new Date(timestamp);
+                }
+            } else if (registrationDateStr) {
+                const d = new Date(registrationDateStr);
+                if (!isNaN(d.getTime())) registrationDate = d;
+            }
+
+            const customerData: any = {
+                createdAt: registrationDate, // MAP RAW ERP DATE CHECK
+                name: raw.nome?.trim() || 'Cliente Sem Nome',
+                email: raw.e_mail?.toLowerCase() || null,
+                phone: phone,
+                cpf: raw.cpf || raw.cnpj,
+                neighborhood: addressData.bairro,
+                city: addressData.cidade,
+                state: addressData.estado,
+                zipCode: addressData.cep,
+                address: addressStr,
+                personType: raw.pf_pj === 'PJ' ? 'PJ' : 'PF',
+                birthDate: birthDate,
+                externalId: externalId,
+                isRegistrationComplete: true,
+                updatedAt: new Date(),
+                storeId: defaultStoreId
+            };
+
+            // D. Decision Logic
+            const existing = existingMap.get(externalId);
+
+            if (existing) {
+                // CASE 1: UPDATE EXISTING
+                await this.prisma.customer.update({
+                    where: { id: existing.id },
+                    data: customerData
+                });
+            } else {
+                // CASE 2: NEW EXTERNAL ID - Check for Duplicates
+
+                // Priority 1: Check CPF Duplicate
+                let realDuplicate: any = null;
+                if (customerData.cpf && customerData.name) {
+                    const match = cpfMap.get(customerData.cpf);
+                    // Minimal name check to avoid disastrous merges of homonyms if CPF is wrong
+                    if (match && match.name === customerData.name) {
+                        realDuplicate = match;
+                    }
+                }
+
+                // Priority 2: Check Email Duplicate
+                if (!realDuplicate && customerData.email && customerData.name) {
+                    const match = emailMap.get(customerData.email as string);
+                    if (match && match.name === customerData.name) {
+                        realDuplicate = match;
+                    }
+                }
+
+                if (realDuplicate) {
+                    // CASE 3: SMART MERGE
+                    this.logger.warn(`Smart Merge: Updating CRM ID ${realDuplicate.externalId} with contact info from ERP ID ${externalId}`);
+
+                    await this.prisma.customer.update({
+                        where: { id: realDuplicate.id },
+                        data: {
+                            // Update Contact Info Only
+                            phone: customerData.phone,
+                            email: customerData.email,
+                            address: customerData.address,
+                            city: customerData.city,
+                            state: customerData.state,
+                            zipCode: customerData.zipCode,
+                            neighborhood: customerData.neighborhood,
+                            createdAt: customerData.createdAt, // SYNC REGISTRATION DATE
+                            updatedAt: new Date(),
+                            dataQualityIssues: {
+                                lastSmartMerge: `Merged with ERP ID ${externalId} on ${new Date().toISOString()}`
+                            }
+                        }
+                    });
+                } else {
+                    // CASE 4: CREATE NEW
+                    if (!customerData.storeId) return;
+
+                    await this.prisma.customer.create({
+                        data: customerData
+                    });
+                }
+            }
         });
 
-        if (existing) {
-            // It's the same ID, so just update it.
-            await this.prisma.customer.update({
-                where: { id: existing.id },
-                data: customerData
-            });
-        } else {
-            // New Customer ID.
-            if (potentialDuplicate) {
-                // Same Name + Same Email exists with DIFFERENT ID.
-                // Action: "Remove the duplicate and leave a warning".
-                // We SKIP creating this new record effectively "removing" it from CRM view.
-                // We update the EXISTING record to warn about this ID.
-
-                this.logger.warn(`Skipping Duplicate Customer Import: ${customerData.name} (${customerData.email}). ERP ID: ${externalId} matches CRM ID: ${potentialDuplicate.externalId}`);
-
-                const issues = (potentialDuplicate.dataQualityIssues as any) || {};
-                const dupes = issues.duplicateErpIds || [];
-                if (!dupes.includes(externalId)) {
-                    dupes.push(externalId);
-                }
-
-                await this.prisma.customer.update({
-                    where: { id: potentialDuplicate.id },
-                    data: {
-                        dataQualityIssues: {
-                            ...issues,
-                            duplicateErpIds: dupes,
-                            lastDuplicateWarning: `Found duplicate entry in ERP with ID ${externalId} on ${new Date().toISOString()}`
-                        }
-                    }
-                });
-                return; // SKIP IMPORT
-            }
-
-            // Not a duplicate (or just shared email with different name), proceed to create.
-            await this.prisma.customer.create({
-                data: customerData
-            });
-        }
+        // E. Execute Parallel Writes
+        await Promise.all(operations);
     }
 }

@@ -123,9 +123,9 @@ export class SyncService {
       where: { externalId: externalId }
     });
 
-    const customerData = {
+    const customerData: any = {
       storeId: storeId,
-      name: customerRaw.nome || 'Cliente Sem Nome',
+      name: customerRaw.nome?.trim() || 'Cliente Sem Nome',
       email: email, // Can be null
       phone: customerRaw.cel || customerRaw.fone,
       city: addressData.cidade || customerRaw.cidade,
@@ -137,9 +137,7 @@ export class SyncService {
       zipCode: addressData.cep || customerRaw.cep,
       personType: 'PF',
       isRegistrationComplete: true,
-      // Note: We do NOT set updatedAt here, so we don't interfere with the timestamp of the Customer Sync?
-      // Actually, if we update them here, we SHOULD update updatedAt.
-      // Prisma @updatedAt handles it automatically if we don't touch it.
+      // Date logic handled in loop
     };
 
     if (customer) {
@@ -152,37 +150,74 @@ export class SyncService {
         }
       });
     } else {
-      // Create new
-      if (email) {
-        const existingEmail = await this.prisma.customer.findFirst({ where: { email } });
-        if (existingEmail) {
-          this.logger.warn(`Email conflict for ${email} (New ID: ${externalId}, Existing ID: ${existingEmail.externalId}). Skipping creation.`);
-          return;
+      // MATCHING STRATEGY: Name + CPF OR Name + Email
+      let realDuplicate: any = null;
+
+      // 1. Check CPF
+      if (cpfCnpj && customerData.name) {
+        const match = await this.prisma.customer.findFirst({ where: { cpf: cpfCnpj } });
+        if (match && match.name === customerData.name) {
+          realDuplicate = match;
         }
       }
 
-      customer = await this.prisma.customer.create({
-        data: customerData,
-      });
+      // 2. Check Email (if no CPF match)
+      if (!realDuplicate && email && customerData.name) {
+        const match = await this.prisma.customer.findFirst({ where: { email: email } });
+        if (match && match.name === customerData.name) {
+          realDuplicate = match;
+        }
+      }
+
+      if (realDuplicate) {
+        // MERGE / LINK
+        this.logger.debug(`Linking Sale to Existing Customer: ${realDuplicate.name} (ID: ${realDuplicate.id})`);
+        customer = await this.prisma.customer.update({
+          where: { id: realDuplicate.id },
+          data: {
+            externalId: externalId, // Link ERP ID
+            phone: customerData.phone || realDuplicate.phone,
+            address: customerData.address || realDuplicate.address,
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // CREATE NEW
+        customer = await this.prisma.customer.create({
+          data: customerData,
+        });
+      }
     }
 
     // 2. Resolve Items
-    const rawItems = sale.produtos || sale.lancamentos || [];
+    const rawItems = sale.produto || [];
 
     const enrichedItems = rawItems.map((item: any) => ({
-      sku: item.sku || item.cod_produto,
-      name: item.descricao || item.nome_produto || 'Produto Sem Nome',
+      id: item.cod_produto,
+      name: item.descricao,
       quantity: item.quantidade,
-      price: item.preco || item.valor_unitario,
-      total: item.valor_total || (item.quantidade * (item.preco || 0)),
+      price: item.preco_venda,
+      total: item.total_item,
     }));
 
     // 3. Save Transaction
     const isCancelled = sale.cancelada === true || sale.cancelada === 'True';
     let status = isCancelled ? 'CANCELLED' : 'PAID';
 
-    // PRIORITIZA DATA DE ATUALIZAÇÃO (Real do Faturamento/Movimentação no ERP)
-    const date = sale.data_atualizacao_parsed || sale.data_emissao_parsed || new Date();
+    // PRIORITIZA DATA DE EMISSÃO (Real do Pedido)
+    // Parse regex /Date(123...)/ which is standard in this OData flavor
+    let date = new Date();
+    const dateStr = sale.data_hora_emissao || sale.data_emissao || sale.data;
+
+    if (dateStr && typeof dateStr === 'string' && dateStr.includes('/Date(')) {
+      const match = dateStr.match(/\d+/);
+      if (match && match[0]) {
+        date = new Date(parseInt(match[0]));
+      }
+    } else if (dateStr) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) date = parsed;
+    }
 
     // REGRA DE NEGÓCIO: DEVOLUÇÃO (tipo_operacao = 'E')
     // Se for devolução, valor deve ser negativo para LTV correto.
@@ -199,39 +234,35 @@ export class SyncService {
       date.setFullYear(targetYear);
     }
 
-    const externalTxId = String(sale.cod_pedidov || sale.pedidov || sale.trans_id);
+    const externalTxId = String(sale.romaneio || sale.cod_pedidov || sale.pedidov || sale.trans_id);
 
-    const existing = await this.prisma.transaction.findFirst({
-      where: {
-        AND: [
-          { customerId: customer.id },
-          { totalValue: totalValue },
-          { date: date }
-        ]
+    // DEDUPLICATION: Use externalId unique key
+    // @ts-ignore
+    await this.prisma.transaction.upsert({
+      // @ts-ignore
+      where: { externalId: externalTxId },
+      update: {
+        storeId: storeId,
+        customerId: customer.id,
+        date: date,
+        totalValue: totalValue,
+        status: status,
+        items: enrichedItems,
+        channel: 'ERP',
+        // Optionally update other fields if needed
+      },
+      create: {
+        // @ts-ignore
+        externalId: externalTxId,
+        storeId: storeId,
+        customerId: customer.id,
+        date: date,
+        totalValue: totalValue,
+        status: status,
+        items: enrichedItems,
+        channel: 'ERP',
       },
     });
-
-    if (!existing) {
-      await this.prisma.transaction.create({
-        data: {
-          storeId: storeId,
-          customerId: customer.id,
-          date: date,
-          totalValue: totalValue,
-          status: status,
-          items: enrichedItems,
-          channel: 'ERP',
-        },
-      });
-      this.logger.debug(`Imported Invoice ${externalTxId} (${totalValue}) for ${customer.email}`);
-    } else {
-      if (existing.status !== status) {
-        await this.prisma.transaction.update({
-          where: { id: existing.id },
-          data: { status: status }
-        });
-        this.logger.debug(`Updated Status for Invoice ${externalTxId}`);
-      }
-    }
+    this.logger.debug(`Synced Invoice ${externalTxId} (${totalValue})`);
   }
 }
