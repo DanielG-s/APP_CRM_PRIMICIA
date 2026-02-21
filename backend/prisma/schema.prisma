@@ -75,7 +75,7 @@ model Conversation {
 }
 
 model Customer {
-  id                     String           @id @default(cuid())
+  id                     String    @id @default(cuid())
   storeId                String
   externalId             String?
   name                   String
@@ -88,29 +88,29 @@ model Customer {
   rfmScoreId             String?
   propensityScore        Float?
   propensityLabel        String?
-  isRegistrationComplete Boolean          @default(false)
+  isRegistrationComplete Boolean   @default(false)
   dataQualityIssues      Json?
-  totalSpent             Decimal          @default(0) @db.Decimal(10, 2)
+  totalSpent             Decimal   @default(0) @db.Decimal(10, 2)
   state                  String?
   lastOrderDate          DateTime?
-  ordersCount            Int              @default(0)
-  rfmStatus              String?          @default("Novos / Sem Dados")
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt @default(now())
+  ordersCount            Int       @default(0)
+  rfmStatus              String?   @default("Novos / Sem Dados")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now()) @updatedAt
 
   // Fields for Extra Characteristics (ERP)
-  neighborhood           String?
-  zipCode                String?
-  address                String?
-  personType             String?
-  
-  conversations          Conversation[]
-  rfmScore               RfmScore?        @relation(fields: [rfmScoreId], references: [id])
-  store                  Store            @relation(fields: [storeId], references: [id])
-  customerEvents          CustomerEvent[]
-  rfmHistory             RfmHistory[]
-  surveyResponses         SurveyResponse[]
-  transactions            Transaction[]
+  neighborhood String?
+  zipCode      String?
+  address      String?
+  personType   String?
+
+  conversations   Conversation[]
+  rfmScore        RfmScore?        @relation(fields: [rfmScoreId], references: [id])
+  store           Store            @relation(fields: [storeId], references: [id])
+  customerEvents  CustomerEvent[]
+  rfmHistory      RfmHistory[]
+  surveyResponses SurveyResponse[]
+  transactions    Transaction[]
 }
 
 model CustomerEvent {
@@ -152,24 +152,24 @@ model RfmScore {
   name       String
   minRecency Int
   maxRecency Int
-  customers   Customer[]
+  customers  Customer[]
 }
 
 model Segment {
-  id             String           @id @default(cuid())
-  name           String
-  logic          String?
-  rules          Json
-  isDynamic      Boolean          @default(true)
-  storeId        String
-  active         Boolean          @default(true)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt @default(now())
-  updatedById    String?
-  lastCount      Int              @default(0)
-  store          Store            @relation(fields: [storeId], references: [id])
-  updatedBy      User?            @relation(fields: [updatedById], references: [id])
-  history        SegmentHistory[]
+  id          String           @id @default(cuid())
+  name        String
+  logic       String?
+  rules       Json
+  isDynamic   Boolean          @default(true)
+  storeId     String
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+  updatedById String?
+  lastCount   Int              @default(0)
+  store       Store            @relation(fields: [storeId], references: [id])
+  updatedBy   User?            @relation(fields: [updatedById], references: [id])
+  history     SegmentHistory[]
 }
 
 model SegmentHistory {
@@ -183,18 +183,20 @@ model SegmentHistory {
 }
 
 model Store {
-  id                  String                @id @default(cuid())
-  name                String
-  cnpj                String?
-  cityNormalized      String?
-  campaigns            Campaign[]
-  customers            Customer[]
-  emailSettings        EmailSettings?
-  segments             Segment[]
-  goals                StoreGoal[]
-  whatsappNumbers      StoreWhatsappNumber[]
-  transactions         Transaction[]
-  users                User[]
+  id              String                @id @default(cuid())
+  name            String
+  cnpj            String?
+  isActive        Boolean               @default(true)
+  syncEnabled     Boolean               @default(true)
+  cityNormalized  String?
+  campaigns       Campaign[]
+  customers       Customer[]
+  emailSettings   EmailSettings?
+  segments        Segment[]
+  goals           StoreGoal[]
+  whatsappNumbers StoreWhatsappNumber[]
+  transactions    Transaction[]
+  users           User[]
 }
 
 model StoreGoal {
@@ -258,4 +260,34 @@ model User {
   name            String?
   segments        Segment[]
   store           Store?    @relation(fields: [storeId], references: [id])
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  storeId    String?
+  externalId String   @unique
+  name       String
+  price      Decimal?
+  category   String?
+  brand      String?
+  status     String?  @default("ACTIVE")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  // Future relationships can be added here
+}
+
+model JobRun {
+  id           String    @id @default(cuid())
+  queue        String
+  jobName      String
+  jobId        String
+  tenantId     String?
+  status       String    // "COMPLETED" | "FAILED"
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  durationMs   Int?
+  attemptsMade Int?
+  error        String?
+  safePayload  Json?     // Sanitized payload (no PII)
 }

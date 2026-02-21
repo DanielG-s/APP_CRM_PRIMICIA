@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: Merxios_db_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-Merxios_erp}
+    networks:
+      - internal_network
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    container_name: Merxios_redis_prod
+    restart: always
+    secrets:
+      - redis_password
+    volumes:
+      - redis_prod_data:/data
+      - ./infra/redis/redis.conf.template:/usr/local/etc/redis/redis.conf.template:ro
+      - ./infra/redis/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: [ "sh", "/entrypoint.sh" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli -a $$(cat /run/secrets/redis_password) ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal_network
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+
+
+networks:
+  internal_network:
+    driver: bridge
+
+secrets:
+  redis_password:
+    file: /etc/merxios/secrets/redis_password

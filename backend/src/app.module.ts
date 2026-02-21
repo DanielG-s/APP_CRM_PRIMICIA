@@ -1,6 +1,10 @@
-import { Module, Global } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule'; // <--- IMPORTADO
+import { Module, Global, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import basicAuth from 'express-basic-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
@@ -12,12 +16,39 @@ import { CampaignsModule } from './modules/marketing/campaigns/campaigns.module'
 import { SettingsModule } from './modules/config/settings/settings.module';
 import { UsersModule } from './modules/config/users/users.module';
 import { ErpModule } from './modules/erp/erp.module';
+import { HealthController } from './health.controller';
 
 @Global()
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // <--- CARREGA .ENV
-    ScheduleModule.forRoot(), // <--- HABILITA O AGENDADOR DE TAREFAS
+    ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => {
+        const nodeEnv = configService.get('NODE_ENV', 'development');
+        // Docker environments use 'redis'. Local dev uses 'localhost'.
+        const defaultHost = (nodeEnv === 'production' || nodeEnv === 'qa') ? 'redis' : 'localhost';
+
+        return {
+          connection: {
+            host: configService.get('REDIS_HOST', defaultHost),
+            port: configService.get('REDIS_PORT', 6379),
+            password: configService.get('REDIS_PASSWORD'),
+          },
+        };
+      },
+      inject: [ConfigService],
+    }),
+    // Only import BullBoardModule if it is enabled. This prevents the route from even existing.
+    ...(process.env.ENABLE_BULLBOARD === 'true'
+      ? [
+        BullBoardModule.forRoot({
+          route: '/admin/queues',
+          adapter: ExpressAdapter,
+        }),
+      ]
+      : []),
     SalesModule,
     CustomersModule,
     IntelligenceModule,
@@ -26,8 +57,30 @@ import { ErpModule } from './modules/erp/erp.module';
     UsersModule,
     ErpModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService, PrismaService],
   exports: [PrismaService],
 })
-export class AppModule { }
+export class AppModule implements NestModule {
+  constructor(private configService: ConfigService) { }
+
+  configure(consumer: MiddlewareConsumer) {
+    const isBullBoardEnabled = this.configService.get('ENABLE_BULLBOARD', 'false') === 'true';
+
+    if (isBullBoardEnabled) {
+      const user = this.configService.get('BULLBOARD_USER');
+      const pass = this.configService.get('BULLBOARD_PASS');
+
+      if (!user || !pass) {
+        throw new Error(
+          'Bull Board is enabled but BULLBOARD_USER or BULLBOARD_PASS is missing. Refusing to start insecurely.',
+        );
+      }
+
+      consumer
+        .apply(basicAuth({ users: { [user]: pass }, challenge: true }))
+        .forRoutes('/admin/queues');
+    }
+    // If disabled, the BullBoardModule is not imported, so /admin/queues will 404 naturally.
+  }
+}

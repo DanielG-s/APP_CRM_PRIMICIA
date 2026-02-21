@@ -3,6 +3,8 @@ import { MilleniumService } from '../millenium/millenium.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class CustomerSyncService {
@@ -12,13 +14,64 @@ export class CustomerSyncService {
         private readonly milleniumService: MilleniumService,
         private readonly prisma: PrismaService,
         private readonly configService: ConfigService,
+        @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
     ) { }
 
     @Cron(CronExpression.EVERY_DAY_AT_3AM)
     async handleDailySync() {
-        this.logger.log('Starting Daily Customer Sync...');
-        await this.syncCustomers(true);
-        this.logger.log('Daily Customer Sync Completed.');
+        const today = new Date().toISOString().split('T')[0];
+
+        let skip = 0;
+        const take = 100; // Pagination to not load 10k stores in memory
+        let hasMore = true;
+        let queueIndex = 0;
+
+        // B-Audit: Configurable fairness jitter and max cap
+        const delayStepMs = Number(this.configService.get('ERP_SYNC_DELAY_CUSTOMERS_MS_STEP', 120000));
+        const maxDelayMs = Number(this.configService.get('ERP_SYNC_DELAY_CUSTOMERS_MS_MAX', 3600000)); // Default 1 hour cap
+
+        while (hasMore) {
+            // Fetch active stores only, ordered for determinism and fairness
+            const stores = await this.prisma.store.findMany({
+                where: { isActive: true },
+                orderBy: { id: 'asc' },
+                select: { id: true, name: true },
+                take,
+                skip
+            });
+
+            if (!stores.length) {
+                hasMore = false;
+                break;
+            }
+
+            for (const store of stores) {
+                const tenantId = store.id;
+                // Idempotency: Predictable Job ID based on tenant + date
+                const customJobId = `sync-customers:${tenantId}:${today}`;
+
+                // Fairness: Hash based delay distribution across the 1h window to avoid bursts + Jitter
+                const hash = Array.from(tenantId).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const baseDelay = hash % maxDelayMs;
+                const jitter = Math.floor(Math.random() * 15000); // 0-15s random jitter
+                const delay = baseDelay + jitter;
+
+                this.logger.log(`Queueing Daily Customer Sync for ${store.name} (Tenant: ${tenantId}) with ${delay / 1000}s delay. JobId: ${customJobId}`);
+
+                await this.syncQueue.add('sync-customers', { tenantId }, {
+                    jobId: customJobId,
+                    delay: delay,
+                    attempts: 3,
+                    backoff: { type: 'exponential', delay: 60000 }, // 1 min, 2 min, 4 min
+                    removeOnComplete: { age: 24 * 3600, count: 100 }, // Retention policy complete
+                    removeOnFail: { age: 7 * 24 * 3600, count: 500 } // Retention policy failed
+                });
+
+                queueIndex++;
+            }
+
+            skip += take;
+        }
     }
 
     /**
