@@ -68,6 +68,7 @@ export class StoreSyncService {
 
                 const storeData = {
                     name: storeName,
+                    tradeName: raw.fantasia ? String(raw.fantasia).trim() : null,
                     cnpj: raw.cnpj ? String(raw.cnpj).trim() : null,
                     isActive: true, // We assume if it came in the list and not excluded, it is active
                     // other fields could be mapped here if added to schema
