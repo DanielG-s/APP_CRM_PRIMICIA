@@ -226,4 +226,27 @@ export class MilleniumService {
       throw error;
     }
   }
+
+  async getFiliais() {
+    try {
+      this.logger.debug(`Fetching filiais (stores) from ERP...`);
+      const response = await lastValueFrom(
+        this.httpService.get(`${this.apiUrl}/filiais/lista_simples`, {
+          params: {
+            $format: 'json',
+          },
+          auth: {
+            username: this.username,
+            password: this.pass,
+          },
+          timeout: 15000,
+        }),
+      );
+
+      return response.data.value || [];
+    } catch (error) {
+      this.logger.error(`Error fetching filiais from ERP: ${error.message}`);
+      throw error;
+    }
+  }
 }

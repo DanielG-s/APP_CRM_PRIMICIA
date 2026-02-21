@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job, UnrecoverableError, Queue } from 'bullmq';
 import { CustomerSyncService } from './customer-sync.service';
 import { ProductSyncService } from './product-sync.service';
+import { StoreSyncService } from './store-sync.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as crypto from 'crypto';
 
@@ -19,6 +20,7 @@ export class SyncProcessor extends WorkerHost {
     constructor(
         private readonly customerSyncService: CustomerSyncService,
         private readonly productSyncService: ProductSyncService,
+        private readonly storeSyncService: StoreSyncService,
         private readonly prisma: PrismaService,
         @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
     ) {
@@ -74,6 +76,9 @@ export class SyncProcessor extends WorkerHost {
                     break;
                 case 'sync-products':
                     await this.productSyncService.syncProducts();
+                    break;
+                case 'sync-stores':
+                    await this.storeSyncService.syncStores();
                     break;
                 default:
                     this.logger.warn(`Unknown job type: ${job.name}`);

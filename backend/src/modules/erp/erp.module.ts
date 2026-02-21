@@ -9,6 +9,7 @@ import { SyncService } from './sync/sync.service';
 import { SyncController } from './sync/sync.controller';
 import { CustomerSyncService } from './sync/customer-sync.service';
 import { ProductSyncService } from './sync/product-sync.service';
+import { StoreSyncService } from './sync/store-sync.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 import { SyncProcessor } from './sync/sync.processor';
@@ -32,10 +33,11 @@ import { QueueCleanupService } from './sync/cleanup.service';
     SyncService,
     CustomerSyncService,
     ProductSyncService,
+    StoreSyncService,
     SyncProcessor,
     QueueCleanupService,
     PrismaService,
   ],
-  exports: [SyncService, CustomerSyncService, ProductSyncService],
+  exports: [SyncService, CustomerSyncService, ProductSyncService, StoreSyncService],
 })
 export class ErpModule { }
