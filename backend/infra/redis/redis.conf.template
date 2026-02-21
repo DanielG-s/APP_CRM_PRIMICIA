@@ -1,0 +1,19 @@
+# Redis Configuration for CRM Primicia Production
+# This file is mounted into the container to prevent password exposure in cmdline
+
+# Basic Security
+requirepass REPLACE_REDIS_PASSWORD
+bind 0.0.0.0
+protected-mode yes
+
+# Persistence
+appendonly yes
+appendfsync everysec
+
+# Performance
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+
+# Logging
+loglevel notice
+logfile ""

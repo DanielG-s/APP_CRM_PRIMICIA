@@ -201,4 +201,29 @@ export class MilleniumService {
     // Kept for reference or fallback
     return this.getCustomersKeyset(params);
   }
+
+  async getProductsPaginated(top: number = 1000, skip: number = 0) {
+    try {
+      this.logger.debug(`Fetching products from ERP: top=${top}, skip=${skip}`);
+      const response = await lastValueFrom(
+        this.httpService.get(`${this.apiUrl}/produtos/lista`, {
+          params: {
+            $format: 'json',
+            TOP: top,
+            SKIP: skip,
+          },
+          auth: {
+            username: this.username,
+            password: this.pass,
+          },
+          timeout: 60000,
+        }),
+      );
+
+      return response.data.value || [];
+    } catch (error) {
+      this.logger.error(`Error fetching products from ERP: ${error.message}`);
+      throw error;
+    }
+  }
 }
