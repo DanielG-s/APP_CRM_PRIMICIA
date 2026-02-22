@@ -18,7 +18,8 @@ async function bootstrap() {
       '/admin/queues',
       basicAuth({
         users: {
-          [process.env.BULLBOARD_USER || 'admin']: process.env.BULLBOARD_PASS || 'merxios-secret',
+          [process.env.BULLBOARD_USER || 'admin']:
+            process.env.BULLBOARD_PASS || 'merxios-secret',
         },
         challenge: true,
       }),

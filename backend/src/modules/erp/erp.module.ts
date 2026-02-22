@@ -24,11 +24,11 @@ import { QueueCleanupService } from './sync/cleanup.service';
     }),
     ...(process.env.ENABLE_BULLBOARD === 'true'
       ? [
-        BullBoardModule.forFeature({
-          name: 'erp-sync-queue',
-          adapter: BullMQAdapter,
-        }),
-      ]
+          BullBoardModule.forFeature({
+            name: 'erp-sync-queue',
+            adapter: BullMQAdapter,
+          }),
+        ]
       : []),
   ],
   controllers: [SyncController],
@@ -42,6 +42,11 @@ import { QueueCleanupService } from './sync/cleanup.service';
     QueueCleanupService,
     PrismaService,
   ],
-  exports: [SyncService, CustomerSyncService, ProductSyncService, StoreSyncService],
+  exports: [
+    SyncService,
+    CustomerSyncService,
+    ProductSyncService,
+    StoreSyncService,
+  ],
 })
-export class ErpModule { }
+export class ErpModule {}

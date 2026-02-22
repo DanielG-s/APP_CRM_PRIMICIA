@@ -119,7 +119,9 @@ export class IntelligenceService {
 
     for (const seg of segments) {
       try {
-        const whereClause = this.queryBuilder.build((seg.rules as unknown as any[]) || []);
+        const whereClause = this.queryBuilder.build(
+          (seg.rules as unknown as any[]) || [],
+        );
         const currentCount = await this.prisma.customer.count({
           where: whereClause,
         });
@@ -224,6 +226,7 @@ export class IntelligenceService {
         rules: data.rules,
         logic: 'custom',
         active: true,
+        organizationId: store?.organizationId || 'default',
         storeId: store?.id || 'default',
         isDynamic: data.isDynamic,
         lastCount: count,

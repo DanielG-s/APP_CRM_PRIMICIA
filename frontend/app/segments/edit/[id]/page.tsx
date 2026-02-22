@@ -17,6 +17,7 @@ import {
   RfmBlock, BehaviorBlock, CharacteristicBlock, SegmentReferenceBlock
 } from '../../shared/components';
 import { API_BASE_URL } from '@/lib/config';
+import { useAuth, useUser } from "@clerk/nextjs";
 
 // --- MODAL DE TUTORIAL MASTERCLASS (EDIÇÃO) ---
 const EditTutorialModal = ({ isOpen, onClose }: any) => {
@@ -172,6 +173,8 @@ const EditTutorialModal = ({ isOpen, onClose }: any) => {
 // --- PÁGINA PRINCIPAL ---
 
 export default function EditSegmentPage() {
+  const { getToken } = useAuth();
+  const { user } = useUser();
   const params = useParams();
   const router = useRouter();
   const segmentId = params.id as string;
@@ -204,7 +207,10 @@ export default function EditSegmentPage() {
     async function fetchData() {
       try {
         // 1. Carrega opções de filtro
-        const resFilters = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/filters`);
+        const token = await getToken();
+        const resFilters = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/filters`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (resFilters.ok) {
           const data = await resFilters.json();
           setFilterOptions(prev => ({ ...prev, ...data, segments: data.segments || [] }));
@@ -212,7 +218,9 @@ export default function EditSegmentPage() {
 
         // 2. Carrega o segmento
         if (segmentId) {
-          const resSegment = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/segments/${segmentId}`);
+          const resSegment = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/segments/${segmentId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           if (resSegment.ok) {
             const segment = await resSegment.json();
 
@@ -240,7 +248,7 @@ export default function EditSegmentPage() {
       }
     }
     fetchData();
-  }, [segmentId, router]);
+  }, [segmentId, router, getToken]);
 
   // ENGINE (PREVIEW)
   useEffect(() => {
@@ -248,9 +256,10 @@ export default function EditSegmentPage() {
     setIsCalculating(true);
     const timer = setTimeout(async () => {
       try {
+        const token = await getToken();
         const response = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/preview`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ rules: blocks }),
         });
         if (!response.ok) throw new Error('Falha');
@@ -288,9 +297,10 @@ export default function EditSegmentPage() {
     if (blocks.length === 0) { alert('Adicione regras.'); return; }
     setIsSaving(true); setSaveStatus('saving');
     try {
+      const token = await getToken();
       const response = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/segments/${segmentId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: segmentName, rules: blocks, isDynamic: isDynamic }),
       });
       if (!response.ok) throw new Error(response.status === 409 ? 'NOME_DUPLICADO' : 'ERRO');

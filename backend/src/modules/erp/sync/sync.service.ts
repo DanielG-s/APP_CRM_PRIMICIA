@@ -53,7 +53,7 @@ export class SyncService {
   private async queueStoreSyncs(start: string, end: string, frequency: string) {
     const stores = await (this.prisma.store as any).findMany({
       where: { isActive: true },
-      select: { id: true, name: true, code: true }
+      select: { id: true, name: true, code: true },
     });
 
     const today = new Date().toISOString().split('T')[0];
@@ -61,17 +61,18 @@ export class SyncService {
     for (let i = 0; i < stores.length; i++) {
       const store = stores[i];
       // Jitter: (index * 2 minutes) + random 0-30s
-      const delay = (i * 120000) + Math.floor(Math.random() * 30000);
-      const jobId = `sync-sales:${(store as any).code}:${frequency}:${today}`;
+      const delay = i * 120000 + Math.floor(Math.random() * 30000);
+      const jobId = `sync-sales:${store.code}:${frequency}:${today}`;
 
-      await this.syncQueue.add('sync-sales',
-        { tenantId: store.id, start, end, storeCode: (store as any).code },
+      await this.syncQueue.add(
+        'sync-sales',
+        { tenantId: store.id, start, end, storeCode: store.code },
         {
           jobId,
           delay,
           attempts: 3,
-          backoff: { type: 'exponential', delay: 300000 } // 5min
-        }
+          backoff: { type: 'exponential', delay: 300000 }, // 5min
+        },
       );
     }
   }
@@ -84,13 +85,15 @@ export class SyncService {
    * 3. Sold Products (embedded in transaction)
    */
   async syncSales(start: Date, end: Date) {
-    this.logger.log(`Starting Sync from ${start.toISOString()} to ${end.toISOString()}...`);
+    this.logger.log(
+      `Starting Sync from ${start.toISOString()} to ${end.toISOString()}...`,
+    );
 
     const sales = await this.milleniumService.getFaturamentos(start, end);
 
     this.logger.log(`Fetched ${sales.length} invoices from ERP.`);
 
-    let newTransactions = 0;
+    const newTransactions = 0;
     let updatedTransactions = 0;
 
     for (const sale of sales) {
@@ -116,11 +119,14 @@ export class SyncService {
   private async processInvoice(sale: any) {
     // PRIORIDADE MUDOU: cod_emissor ou cod_filial para fazer o match exato
     let storeCode = String(sale.cod_emissor || sale.cod_filial);
-    const storeName = sale.nome_emissor || sale.nome_filial || `Filial ${storeCode}`;
+    const storeName =
+      sale.nome_emissor || sale.nome_filial || `Filial ${storeCode}`;
     const eventName = sale.nome_evento || '';
 
     if (!SyncService.ALLOWED_EVENT_NAMES.includes(eventName)) {
-      this.logger.debug(`Skipping invoice ${sale.cod_pedidov || sale.pedidov}: Event '${eventName}' not in allow-list.`);
+      this.logger.debug(
+        `Skipping invoice ${sale.cod_pedidov || sale.pedidov}: Event '${eventName}' not in allow-list.`,
+      );
       return;
     }
 
@@ -132,20 +138,26 @@ export class SyncService {
 
     // Check if we already have this store cached or in DB explicitly by CODE
     let store = await (this.prisma.store as any).findFirst({
-      where: { code: storeCode }
+      where: { code: storeCode },
     });
 
     if (!store) {
-      this.logger.debug(`Creating new Store from ERP fallback: ${storeName} (${storeCode})`);
+      this.logger.debug(
+        `Creating new Store from ERP fallback: ${storeName} (${storeCode})`,
+      );
+      const defaultOrg = await this.prisma.organization.findFirst();
+      if (!defaultOrg) throw new Error('No Organization found to attach fallback store');
       store = await (this.prisma.store as any).create({
         data: {
           code: storeCode,
           name: storeName,
-        }
+          organizationId: defaultOrg.id
+        },
       });
     }
 
     const storeId = store.id;
+    const organizationId = store.organizationId;
 
     // 1. Resolve Customer from Embedded Data
     // 'listafaturamentos' returns 'cliente' as an array of objects
@@ -153,13 +165,16 @@ export class SyncService {
 
     // Safety check: Needs minimum data to be a valid customer in CRM
     if (!customerRaw || !customerRaw.cod_cliente) {
-      this.logger.warn(`Skipping invoice ${sale.cod_pedidov}: No customer data.`);
+      this.logger.warn(
+        `Skipping invoice ${sale.cod_pedidov}: No customer data.`,
+      );
       return;
     }
 
     // Resolve Address from 'endereco' or 'endereco_entrega' arrays
     // Use optional chaining carefully
-    const addressData = customerRaw.endereco?.[0] || customerRaw.endereco_entrega?.[0] || {};
+    const addressData =
+      customerRaw.endereco?.[0] || customerRaw.endereco_entrega?.[0] || {};
 
     // CPF/CNPJ Mapping
     const cpfCnpj = customerRaw.cpf || customerRaw.cgc;
@@ -171,10 +186,11 @@ export class SyncService {
     const email = customerRaw.e_mail || null;
 
     let customer = await this.prisma.customer.findFirst({
-      where: { externalId: externalId }
+      where: { externalId: externalId },
     });
 
     const customerData: any = {
+      organizationId: organizationId,
       storeId: storeId,
       name: customerRaw.nome?.trim() || 'Cliente Sem Nome',
       email: email, // Can be null
@@ -183,7 +199,9 @@ export class SyncService {
       state: addressData.estado || customerRaw.estado,
       externalId: externalId,
       cpf: cpfCnpj,
-      address: addressData.logradouro ? `${addressData.logradouro}, ${addressData.numero || ''}` : null,
+      address: addressData.logradouro
+        ? `${addressData.logradouro}, ${addressData.numero || ''}`
+        : null,
       neighborhood: addressData.bairro || customerRaw.bairro,
       zipCode: addressData.cep || customerRaw.cep,
       personType: 'PF',
@@ -198,7 +216,7 @@ export class SyncService {
         data: {
           ...customerData,
           email: email,
-        }
+        },
       });
     } else {
       // MATCHING STRATEGY: Name + CPF OR Name + Email
@@ -206,7 +224,9 @@ export class SyncService {
 
       // 1. Check CPF
       if (cpfCnpj && customerData.name) {
-        const match = await this.prisma.customer.findFirst({ where: { cpf: cpfCnpj } });
+        const match = await this.prisma.customer.findFirst({
+          where: { cpf: cpfCnpj },
+        });
         if (match && match.name === customerData.name) {
           realDuplicate = match;
         }
@@ -214,7 +234,9 @@ export class SyncService {
 
       // 2. Check Email (if no CPF match)
       if (!realDuplicate && email && customerData.name) {
-        const match = await this.prisma.customer.findFirst({ where: { email: email } });
+        const match = await this.prisma.customer.findFirst({
+          where: { email: email },
+        });
         if (match && match.name === customerData.name) {
           realDuplicate = match;
         }
@@ -222,15 +244,17 @@ export class SyncService {
 
       if (realDuplicate) {
         // MERGE / LINK
-        this.logger.debug(`Linking Sale to Existing Customer: ${realDuplicate.name} (ID: ${realDuplicate.id})`);
+        this.logger.debug(
+          `Linking Sale to Existing Customer: ${realDuplicate.name} (ID: ${realDuplicate.id})`,
+        );
         customer = await this.prisma.customer.update({
           where: { id: realDuplicate.id },
           data: {
             externalId: externalId, // Link ERP ID
             phone: customerData.phone || realDuplicate.phone,
             address: customerData.address || realDuplicate.address,
-            updatedAt: new Date()
-          }
+            updatedAt: new Date(),
+          },
         });
       } else {
         // CREATE NEW
@@ -281,11 +305,14 @@ export class SyncService {
     // HACK: Date Shift for Dev Visibility
     if (date.getFullYear() < 2024) {
       const currentYear = new Date().getFullYear();
-      const targetYear = date.getMonth() > new Date().getMonth() ? currentYear - 1 : currentYear;
+      const targetYear =
+        date.getMonth() > new Date().getMonth() ? currentYear - 1 : currentYear;
       date.setFullYear(targetYear);
     }
 
-    const externalTxId = String(sale.romaneio || sale.cod_pedidov || sale.pedidov || sale.trans_id);
+    const externalTxId = String(
+      sale.romaneio || sale.cod_pedidov || sale.pedidov || sale.trans_id,
+    );
 
     // DEDUPLICATION: Use externalId unique key
     // @ts-ignore
@@ -293,6 +320,7 @@ export class SyncService {
       // @ts-ignore
       where: { externalId: externalTxId },
       update: {
+        organizationId: organizationId,
         storeId: storeId,
         customerId: customer.id,
         date: date,
@@ -305,6 +333,7 @@ export class SyncService {
       create: {
         // @ts-ignore
         externalId: externalTxId,
+        organizationId: organizationId,
         storeId: storeId,
         customerId: customer.id,
         date: date,

@@ -19,7 +19,7 @@ function rfmLabelToScore(label: string): number {
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async findAll() {
     const customers = await this.prisma.customer.findMany({
@@ -116,7 +116,8 @@ export class CustomersService {
       },
     });
 
-    if (!customer) throw new NotFoundException(`Customer with ID ${id} not found`);
+    if (!customer)
+      throw new NotFoundException(`Customer with ID ${id} not found`);
 
     const today = new Date();
     const ltv = customer.transactions.reduce(

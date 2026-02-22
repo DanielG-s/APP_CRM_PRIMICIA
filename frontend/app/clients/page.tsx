@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { API_BASE_URL } from "@/lib/config";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 // --- CORES DAS TAGS ---
 const RFM_COLORS: any = {
@@ -27,6 +28,8 @@ const SEGMENTS_OPTIONS = ['VIP', 'Leal', 'Novo', 'Em Risco', 'Inativo', 'Lead'];
  * Displays a paginated list of customers with filtering (text, RFM segment) and sorting capabilities.
  */
 export default function ClientsPage() {
+    const { getToken } = useAuth();
+    const { user } = useUser();
     const router = useRouter();
     const [clients, setClients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -53,13 +56,16 @@ export default function ClientsPage() {
             setLoading(true);
             try {
                 // ... inside the component
-                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers`);
+                const token = await getToken();
+                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
                 if (res.ok) setClients(await res.json());
             } catch (error) { console.error(error); }
             finally { setLoading(false); }
         }
         fetchClients();
-    }, []);
+    }, [getToken]);
 
     // Click Outside para fechar o menu de segmentação
     useEffect(() => {
@@ -150,7 +156,7 @@ export default function ClientsPage() {
     return (
         <div className="flex h-screen bg-[#f1f5f9] font-sans text-slate-900">
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-                <Header title="Carteira de Clientes" subtitle="Visão geral e gestão de consumidores" icon={<Users size={18} />} />
+                <Header title="Carteira de Clientes" subtitle="Visão geral e gestão de consumidores" icon={<Users size={18} />} user={user} />
 
                 <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-6">
 
@@ -298,7 +304,7 @@ export default function ClientsPage() {
     );
 }
 
-function Header({ title, subtitle, icon }: any) {
+function Header({ title, subtitle, icon, user }: any) {
     return (
         <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
             <div>
@@ -309,10 +315,10 @@ function Header({ title, subtitle, icon }: any) {
             </div>
             <div className="flex items-center gap-3">
                 <div className="text-right hidden sm:block">
-                    <p className="text-xs font-bold text-slate-700">Admin User</p>
-                    <p className="text-[10px] text-slate-400">Diretor Comercial</p>
+                    <p className="text-xs font-bold text-slate-700">{user?.fullName || 'Usuário'}</p>
+                    <p className="text-[10px] text-slate-400">Merxios Auth</p>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">AD</div>
+                <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">{user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || ''}</div>
             </div>
         </header>
     )

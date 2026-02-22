@@ -32,6 +32,7 @@ export class SettingsService {
         ...data,
       },
       create: {
+        organizationId: store.organizationId,
         storeId: store.id,
         ...data,
       },
@@ -65,6 +66,7 @@ export class SettingsService {
 
     return this.prisma.storeWhatsappNumber.create({
       data: {
+        organizationId: store.organizationId,
         storeId: store.id,
         ...data,
         status: 'CONNECTED', // Aqui você integraria com a API para checar o status real

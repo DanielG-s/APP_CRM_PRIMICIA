@@ -4,7 +4,7 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 
 @Injectable()
 export class CampaignsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // --- CORREÇÃO DO ERRO 1: Adicionar o método findAll ---
   /**
@@ -12,9 +12,9 @@ export class CampaignsService {
    * Includes related content and metrics.
    * @param storeId The ID of the store to filter by.
    */
-  async findAll(storeId: string) {
+  async findAll(organizationId: string) {
     return this.prisma.campaign.findMany({
-      where: { storeId },
+      where: { organizationId },
       include: { contents: true, metrics: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -25,10 +25,10 @@ export class CampaignsService {
    * Validates store ID and maps DTO fields to Prisma schema.
    */
   async create(data: CreateCampaignDto) {
-    // --- CORREÇÃO DO ERRO 5: Garantir que storeId existe ---
-    if (!data.storeId) {
+    // --- CORREÇÃO DO ERRO 5: Garantir que organizationId existe ---
+    if (!data.organizationId) {
       throw new BadRequestException(
-        'Store ID é obrigatório para criar uma campanha.',
+        'Organization ID é obrigatório para criar uma campanha.',
       );
     }
 
@@ -42,7 +42,8 @@ export class CampaignsService {
       data: {
         name: data.name,
         channel: data.channel,
-        storeId: data.storeId, // Agora o TS sabe que isso é string, não undefined
+        organizationId: data.organizationId,
+        storeId: data.storeId,
         status: 'draft', // Valor padrão
         conversionTrigger: 'manual', // Valor padrão ou vindo do DTO se existir
 

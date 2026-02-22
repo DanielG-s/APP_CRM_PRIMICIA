@@ -15,6 +15,7 @@ import {
   RfmBlock, BehaviorBlock, CharacteristicBlock, SegmentReferenceBlock
 } from '../shared/components';
 import { API_BASE_URL } from "@/lib/config";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 // --- NOVO TUTORIAL MASTERCLASS ---
 const CreateTutorialModal = ({ isOpen, onClose }: any) => {
@@ -178,6 +179,8 @@ const CreateTutorialModal = ({ isOpen, onClose }: any) => {
 // --- PÁGINA PRINCIPAL ---
 
 export default function SegmentsPage() {
+  const { getToken } = useAuth();
+  const { user } = useUser();
   const [blocks, setBlocks] = useState<any[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -200,7 +203,10 @@ export default function SegmentsPage() {
   useEffect(() => {
     async function fetchOptions() {
       try {
-        const res = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/filters`);
+        const token = await getToken();
+        const res = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/filters`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (res.ok) {
           const data = await res.json();
           setFilterOptions(prev => ({ ...prev, ...data, segments: data.segments || [] }));
@@ -208,16 +214,17 @@ export default function SegmentsPage() {
       } catch (e) { console.error("Erro filtros:", e); }
     }
     fetchOptions();
-  }, []);
+  }, [getToken]);
 
   useEffect(() => {
     if (blocks.length === 0) { setResults(null); return; }
     setIsCalculating(true);
     const timer = setTimeout(async () => {
       try {
+        const token = await getToken();
         const response = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/preview`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ rules: blocks }),
         });
         if (!response.ok) throw new Error('Falha');
@@ -263,9 +270,10 @@ export default function SegmentsPage() {
 
     setIsSaving(true); setSaveStatus('saving');
     try {
+      const token = await getToken();
       const response = await fetch(`${API_BASE_URL}/webhook/crm/intelligence/segments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: segmentName, rules: blocks, isDynamic: isDynamic }),
       });
       if (!response.ok) throw new Error(response.status === 409 ? 'NOME_DUPLICADO' : 'ERRO');

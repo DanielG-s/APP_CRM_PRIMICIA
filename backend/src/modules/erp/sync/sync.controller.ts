@@ -3,11 +3,13 @@ import { SyncService } from './sync.service';
 
 @Controller('erp/sync')
 export class SyncController {
-  constructor(private readonly syncService: SyncService) { }
+  constructor(private readonly syncService: SyncService) {}
 
   @Post('sales')
   async syncSales(@Body() body: { start?: string; end?: string }) {
-    const start = body.start ? new Date(body.start) : new Date(new Date().setDate(new Date().getDate() - 1));
+    const start = body.start
+      ? new Date(body.start)
+      : new Date(new Date().setDate(new Date().getDate() - 1));
     const end = body.end ? new Date(body.end) : new Date();
 
     // Ensure start is beginning of day if defaulted

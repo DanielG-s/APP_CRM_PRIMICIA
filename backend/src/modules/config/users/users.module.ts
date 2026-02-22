@@ -5,8 +5,8 @@ import { UsersSyncService } from './users-sync.service';
 import { WebhooksController } from './webhooks.controller';
 
 @Module({
-    controllers: [UsersController, WebhooksController],
-    providers: [UsersService, UsersSyncService],
-    exports: [UsersService, UsersSyncService]
+  controllers: [UsersController, WebhooksController],
+  providers: [UsersService, UsersSyncService],
+  exports: [UsersService, UsersSyncService],
 })
-export class UsersModule { }
+export class UsersModule {}

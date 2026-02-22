@@ -5,7 +5,7 @@ import { CreateWhatsappInstanceDto } from './dto/create-whatsapp.dto';
 
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) { }
+  constructor(private readonly settingsService: SettingsService) {}
 
   // --- Rotas da Loja (Geral) ---
   @Get('store')

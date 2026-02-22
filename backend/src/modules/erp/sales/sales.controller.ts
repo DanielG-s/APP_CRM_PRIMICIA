@@ -1,4 +1,13 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, Query, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Get,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -143,7 +152,7 @@ export class SalesController {
     let storeIds: string[] | undefined = undefined;
 
     if (user.role === Role.GERENTE_GERAL) {
-      // Gerente Geral can view all or filter specifically
+      // Gerente Geral can view all stores within their organization
       storeIds = stores ? stores.split(',') : undefined;
     } else {
       // Store managers and sellers are locked to their explicit storeId
