@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { createClerkClient } from '@clerk/clerk-sdk-node';
 import { IS_PUBLIC_KEY } from '../../../common/decorators/public.decorator';
+import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
@@ -15,7 +16,8 @@ export class ClerkAuthGuard implements CanActivate {
 
     constructor(
         private configService: ConfigService,
-        private reflector: Reflector
+        private reflector: Reflector,
+        private prisma: PrismaService,
     ) {
         this.clerkClient = createClerkClient({
             secretKey: this.configService.get<string>('CLERK_SECRET_KEY'),
@@ -44,11 +46,15 @@ export class ClerkAuthGuard implements CanActivate {
         try {
             const sessionClaims = await this.clerkClient.verifyToken(token);
 
-            request.user = {
-                id: sessionClaims.sub,
-                email: sessionClaims.email,
-                metadata: sessionClaims.publicMetadata,
-            };
+            const dbUser = await this.prisma.user.findUnique({
+                where: { clerkId: sessionClaims.sub }
+            });
+
+            if (!dbUser) {
+                throw new UnauthorizedException('User not found in database');
+            }
+
+            request.user = dbUser;
 
             return true;
         } catch (error) {

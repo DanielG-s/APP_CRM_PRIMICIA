@@ -21,7 +21,7 @@ export class UsersSyncService {
                 clerkId,
                 email,
                 name,
-                role: 'user',
+                role: 'VENDEDOR',
                 storeId: finalStoreId,
             },
         });

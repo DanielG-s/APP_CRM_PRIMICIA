@@ -10,6 +10,9 @@ import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './modules/config/users/clerk-auth.guard';
+import { RolesGuard } from './modules/config/users/roles.guard';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 import { SalesModule } from 'src/modules/erp/sales/sales.module';
 import { CustomersModule } from './modules/erp/customers/customers.module';
@@ -69,6 +72,14 @@ import { HealthController } from './health.controller';
     {
       provide: APP_GUARD,
       useClass: ClerkAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
   exports: [PrismaService],

@@ -1,15 +1,9 @@
-import {
-  Controller,
-  Post,
-  Body,
-  HttpCode,
-  HttpStatus,
-  Get,
-  Query,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { User, Role } from '@prisma/client';
 
 @ApiTags('Integração ERP')
 @Controller('sales')
@@ -130,24 +124,34 @@ export class SalesController {
   @ApiQuery({ name: 'end', required: false })
   @ApiQuery({ name: 'stores', required: false })
   async getRetailMetrics(
+    @CurrentUser() user: any,
     @Query('start') start?: string,
     @Query('end') end?: string,
     @Query('stores') stores?: string,
   ) {
     // 1. Definição de Datas Segura
-    // Se não vier data, pega os últimos 30 dias
     const endDate = end ? new Date(end) : new Date();
     const startDate = start
       ? new Date(start)
       : new Date(new Date().setDate(endDate.getDate() - 30));
 
     // 2. Ajuste Fino do Horário (00:00 -> 23:59)
-    // Isso garante que pegamos as vendas do último dia inteiro
     const endFinal = new Date(endDate);
     endFinal.setHours(23, 59, 59, 999);
 
-    // 3. Tratamento de Lojas (String -> Array)
-    const storeIds = stores ? stores.split(',') : undefined;
+    // 3. Multi-Tenant Enforcement
+    let storeIds: string[] | undefined = undefined;
+
+    if (user.role === Role.GERENTE_GERAL) {
+      // Gerente Geral can view all or filter specifically
+      storeIds = stores ? stores.split(',') : undefined;
+    } else {
+      // Store managers and sellers are locked to their explicit storeId
+      if (!user.storeId) {
+        return []; // Safety fallback: no store assigned
+      }
+      storeIds = [user.storeId];
+    }
 
     // Passamos Objetos Date reais para o Service agora
     return this.salesService.getRetailMetrics(startDate, endFinal, storeIds);
@@ -157,6 +161,7 @@ export class SalesController {
   @Get('schedule-metrics')
   @ApiOperation({ summary: 'Métricas da página de Agenda' })
   async getScheduleMetrics(
+    @CurrentUser() user: any,
     @Query('start') start: string,
     @Query('end') end: string,
     @Query('channel') channel?: string,
@@ -187,11 +192,20 @@ export class SalesController {
         ? campaignType
         : [campaignType]
       : undefined;
-    const storeIds = stores
-      ? Array.isArray(stores)
-        ? stores
-        : [stores]
-      : undefined;
+
+    let storeIds: string[] | undefined = undefined;
+
+    if (user.role === Role.GERENTE_GERAL) {
+      storeIds = stores
+        ? Array.isArray(stores)
+          ? stores
+          : [stores]
+        : undefined;
+    } else {
+      if (!user.storeId) return [];
+      storeIds = [user.storeId];
+    }
+
     const salespersonIds = vendedores
       ? Array.isArray(vendedores)
         ? vendedores

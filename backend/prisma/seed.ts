@@ -67,7 +67,7 @@ async function main() {
       cnpj: '12.345.678/0001-90',
       cityNormalized: 'sao paulo',
       users: {
-        create: { name: 'Daniel Admin', email: 'admin@primicia.com', password: 'admin', role: 'ADMIN' },
+        create: { name: 'Daniel Admin', email: 'admin@primicia.com', password: 'admin', role: 'GERENTE_GERAL' },
       },
       emailSettings: {
         create: {
