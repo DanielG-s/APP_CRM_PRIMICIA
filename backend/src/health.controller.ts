@@ -4,6 +4,9 @@ import { PrismaService } from './prisma/prisma.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
+import { Public } from './common/decorators/public.decorator';
+
+@Public()
 @Controller('health')
 export class HealthController {
     constructor(

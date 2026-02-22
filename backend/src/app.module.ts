@@ -8,6 +8,8 @@ import basicAuth from 'express-basic-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
+import { APP_GUARD } from '@nestjs/core';
+import { ClerkAuthGuard } from './modules/config/users/clerk-auth.guard';
 
 import { SalesModule } from 'src/modules/erp/sales/sales.module';
 import { CustomersModule } from './modules/erp/customers/customers.module';
@@ -61,7 +63,14 @@ import { HealthController } from './health.controller';
     ErpModule,
   ],
   controllers: [AppController, HealthController],
-  providers: [AppService, PrismaService],
+  providers: [
+    AppService,
+    PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: ClerkAuthGuard,
+    },
+  ],
   exports: [PrismaService],
 })
 export class AppModule implements NestModule {

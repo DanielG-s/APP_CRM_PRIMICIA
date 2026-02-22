@@ -1,10 +1,11 @@
-import { SidebarProvider } from "./contexts/SidebarContext"; // Ajuste o caminho
-import LayoutShell from "./components/LayoutShell"; // Ajuste o caminho
+import LayoutWrapper from "./components/LayoutWrapper";
 import JsonLd from "../components/JsonLd";
 import "./globals.css";
 
 import { API_BASE_URL } from "@/lib/config";
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
+import { ptBR } from "@clerk/localizations";
 
 export const metadata: Metadata = {
   title: {
@@ -41,28 +42,28 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
-      <body>
-        <JsonLd
-          data={{
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            name: "Merxios CRM",
-            url: API_BASE_URL,
-            logo: `${API_BASE_URL}/logo.png`,
-            sameAs: [
-              "https://www.facebook.com/merxios",
-              "https://twitter.com/merxios",
-              "https://www.linkedin.com/company/merxios",
-            ],
-          }}
-        />
-        <SidebarProvider>
-          <LayoutShell>
+    <ClerkProvider localization={ptBR}>
+      <html lang="pt-BR">
+        <body>
+          <JsonLd
+            data={{
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "Merxios CRM",
+              url: API_BASE_URL,
+              logo: `${API_BASE_URL}/logo.png`,
+              sameAs: [
+                "https://www.facebook.com/merxios",
+                "https://twitter.com/merxios",
+                "https://www.linkedin.com/company/merxios",
+              ],
+            }}
+          />
+          <LayoutWrapper>
             {children}
-          </LayoutShell>
-        </SidebarProvider>
-      </body>
-    </html>
+          </LayoutWrapper>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

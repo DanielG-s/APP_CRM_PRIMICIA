@@ -26,6 +26,7 @@
     "@bull-board/api": "^6.19.0",
     "@bull-board/express": "^6.19.0",
     "@bull-board/nestjs": "^6.19.0",
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
@@ -42,6 +43,7 @@
     "express-basic-auth": "^1.2.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "svix": "^1.85.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0"
   },
