@@ -351,7 +351,7 @@ export default function RetailResultsPage() {
                                                     <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>
                                                         {draftStores.includes(store.id) && <Check size={10} className="text-white" />}
                                                     </div>
-                                                    <span className="text-xs text-slate-700 truncate font-medium">{store.name}</span>
+                                                    <span className="text-xs text-slate-700 truncate font-medium">{store.code ? `${store.code} - ${store.tradeName || store.name}` : (store.tradeName || store.name)}</span>
                                                 </label>
                                             ))}
                                         </div>
@@ -762,7 +762,7 @@ function StoresTableSection({ stores }: { stores: any[] }) {
                     <tbody className="divide-y divide-slate-100">
                         {paginatedStores.map((s: any) => (
                             <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 font-bold text-slate-700">{s.name}</td>
+                                <td className="px-6 py-4 font-bold text-slate-700">{s.code ? `${s.code} - ${s.tradeName || s.name}` : (s.tradeName || s.name)}</td>
                                 <td className="px-6 py-4 font-mono text-slate-600">R$ {s.revenue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
                                 <td className="px-6 py-4 font-mono text-slate-600">R$ {s.revenueInfluenced.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
                                 <td className="px-6 py-4 text-slate-500">{s.transactions}</td>

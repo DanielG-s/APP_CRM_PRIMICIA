@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
+import { format } from 'date-fns';
 
 @Injectable()
 export class MilleniumService {
@@ -23,8 +24,8 @@ export class MilleniumService {
     // ... Keeping getFaturamentos same as before ... 
     // Optimization: Just copy the logic or simplified version since we are focusing on Customers
     // For safety, I'll restore the robust getFaturamentos logic I wrote earlier.
-    const start = startDate.toISOString();
-    const end = endDate.toISOString();
+    const start = format(startDate, 'yyyy-MM-dd');
+    const end = format(endDate, 'yyyy-MM-dd');
 
     const params = {
       $format: 'json',
@@ -69,7 +70,8 @@ export class MilleniumService {
 
         if (allSales.length > 50000) break;
       } catch (error) {
-        this.logger.error(`Error fetching Millenium sales: ${error.message}`);
+        const errorData = error.response?.data;
+        this.logger.error(`Error fetching Millenium sales: ${error.message} - Data: ${JSON.stringify(errorData)}`);
         throw error;
       }
     }

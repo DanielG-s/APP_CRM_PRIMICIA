@@ -1,4 +1,5 @@
-import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import * as express from 'express';
 import { PrismaService } from './prisma/prisma.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -6,37 +7,42 @@ import { Queue } from 'bullmq';
 @Controller('health')
 export class HealthController {
     constructor(
-        private prisma: PrismaService,
-        @InjectQueue('erp-sync-queue') private syncQueue: Queue,
+        private readonly prisma: PrismaService,
+        @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
     ) { }
 
     @Get()
-    async getHealth() {
-        return { status: 'OK', timestamp: new Date() };
+    async health(@Res() res: express.Response) {
+        return res.status(HttpStatus.OK).json({ status: 'ok', timestamp: new Date() });
     }
 
     @Get('ready')
-    async getReadiness() {
-        const checks: any = { database: 'DOWN', redis: 'DOWN' };
+    async ready(@Res() res: express.Response) {
+        const checks: any = {
+            prisma: 'down',
+            redis: 'down',
+        };
 
         try {
             await this.prisma.$queryRaw`SELECT 1`;
-            checks.database = 'UP';
-        } catch (e) { }
+            checks.prisma = 'up';
+        } catch (e) {
+            checks.prisma = 'error';
+        }
 
         try {
             const client = await this.syncQueue.client;
             await client.ping();
-            checks.redis = 'UP';
-        } catch (e) { }
-
-        const isReady = Object.values(checks).every((v) => v === 'UP');
-        const responseData = { status: isReady ? 'READY' : 'NOT_READY', checks };
-
-        if (!isReady) {
-            throw new HttpException(responseData, HttpStatus.SERVICE_UNAVAILABLE);
+            checks.redis = 'up';
+        } catch (e) {
+            checks.redis = 'error';
         }
 
-        return responseData;
+        const isReady = checks.prisma === 'up' && checks.redis === 'up';
+
+        return res.status(isReady ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE).json({
+            status: isReady ? 'ready' : 'not_ready',
+            checks,
+        });
     }
 }

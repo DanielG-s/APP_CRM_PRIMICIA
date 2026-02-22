@@ -22,10 +22,14 @@ import { QueueCleanupService } from './sync/cleanup.service';
     BullModule.registerQueue({
       name: 'erp-sync-queue',
     }),
-    BullBoardModule.forFeature({
-      name: 'erp-sync-queue',
-      adapter: BullMQAdapter,
-    }),
+    ...(process.env.ENABLE_BULLBOARD === 'true'
+      ? [
+        BullBoardModule.forFeature({
+          name: 'erp-sync-queue',
+          adapter: BullMQAdapter,
+        }),
+      ]
+      : []),
   ],
   controllers: [SyncController],
   providers: [

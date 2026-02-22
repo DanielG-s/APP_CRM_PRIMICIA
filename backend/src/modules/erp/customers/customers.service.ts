@@ -109,7 +109,7 @@ export class CustomersService {
             items: true,
             channel: true,
             status: true,
-            store: { select: { name: true } },
+            store: { select: { name: true, tradeName: true, code: true } },
           },
           orderBy: { date: 'desc' },
         },
@@ -168,6 +168,8 @@ export class CustomersService {
           value: Number(t.totalValue),
           meta: `Canal: ${t.channel || 'Loja'} `,
           store: t.store?.name || 'Loja Física',
+          storeTradeName: t.store?.tradeName,
+          storeCode: t.store?.code,
         };
       }),
       recentTransactions: customer.transactions.slice(0, 3).map((t) => ({

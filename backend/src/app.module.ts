@@ -40,6 +40,9 @@ import { HealthController } from './health.controller';
       },
       inject: [ConfigService],
     }),
+    BullModule.registerQueue({
+      name: 'erp-sync-queue',
+    }),
     // Only import BullBoardModule if it is enabled. This prevents the route from even existing.
     ...(process.env.ENABLE_BULLBOARD === 'true'
       ? [

@@ -3,39 +3,77 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { MilleniumService } from '../millenium/millenium.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
+
+  private static readonly ALLOWED_EVENT_NAMES = [
+    'S - VENDA E-COMMERCE',
+    'S - VENDA VAREJO NFC-E (LOJAS)',
+    'S - VENDA VAREJO CFE (LOJAS)',
+    'S - VENDA VAREJO CFE ( ESTOQUE NEGAT',
+    'S - VENDA VAREJO NFE',
+    'E - DEVOLUCAO DE VENDA VAREJO',
+    'E - DEVOLUCAO DE VENDA E-COMMERCE',
+  ];
+
   // Simple in-memory cache for product names to avoid spamming the API
   private productCache = new Map<number, string>();
 
   constructor(
     private readonly milleniumService: MilleniumService,
     private readonly prisma: PrismaService,
+    @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
   ) { }
 
   @Cron('0 3 * * *') // 3 AM every day
   async handleNightlySync() {
-    this.logger.log('Running nightly sales sync (Listafaturamentos)...');
+    this.logger.log('Queueing nightly sales sync (Staggered)...');
 
-    // Strict 24h Window: Yesterday 00:00 to 23:59
     const yesterday = subDays(new Date(), 1);
-    const startDate = startOfDay(yesterday);
-    const endDate = endOfDay(yesterday);
+    const start = startOfDay(yesterday).toISOString();
+    const end = endOfDay(yesterday).toISOString();
 
-    await this.syncSales(startDate, endDate);
+    await this.queueStoreSyncs(start, end, 'nightly');
   }
 
-  @Cron(CronExpression.EVERY_HOUR) // Every hour
+  @Cron('0 * * * *') // Every hour on the hour
   async handleHourlySync() {
-    this.logger.log('Running hourly sales sync...');
-    // Sync Today only (since midnight)
-    // This catches new sales during the day.
+    this.logger.log('Queueing hourly sales sync (Staggered)...');
     const now = new Date();
-    const startDate = startOfDay(now);
+    const start = startOfDay(now).toISOString();
+    const end = now.toISOString();
 
-    await this.syncSales(startDate, now);
+    await this.queueStoreSyncs(start, end, 'hourly');
+  }
+
+  private async queueStoreSyncs(start: string, end: string, frequency: string) {
+    const stores = await (this.prisma.store as any).findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true }
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+
+    for (let i = 0; i < stores.length; i++) {
+      const store = stores[i];
+      // Jitter: (index * 2 minutes) + random 0-30s
+      const delay = (i * 120000) + Math.floor(Math.random() * 30000);
+      const jobId = `sync-sales:${(store as any).code}:${frequency}:${today}`;
+
+      await this.syncQueue.add('sync-sales',
+        { tenantId: store.id, start, end, storeCode: (store as any).code },
+        {
+          jobId,
+          delay,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 300000 } // 5min
+        }
+      );
+    }
   }
 
   /**
@@ -76,19 +114,32 @@ export class SyncService {
   }
 
   private async processInvoice(sale: any) {
-    // 0. Resolve Store (Filial)
-    // PRIORIDADE: nome_emissor (conforme solicitado) > nome_filial > cod_filial
-    const storeName = sale.nome_emissor || sale.nome_filial || (sale.cod_filial ? `Filial ${sale.cod_filial}` : 'Loja Principal');
+    // PRIORIDADE MUDOU: cod_emissor ou cod_filial para fazer o match exato
+    let storeCode = String(sale.cod_emissor || sale.cod_filial);
+    const storeName = sale.nome_emissor || sale.nome_filial || `Filial ${storeCode}`;
+    const eventName = sale.nome_evento || '';
 
-    // Check if we already have this store cached or in DB
-    let store = await this.prisma.store.findFirst({
-      where: { name: storeName }
+    if (!SyncService.ALLOWED_EVENT_NAMES.includes(eventName)) {
+      this.logger.debug(`Skipping invoice ${sale.cod_pedidov || sale.pedidov}: Event '${eventName}' not in allow-list.`);
+      return;
+    }
+
+    // REDIRECIONAMENTO: 006 deve ser tratada como 007
+    if (storeCode === '006') {
+      this.logger.debug(`Redirecting sale from store 006 to 007`);
+      storeCode = '007';
+    }
+
+    // Check if we already have this store cached or in DB explicitly by CODE
+    let store = await (this.prisma.store as any).findFirst({
+      where: { code: storeCode }
     });
 
     if (!store) {
-      this.logger.debug(`Creating new Store from ERP: ${storeName}`);
-      store = await this.prisma.store.create({
+      this.logger.debug(`Creating new Store from ERP fallback: ${storeName} (${storeCode})`);
+      store = await (this.prisma.store as any).create({
         data: {
+          code: storeCode,
           name: storeName,
         }
       });
