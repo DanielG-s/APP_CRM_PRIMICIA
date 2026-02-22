@@ -4,14 +4,15 @@ import { Job, UnrecoverableError, Queue } from 'bullmq';
 import { CustomerSyncService } from './customer-sync.service';
 import { ProductSyncService } from './product-sync.service';
 import { StoreSyncService } from './store-sync.service';
+import { SyncService } from './sync.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as crypto from 'crypto';
 
 @Processor('erp-sync-queue', {
-    concurrency: parseInt(process.env.ERP_SYNC_CONCURRENCY || '1', 10), // Configurable global concurrency
+    concurrency: 1, // Strict sequential processing per worker instance
     limiter: {
-        max: 10,
-        duration: 60000
+        max: 5,
+        duration: 1000 // 5 jobs per second max
     }
 })
 export class SyncProcessor extends WorkerHost {
@@ -21,6 +22,7 @@ export class SyncProcessor extends WorkerHost {
         private readonly customerSyncService: CustomerSyncService,
         private readonly productSyncService: ProductSyncService,
         private readonly storeSyncService: StoreSyncService,
+        private readonly syncService: SyncService,
         private readonly prisma: PrismaService,
         @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
     ) {
@@ -79,6 +81,10 @@ export class SyncProcessor extends WorkerHost {
                     break;
                 case 'sync-stores':
                     await this.storeSyncService.syncStores();
+                    break;
+                case 'sync-sales':
+                    const { start, end } = job.data;
+                    await this.syncService.syncSales(new Date(start), new Date(end));
                     break;
                 default:
                     this.logger.warn(`Unknown job type: ${job.name}`);

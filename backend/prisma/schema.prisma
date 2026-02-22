@@ -186,6 +186,7 @@ model Store {
   id              String                @id @default(cuid())
   name            String
   tradeName       String?
+  code            String?               @unique
   cnpj            String?
   isActive        Boolean               @default(true)
   syncEnabled     Boolean               @default(true)

@@ -56,7 +56,9 @@ export class StoreSyncService {
 
                 // Rule: Ignore stores starting with "DESAT-" or "DIV-"
                 // Using regex or simple startsWith checking for specific prefixes
-                if (codFilial.startsWith('DESAT-') || codFilial.startsWith('DIV-')) {
+                const isExcluded = ['DESAT', 'DIV-', '10', 'FC', 'INDEF', 'TRE'].some(prefix => codFilial.startsWith(prefix)) ||
+                    ['001', '002', '003'].includes(codFilial);
+                if (isExcluded) {
                     this.logger.debug(`Ignoring store ${raw.nome} due to prefix: ${codFilial}`);
                     continue;
                 }
@@ -69,15 +71,15 @@ export class StoreSyncService {
                 const storeData = {
                     name: storeName,
                     tradeName: raw.fantasia ? String(raw.fantasia).trim() : null,
+                    code: codFilial,
                     cnpj: raw.cnpj ? String(raw.cnpj).trim() : null,
                     isActive: true, // We assume if it came in the list and not excluded, it is active
                     // other fields could be mapped here if added to schema
                 };
 
-                // As Store doesn't have @unique on name in schema, we find first then update/create
-                // This ensures we relate the sale.nome_emissor to this exact name.
+                // As Store now has code (cod_filial), we find existing ones by code.
                 const existingStore = await this.prisma.store.findFirst({
-                    where: { name: storeName }
+                    where: { code: codFilial }
                 });
 
                 if (existingStore) {

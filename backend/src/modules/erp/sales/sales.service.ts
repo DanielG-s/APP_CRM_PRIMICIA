@@ -121,8 +121,9 @@ export class SalesService {
   }
 
   async getStores() {
-    return this.prisma.store.findMany({
-      select: { id: true, name: true },
+    return (this.prisma.store as any).findMany({
+      where: { code: { not: '006' } },
+      select: { id: true, name: true, tradeName: true, code: true },
       orderBy: { name: 'asc' },
     });
   }
@@ -141,15 +142,21 @@ export class SalesService {
     campaigns.forEach((c) => {
       if (c.type) typesSet.add(c.type);
     });
-    const stores = await this.prisma.store.findMany({
-      select: { id: true, name: true },
+
+    // 1. Encontrar as lojas pelos códigos
+    const store006 = await (this.prisma.store as any).findUnique({ where: { code: '006' } });
+    const store007 = await (this.prisma.store as any).findUnique({ where: { code: '007' } });
+
+    const stores = await (this.prisma.store as any).findMany({
+      where: { code: { not: '006' } },
+      select: { id: true, name: true, tradeName: true, code: true },
     });
 
     return {
       campaigns: campaigns.map((c) => ({ id: c.id, name: c.name })),
       tags: Array.from(tagsSet).sort(),
       types: Array.from(typesSet).sort(),
-      stores: stores.map((s) => ({ id: s.id, name: s.name })),
+      stores: stores.map((s: any) => ({ id: s.id, name: s.name, tradeName: s.tradeName, code: s.code })),
       channels: ['E-mail', 'SMS', 'Mobile push', 'WhatsApp'],
     };
   }
@@ -190,7 +197,7 @@ export class SalesService {
       include: { schedules: true },
     });
 
-    const salesRaw = await this.prisma.transaction.findMany({
+    const salesRaw = await (this.prisma.transaction as any).findMany({
       where: { date: { gte: start, lte: end }, status: 'PAID' },
       select: {
         date: true,
@@ -198,7 +205,7 @@ export class SalesService {
         id: true,
         isInfluenced: true,
         storeId: true,
-        store: { select: { name: true } },
+        store: { select: { name: true, tradeName: true, code: true } },
       },
     });
 
@@ -321,11 +328,13 @@ export class SalesService {
     }
 
     const storesMap = new Map();
-    salesRaw.forEach((s) => {
+    salesRaw.forEach((s: any) => {
       if (!storesMap.has(s.storeId))
         storesMap.set(s.storeId, {
           id: s.storeId,
           name: s.store?.name,
+          tradeName: s.store?.tradeName,
+          code: s.store?.code,
           revenue: 0,
           revenueInfluenced: 0,
           conversions: 0,
@@ -443,8 +452,9 @@ export class SalesService {
       if (!storesMap.has(storeId)) {
         storesMap.set(storeId, {
           id: storeId,
-          name: tx.store.name,
-          code: tx.store.cnpj ? tx.store.cnpj.slice(0, 4) : 'LOJA',
+          name: (tx as any).store.name,
+          tradeName: (tx as any).store.tradeName,
+          code: (tx as any).store.code,
           revenue: 0,
           revenueInfluenced: 0,
           transactions: 0,
@@ -592,10 +602,10 @@ export class SalesService {
       transactionWhere.salespersonId = { in: filters.salespersonIds };
     }
 
-    const campaigns = await this.prisma.campaign.findMany({
+    const campaigns = await (this.prisma.campaign as any).findMany({
       where: campaignWhere,
       orderBy: { date: 'desc' },
-      include: { store: { select: { id: true, name: true } } },
+      include: { store: { select: { id: true, name: true, tradeName: true, code: true } } },
     });
     const sales = await this.prisma.transaction.findMany({
       where: transactionWhere,
@@ -696,11 +706,13 @@ export class SalesService {
     });
 
     const storesMap = new Map();
-    campaigns.forEach((c) => {
+    campaigns.forEach((c: any) => {
       if (!storesMap.has(c.storeId))
         storesMap.set(c.storeId, {
           id: c.storeId,
           name: c.store?.name || 'Loja',
+          tradeName: c.store?.tradeName,
+          code: c.store?.code,
           receitaInf: 0,
           vendasInf: 0,
           realizados: 0,
@@ -739,6 +751,8 @@ export class SalesService {
               ? 'Vendedor'
               : `Vend. ${sellerId.substring(0, 4)}`,
           storeName,
+          storeTradeName: storesMap.get(s.storeId)?.tradeName,
+          storeCode: storesMap.get(s.storeId)?.code,
           storeId: s.storeId,
           receitaInf: 0,
           vendasInf: 0,

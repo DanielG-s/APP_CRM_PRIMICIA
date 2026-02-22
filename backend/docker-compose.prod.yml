@@ -44,4 +44,4 @@ networks:
 
 secrets:
   redis_password:
-    file: /etc/merxios/secrets/redis_password
+    file: ./infra/redis/redis_password.txt

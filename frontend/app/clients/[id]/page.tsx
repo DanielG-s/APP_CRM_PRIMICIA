@@ -256,7 +256,7 @@ export default function ClientDetailPage() {
                                             <div className="col-span-4">
                                                 <div className="flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-50 px-2 py-1 rounded w-fit">
                                                     <StoreIcon size={12} />
-                                                    {event.store || 'Loja Física'}
+                                                    {event.storeCode ? `${event.storeCode} - ${event.storeTradeName || event.store || 'Loja Física'}` : (event.storeTradeName || event.store || 'Loja Física')}
                                                 </div>
                                             </div>
                                             <div className="col-span-3 text-right">
