@@ -10,6 +10,7 @@ interface BackendProfile {
     name: string;
     role: string;
     tenantId: string;
+    organizationName: string;
 }
 
 export default function ProfilePage() {
@@ -67,12 +68,12 @@ export default function ProfilePage() {
                                 <p className="font-medium text-violet-900 leading-none mt-1">{profile.role.replace('_', ' ')}</p>
                             </div>
                         </div>
-                        {profile.tenantId && (
+                        {profile.organizationName && (
                             <div className="bg-blue-50 border border-blue-100 px-4 py-2 rounded-lg flex items-center gap-2">
                                 <Home size={18} className="text-blue-600" />
                                 <div>
-                                    <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider">ID da Organização</p>
-                                    <p className="font-medium text-blue-900 leading-none mt-1 truncate max-w-[120px]" title={profile.tenantId}>{profile.tenantId}</p>
+                                    <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider">Organização</p>
+                                    <p className="font-medium text-blue-900 leading-none mt-1">{profile.organizationName}</p>
                                 </div>
                             </div>
                         )}

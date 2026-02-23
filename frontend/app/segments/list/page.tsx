@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { intelligenceService } from '@/services/intelligence.service';
 import { API_BASE_URL } from '@/lib/config';
+import { useAuth } from '@clerk/nextjs';
 
 // Se você não tiver este arquivo criado, me avise que eu crio ele pra você
 import { SegmentImpactPanel } from '../shared/components';
@@ -249,6 +250,7 @@ const Sparkline = ({ data, color = "#10b981" }: { data: number[], color?: string
 // --- PÁGINA PRINCIPAL ---
 
 export default function SegmentListPage() {
+  const { getToken } = useAuth();
   const [segments, setSegments] = useState<any[]>([]);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -295,7 +297,8 @@ export default function SegmentListPage() {
     const fetchPreview = async () => {
       setIsPreviewLoading(true);
       try {
-        const response = await intelligenceService.calculatePreview(selectedSegment.rules);
+        const token = await getToken();
+        const response = await intelligenceService.calculatePreview(token, selectedSegment.rules);
         setPreviewData(response);
       } catch (error) { console.error("Erro ao calcular preview", error); }
       finally { setIsPreviewLoading(false); }
@@ -308,7 +311,8 @@ export default function SegmentListPage() {
   const fetchSegments = async () => {
     try {
       setIsLoading(true);
-      const data = await intelligenceService.getSegments();
+      const token = await getToken();
+      const data = await intelligenceService.getSegments(token);
 
       if (data && data.segments && Array.isArray(data.segments)) {
         setSegments(data.segments);
@@ -342,7 +346,10 @@ export default function SegmentListPage() {
   const handleToggleStatus = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSegments(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s));
-    try { await intelligenceService.toggleSegmentStatus(id); }
+    try {
+      const token = await getToken();
+      await intelligenceService.toggleSegmentStatus(token, id);
+    }
     catch (_) { fetchSegments(); }
   };
 
@@ -351,7 +358,10 @@ export default function SegmentListPage() {
     if (!confirm('Tem certeza?')) return;
     if (selectedSegment?.id === id) setSelectedSegment(null);
     setSegments(prev => prev.filter(s => s.id !== id));
-    try { await intelligenceService.deleteSegment(id); }
+    try {
+      const token = await getToken();
+      await intelligenceService.deleteSegment(token, id);
+    }
     catch (_) { fetchSegments(); }
   };
 
