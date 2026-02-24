@@ -123,12 +123,13 @@ export class SyncService {
       sale.nome_emissor || sale.nome_filial || `Filial ${storeCode}`;
     const eventName = sale.nome_evento || '';
 
-    if (!SyncService.ALLOWED_EVENT_NAMES.includes(eventName)) {
-      this.logger.debug(
-        `Skipping invoice ${sale.cod_pedidov || sale.pedidov}: Event '${eventName}' not in allow-list.`,
-      );
-      return;
-    }
+    // Temporarily disabled mapping rule since historical ERP sales miss nome_evento
+    // if (!SyncService.ALLOWED_EVENT_NAMES.includes(eventName)) {
+    //   this.logger.debug(
+    //     `Skipping invoice ${sale.cod_pedidov || sale.pedidov}: Event '${eventName}' not in allow-list.`,
+    //   );
+    //   return;
+    // }
 
     // REDIRECIONAMENTO: 006 deve ser tratada como 007
     if (storeCode === '006') {
@@ -143,17 +144,9 @@ export class SyncService {
 
     if (!store) {
       this.logger.debug(
-        `Creating new Store from ERP fallback: ${storeName} (${storeCode})`,
+        `Skipping invoice ${sale.cod_pedidov || sale.pedidov}: Store ${storeCode} is not in the allowed stores list.`,
       );
-      const defaultOrg = await this.prisma.organization.findFirst();
-      if (!defaultOrg) throw new Error('No Organization found to attach fallback store');
-      store = await (this.prisma.store as any).create({
-        data: {
-          code: storeCode,
-          name: storeName,
-          organizationId: defaultOrg.id
-        },
-      });
+      return;
     }
 
     const storeId = store.id;

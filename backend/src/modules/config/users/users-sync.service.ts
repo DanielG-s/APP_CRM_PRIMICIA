@@ -9,28 +9,15 @@ export class UsersSyncService {
     // Find if user was invited (email exists)
     const existingUser = await this.prisma.user.findFirst({
       where: organizationId ? { organizationId, email } : { email },
+      include: { role: true, accessibleStores: true },
     });
 
     if (!existingUser) {
-      // Self-Serve SaaS Onboarding:
-      // Se o usuário não foi convidado, criamos um Tenant isolado (Organization) novo para ele.
-      const newOrg = await this.prisma.organization.create({
-        data: {
-          name: `Workspace de ${name || email}`,
-        },
-      });
-
-      // @ts-ignore
-      return this.prisma.user.create({
-        data: {
-          clerkId,
-          email,
-          name: name || 'Usuário',
-          role: 'SUPER_ADMIN',
-          status: 'ACTIVE',
-          organizationId: newOrg.id,
-        } as any,
-      });
+      // Se o usuário não existe pelo email, significa que ele tentou burlar
+      // e se registrar no Clerk sem um convite do backend.
+      throw new ForbiddenException(
+        'Acesso negado: Sua conta não foi convidada para usar o sistema.',
+      );
     }
 
     // Se o usuário existe, mas não tinha o clerkId associado (primeiro login após o convite ter sido providenciado)
@@ -43,6 +30,7 @@ export class UsersSyncService {
           status: 'ACTIVE',
           name: existingUser.name || name, // Mantém o nome do convite se existir, ou pega do Clerk
         } as any,
+        include: { role: true, accessibleStores: true },
       });
     }
 

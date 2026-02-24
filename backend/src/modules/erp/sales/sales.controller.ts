@@ -12,7 +12,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { User, Role } from '@prisma/client';
+import { User } from '@prisma/client';
 
 @ApiTags('Integração ERP')
 @Controller('sales')
@@ -151,7 +151,7 @@ export class SalesController {
     // 3. Multi-Tenant Enforcement
     let storeIds: string[] | undefined = undefined;
 
-    if (user.role === Role.GERENTE_GERAL) {
+    if ((user as any).role?.level <= 10) {
       // Gerente Geral can view all stores within their organization
       storeIds = stores ? stores.split(',') : undefined;
     } else {
@@ -204,7 +204,7 @@ export class SalesController {
 
     let storeIds: string[] | undefined = undefined;
 
-    if (user.role === Role.GERENTE_GERAL) {
+    if ((user as any).role?.level <= 10) {
       storeIds = stores
         ? Array.isArray(stores)
           ? stores

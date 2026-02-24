@@ -52,6 +52,7 @@ export class ClerkAuthGuard implements CanActivate {
 
       let dbUser = await this.prisma.user.findUnique({
         where: { clerkId: sessionClaims.sub },
+        include: { role: true, accessibleStores: true },
       });
 
       // Fallback: If the user is authenticated in Clerk but missing in our DB
@@ -74,11 +75,11 @@ export class ClerkAuthGuard implements CanActivate {
         }
 
         // Deixa a ForbiddenException do usersSyncService vazar para o interceptor caso não tenha sido convidado
-        dbUser = await this.usersSyncService.syncUser(
+        dbUser = (await this.usersSyncService.syncUser(
           sessionClaims.sub, // clerkId
           email,
           name,
-        );
+        )) as any;
       }
 
       request.user = dbUser;

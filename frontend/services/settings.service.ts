@@ -64,12 +64,32 @@ export const settingsService = {
   },
 
   createUser: async (token: string | null, data: any) => {
-    const response = await axios.post(`${API_URL}/users`, data, getHeaders(token));
+    const response = await axios.post(`${API_URL}/users/invite`, data, getHeaders(token));
+    return response.data;
+  },
+
+  updateUserRole: async (token: string | null, userId: string, roleId: string) => {
+    const response = await axios.patch(`${API_URL}/users/${userId}/role`, { roleId }, getHeaders(token));
     return response.data;
   },
 
   deleteUser: async (token: string | null, id: string) => {
     const response = await axios.delete(`${API_URL}/users/${id}`, getHeaders(token));
+    return response.data;
+  },
+
+  getRoles: async (token: string | null) => {
+    const response = await axios.get(`${API_URL}/config/roles`, getHeaders(token));
+    return response.data;
+  },
+
+  createRole: async (token: string | null, data: any) => {
+    const response = await axios.post(`${API_URL}/config/roles`, data, getHeaders(token));
+    return response.data;
+  },
+
+  deleteRole: async (token: string | null, roleId: string) => {
+    const response = await axios.delete(`${API_URL}/config/roles/${roleId}`, getHeaders(token));
     return response.data;
   }
 };

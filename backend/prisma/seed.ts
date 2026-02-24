@@ -68,7 +68,17 @@ async function main() {
     }
   });
 
-  // 2. Loja e Admin
+  // 2. Criar cargo
+  const adminRole = await prisma.role.create({
+    data: {
+      organizationId: org.id,
+      name: 'Gerente Geral Seeder',
+      level: 10,
+      permissions: ['*']
+    }
+  });
+
+  // 3. Loja e Admin
   const store = await prisma.store.create({
     data: {
       id: 'DEFAULT', // Force ID for SyncService compatibility
@@ -77,7 +87,7 @@ async function main() {
       cnpj: '12.345.678/0001-90',
       cityNormalized: 'sao paulo',
       users: {
-        create: { organizationId: org.id, clerkId: 'admin_seed', name: 'Daniel Admin', email: 'admin@primicia.com', role: 'GERENTE_GERAL' },
+        create: { organizationId: org.id, clerkId: 'admin_seed', name: 'Daniel Admin', email: 'admin@primicia.com', roleId: adminRole.id },
       },
       emailSettings: {
         create: {

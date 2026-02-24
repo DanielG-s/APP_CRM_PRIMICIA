@@ -37,6 +37,8 @@ export default function ClientsPage() {
     const deferredSearch = useDeferredValue(search);
     const [page, setPage] = useState(1);
     const itemsPerPage = 10;
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalClients, setTotalClients] = useState(0);
 
     // Estados de Filtro e Ordenação
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'lastPurchase', direction: 'desc' });
@@ -46,26 +48,43 @@ export default function ClientsPage() {
     const [activeSegments, setActiveSegments] = useState<string[]>([]);
     const segmentMenuRef = useRef<HTMLDivElement>(null);
 
-    // --- FETCHING ---
+    // --- FETCHING VIA BACKEND PAGINATION ---
     useEffect(() => {
-        /**
-         * Fetches all customers from the backend.
-         * Sets loading state and handles errors.
-         */
+        let isActive = true;
         async function fetchClients() {
             setLoading(true);
             try {
-                // ... inside the component
                 const token = await getToken();
-                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers`, {
+                const params = new URLSearchParams();
+                params.append('page', page.toString());
+                params.append('limit', itemsPerPage.toString());
+                if (deferredSearch) params.append('search', deferredSearch);
+                if (sortConfig.key) {
+                    params.append('sortBy', sortConfig.key);
+                    params.append('sortDir', sortConfig.direction);
+                }
+                if (activeSegments.length > 0) {
+                    params.append('segments', activeSegments.join(','));
+                }
+
+                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers?${params.toString()}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                if (res.ok) setClients(await res.json());
-            } catch (error) { console.error(error); }
-            finally { setLoading(false); }
+                if (res.ok && isActive) {
+                    const data = await res.json();
+                    setClients(data.data);
+                    setTotalPages(data.pagination.totalPages);
+                    setTotalClients(data.pagination.total);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (isActive) setLoading(false);
+            }
         }
         fetchClients();
-    }, [getToken]);
+        return () => { isActive = false; };
+    }, [getToken, page, deferredSearch, sortConfig, activeSegments]);
 
     // Click Outside para fechar o menu de segmentação
     useEffect(() => {
@@ -85,57 +104,12 @@ export default function ClientsPage() {
         }));
     };
 
-    /**
-     * Toggles a segment filter on/off.
-     * Resets pagination to page 1 when filters change.
-     */
     const toggleSegment = (segment: string) => {
         setActiveSegments(prev =>
             prev.includes(segment) ? prev.filter(s => s !== segment) : [...prev, segment]
         );
         setPage(1); // Volta para pág 1 ao filtrar
     };
-
-    // --- FILTER & SORT ---
-    /**
-     * Memoized list of clients after filtering and sorting.
-     * Dependencies: clients, search, sortConfig, activeSegments.
-     */
-    const processedData = useMemo(() => {
-        let data = [...clients];
-
-        // 1. Filtro de Texto
-        if (deferredSearch) {
-            const term = deferredSearch.toLowerCase();
-            data = data.filter(c => c.name.toLowerCase().includes(term) || c.email.toLowerCase().includes(term) || (c.cpf && c.cpf.includes(term)));
-        }
-
-        // 2. Filtro de Segmento (NOVO)
-        if (activeSegments.length > 0) {
-            data = data.filter(c => activeSegments.includes(c.rfmLabel));
-        }
-
-        // 3. Ordenação
-        if (sortConfig.key) {
-            data.sort((a, b) => {
-                let valA = a[sortConfig.key];
-                const valB = b[sortConfig.key];
-                if (valA === null) return 1; if (valB === null) return -1;
-                if (typeof valA === 'string' && !isNaN(Number(valA))) valA = Number(valA);
-                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
-        return data;
-    }, [clients, deferredSearch, sortConfig, activeSegments]);
-
-    const paginatedData = useMemo(() => {
-        const start = (page - 1) * itemsPerPage;
-        return processedData.slice(start, start + itemsPerPage);
-    }, [processedData, page]);
-
-    const totalPages = Math.ceil(processedData.length / itemsPerPage);
 
     // Header da Tabela
     const SortHeader = ({ label, sortKey, align = "left" }: any) => (
@@ -210,7 +184,7 @@ export default function ClientsPage() {
                     </div>
 
                     <div className="flex justify-between items-center px-2">
-                        <h2 className="text-sm font-bold text-slate-500">{processedData.length.toLocaleString('pt-BR')} consumidores na base</h2>
+                        <h2 className="text-sm font-bold text-slate-500">{totalClients.toLocaleString('pt-BR')} consumidores na base</h2>
                     </div>
 
                     {/* Tabela */}
@@ -231,7 +205,7 @@ export default function ClientsPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {paginatedData.map((client: any) => (
+                                    {clients.map((client: any) => (
                                         <tr key={client.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => router.push(`/clients/${client.id}`)}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
@@ -288,11 +262,11 @@ export default function ClientsPage() {
                             {/* Paginação */}
                             <div className="p-4 border-t border-slate-100 flex justify-end items-center bg-slate-50/50 gap-3">
                                 <span className="text-xs text-slate-500">
-                                    {paginatedData.length > 0 ? `${(page - 1) * itemsPerPage + 1}-${Math.min(page * itemsPerPage, processedData.length)} de ${processedData.length}` : '0 de 0'}
+                                    {clients.length > 0 ? `${(page - 1) * itemsPerPage + 1}-${Math.min(page * itemsPerPage, totalClients)} de ${totalClients}` : '0 de 0'}
                                 </span>
                                 <div className="flex gap-1">
                                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-violet-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
-                                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-violet-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
+                                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0} className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-violet-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
                                 </div>
                             </div>
                         </div>

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { settingsService } from "@/services/settings.service";
-import { Loader2, Plus, Trash2, Mail, MessageSquare, MessageCircle, Save, Store, User, Shield } from "lucide-react";
+import { Loader2, Plus, Trash2, Mail, MessageSquare, MessageCircle, Save, Store, User, Shield, Pencil, Lock } from "lucide-react";
 
 import { useAuth } from "@clerk/nextjs";
 
@@ -29,14 +29,20 @@ export default function SettingsPage() {
     cityNormalized: "",
   });
 
-  // --- ESTADOS: EQUIPE (USUÁRIOS) ---
   const [users, setUsers] = useState<any[]>([]);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+
+  const [roles, setRoles] = useState<any[]>([]);
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [newRole, setNewRole] = useState({ name: "", level: 10, permissions: [] as string[] });
+
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
     password: "",
-    role: "user" // admin, user
+    role: "" // Will hold the Role ID
   });
 
   // --- ESTADOS: E-MAIL ---
@@ -80,17 +86,19 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const token = await getToken();
-      const [storeData, usersData, emailData, wppData] = await Promise.all([
+      const [storeData, usersData, emailData, wppData, rolesData] = await Promise.all([
         settingsService.getStore(token),
         settingsService.getUsers(token),
         settingsService.getEmailSettings(token),
-        settingsService.getWhatsappInstances(token)
+        settingsService.getWhatsappInstances(token),
+        settingsService.getRoles(token)
       ]);
 
       if (storeData) setStoreConfig({ ...storeConfig, ...storeData });
       if (usersData) setUsers(usersData);
       if (emailData) setEmailConfig({ ...emailConfig, ...emailData });
       if (wppData) setWhatsappInstances(wppData);
+      if (rolesData) setRoles(rolesData);
 
     } catch (error) {
       console.error("Erro ao carregar configs:", error);
@@ -123,11 +131,29 @@ export default function SettingsPage() {
       await settingsService.createUser(token, newUser);
       toast.success("Usuário criado com sucesso.");
       setIsUserDialogOpen(false);
-      setNewUser({ name: "", email: "", password: "", role: "user" });
+      setNewUser({ name: "", email: "", password: "", role: "" });
       const updatedUsers = await settingsService.getUsers(token);
       setUsers(updatedUsers);
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Erro ao criar usuário.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEditUser() {
+    if (!editingUser?.roleId) return toast.warning("Selecione um cargo.");
+    setSaving(true);
+    try {
+      const token = await getToken();
+      await settingsService.updateUserRole(token, editingUser.id, editingUser.roleId);
+      toast.success("Cargo atualizado com sucesso!");
+      setIsEditUserDialogOpen(false);
+      setEditingUser(null);
+      const updatedUsers = await settingsService.getUsers(token);
+      setUsers(updatedUsers);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Erro ao atualizar usuário.");
     } finally {
       setSaving(false);
     }
@@ -140,8 +166,39 @@ export default function SettingsPage() {
       await settingsService.deleteUser(token, id);
       toast.success("Usuário removido.");
       setUsers(users.filter(u => u.id !== id));
-    } catch (error) {
-      toast.error("Erro ao remover usuário.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Erro ao remover usuário.");
+    }
+  }
+
+  // --- HANDLERS: CARGOS ---
+  async function handleAddRole() {
+    if (!newRole.name) return toast.warning("Preencha o nome do cargo.");
+    setSaving(true);
+    try {
+      const token = await getToken();
+      await settingsService.createRole(token, newRole);
+      toast.success("Cargo criado com sucesso!");
+      setIsRoleDialogOpen(false);
+      setNewRole({ name: "", level: 10, permissions: [] });
+      const rolesData = await settingsService.getRoles(token);
+      setRoles(rolesData);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Erro ao criar cargo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteRole(id: string) {
+    if (!confirm("Tem certeza que deseja excluir este cargo? (Isto falhará se houver usuários usando-o)")) return;
+    try {
+      const token = await getToken();
+      await settingsService.deleteRole(token, id);
+      toast.success("Cargo excluído.");
+      setRoles(roles.filter(r => r.id !== id));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Erro ao excluir cargo.");
     }
   }
 
@@ -225,9 +282,10 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3 mb-8">
+        <TabsList className="grid w-full max-w-2xl grid-cols-4 mb-8">
           <TabsTrigger value="general">Geral</TabsTrigger>
-          <TabsTrigger value="team">Equipe</TabsTrigger>
+          <TabsTrigger value="team">Usuários</TabsTrigger>
+          <TabsTrigger value="roles">Cargos</TabsTrigger>
           <TabsTrigger value="channels">Canais</TabsTrigger>
         </TabsList>
 
@@ -300,12 +358,13 @@ export default function SettingsPage() {
                     <Input type="password" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="******" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Permissão (Role)</Label>
+                    <Label>Permissão / Cargo (Role)</Label>
                     <Select value={newUser.role} onValueChange={v => setNewUser({ ...newUser, role: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Selecione um cargo..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user">Usuário (Padrão)</SelectItem>
-                        <SelectItem value="admin">Administrador</SelectItem>
+                        {roles.map((r: any) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -313,6 +372,34 @@ export default function SettingsPage() {
                 <DialogFooter>
                   <Button onClick={handleAddUser} disabled={saving}>
                     {saving ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'Criar Usuário'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* EDIÇÃO DE USUÁRIO */}
+            <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Mudar Cargo</DialogTitle>
+                  <DialogDescription>Atualize as permissões de {editingUser?.name}.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Permissão / Cargo (Role)</Label>
+                    <Select value={editingUser?.roleId || ""} onValueChange={v => setEditingUser({ ...editingUser, roleId: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione um cargo..." /></SelectTrigger>
+                      <SelectContent>
+                        {roles.map((r: any) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleEditUser} disabled={saving}>
+                    {saving ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'Salvar Alterações'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -337,13 +424,16 @@ export default function SettingsPage() {
                         <td className="p-4 align-middle font-medium">{user.name}</td>
                         <td className="p-4 align-middle">{user.email}</td>
                         <td className="p-4 align-middle">
-                          <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                            {user.role === 'admin' ? <Shield size={12} className="mr-1" /> : null}
-                            {user.role}
+                          <Badge variant={user.role?.level === 0 ? 'default' : 'secondary'}>
+                            {user.role?.level === 0 ? <Shield size={12} className="mr-1" /> : null}
+                            {user.role?.name || 'Sem Cargo'}
                           </Badge>
                         </td>
-                        <td className="p-4 align-middle text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                        <td className="p-4 align-middle text-right flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => { setEditingUser(user); setIsEditUserDialogOpen(true); }} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full">
+                            <Pencil size={16} />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full">
                             <Trash2 size={16} />
                           </Button>
                         </td>
@@ -352,6 +442,82 @@ export default function SettingsPage() {
                     {users.length === 0 && (
                       <tr>
                         <td colSpan={4} className="p-4 text-center text-muted-foreground">Nenhum usuário encontrado.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ================= ABA CARGOS (ROLES) ================= */}
+        <TabsContent value="roles" className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-purple-100 rounded-lg text-purple-700"><Lock size={20} /></div>
+              <div>
+                <h2 className="text-lg font-semibold">Cargos e Permissões</h2>
+                <p className="text-sm text-muted-foreground">Defina níveis de acesso para a equipe.</p>
+              </div>
+            </div>
+            <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+              <DialogTrigger asChild>
+                <Button><Plus size={16} className="mr-2" /> Novo Cargo</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Novo Cargo</DialogTitle>
+                  <DialogDescription>Crie uma nova hierarquia de acessos.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Nome do Cargo</Label>
+                    <Input value={newRole.name} onChange={e => setNewRole({ ...newRole, name: e.target.value })} placeholder="Ex: Supervisor" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nível Hierárquico (Level)</Label>
+                    <Input type="number" value={newRole.level} onChange={e => setNewRole({ ...newRole, level: Number(e.target.value) })} />
+                    <p className="text-xs text-muted-foreground">0 = Acesso Total (Super Admin). 10 = Gerente. 20 = Usuário comum. Níveis menores mandam em níveis maiores.</p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleAddRole} disabled={saving}>
+                    {saving ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'Criar Cargo'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="relative w-full overflow-auto">
+                <table className="w-full caption-bottom text-sm">
+                  <thead className="[&_tr]:border-b">
+                    <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Nome do Cargo</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Level</th>
+                      <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&_tr:last-child]:border-0">
+                    {roles.map((role) => (
+                      <tr key={role.id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                        <td className="p-4 align-middle font-medium">{role.name}</td>
+                        <td className="p-4 align-middle">
+                          <Badge variant={role.level === 0 ? 'default' : 'secondary'}>Lvl {role.level}</Badge>
+                        </td>
+                        <td className="p-4 align-middle text-right">
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                            <Trash2 size={16} />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {roles.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="p-4 text-center text-muted-foreground">Nenhum cargo encontrado.</td>
                       </tr>
                     )}
                   </tbody>

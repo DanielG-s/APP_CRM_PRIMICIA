@@ -6,14 +6,20 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { createClerkClient } from '@clerk/clerk-sdk-node';
-import { Role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) { }
 
+  async getOrganizationName(organizationId: string) {
+    return this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    });
+  }
+
   async findAll(currentUser: any) {
-    if (currentUser.role === Role.SUPER_ADMIN) {
+    if (currentUser.role?.level === 0) {
       return this.prisma.user.findMany({
         orderBy: { name: 'asc' },
         select: {
@@ -22,7 +28,7 @@ export class UsersService {
           email: true,
           role: true,
           createdAt: true,
-          organizationId: true, // changed from storeId
+          organizationId: true,
           clerkId: true,
         },
       });
@@ -49,29 +55,29 @@ export class UsersService {
     currentUser: any,
     email: string,
     name: string,
-    role: string,
+    roleId: string,
     targetOrganizationId?: string,
   ) {
+    const roleData = await this.prisma.role.findUnique({ where: { id: roleId } });
+    if (!roleData) throw new NotFoundException('Cargo inválido.');
+
     // Validation: Who can invite who?
-    if (
-      currentUser.role !== Role.SUPER_ADMIN &&
-      currentUser.role !== Role.GERENTE_GERAL
-    ) {
+    const currentUserLevel = currentUser.role?.level ?? 999;
+    if (currentUserLevel > 10) {
       throw new ConflictException(
         'Apenas Gerentes ou Super Admins podem convidar usuários.',
       );
     }
 
-    // GERENTE_GERAL cannot create SUPER_ADMIN
-    if (currentUser.role === Role.GERENTE_GERAL && role === Role.SUPER_ADMIN) {
+    if (currentUserLevel !== 0 && roleData.level <= currentUserLevel) {
       throw new ConflictException(
-        'Acesso negado: Você não possui privilégios para criar contas de Super Admin.',
+        'Acesso negado: Você não possui privilégios para atribuir este cargo.',
       );
     }
 
     // Determine Tenant
     const finalOrgId =
-      currentUser.role === Role.SUPER_ADMIN && targetOrganizationId
+      currentUserLevel === 0 && targetOrganizationId
         ? targetOrganizationId
         : currentUser.organizationId;
 
@@ -90,58 +96,85 @@ export class UsersService {
     });
 
     try {
-      // Dispara o convite usando Clerk
-      await clerkClient.invitations.createInvitation({
+      // 1. Buscar a Organization local e garantir que exista no Clerk
+      const org = await this.prisma.organization.findUnique({
+        where: { id: finalOrgId },
+      });
+      if (!org) throw new NotFoundException('Organização não encontrada.');
+
+      let clerkOrgId = (org as any).clerkOrgId;
+
+      // 2. Se não tem Clerk Org vinculada ainda, criar uma
+      if (!clerkOrgId) {
+        const clerkOrg = await clerkClient.organizations.createOrganization({
+          name: org.name,
+          createdBy: currentUser.clerkId,
+        });
+        clerkOrgId = clerkOrg.id;
+
+        await this.prisma.organization.update({
+          where: { id: finalOrgId },
+          data: { clerkOrgId } as any,
+        });
+      }
+
+      // 3. Dispara o convite usando Clerk Organization Invitation
+      await clerkClient.organizations.createOrganizationInvitation({
+        organizationId: clerkOrgId,
         emailAddress: email,
-        publicMetadata: {
-          role,
-          tenantId: finalOrgId,
-        },
-        ignoreExisting: true,
+        inviterUserId: currentUser.clerkId,
+        role: 'org:member',
+        redirectUrl: (process.env.FRONTEND_URL || 'http://localhost:3001') + '/sign-up',
       });
 
-      // Cria o placeholder localmente para amarração futura no login
+      // 4. Cria o placeholder localmente para amarração futura no login
       return this.prisma.user.create({
         data: {
           email,
           name,
-          role: role as Role,
+          roleId: roleId,
+          status: 'INVITED',
           organizationId: finalOrgId,
-        },
+        } as any,
       });
-    } catch (error) {
-      console.error('Erro ao processar convite no Clerk:', error);
+    } catch (error: any) {
+      console.error('Erro ao processar convite no Clerk:', error?.message || error);
+      if (error?.status === 404 || error?.status === 409) {
+        throw new ConflictException(error.message || 'Erro ao processar convite.');
+      }
       throw new ConflictException(
         'Não foi possível disparar o convite no Clerk.',
       );
     }
   }
 
-  async updateRole(currentUser: any, targetUserId: string, newRole: string) {
+  async updateRole(currentUser: any, targetUserId: string, newRoleId: string) {
     if (currentUser.id === targetUserId) {
       throw new ConflictException(
         'Operação bloqueada: Você não pode alterar sua própria patente.',
       );
     }
 
-    if (
-      currentUser.role !== Role.SUPER_ADMIN &&
-      currentUser.role !== Role.GERENTE_GERAL
-    ) {
+    const currentUserLevel = currentUser.role?.level ?? 999;
+    if (currentUserLevel > 10) {
       throw new ConflictException(
         'Apenas Gerentes ou Super Admins podem alterar perfis.',
       );
     }
 
+    const newRoleData = await this.prisma.role.findUnique({ where: { id: newRoleId } });
+    if (!newRoleData) throw new NotFoundException('Novo cargo inválido.');
+
     const targetUser = await this.prisma.user.findUnique({
       where: { id: targetUserId },
+      include: { role: true },
     });
     if (!targetUser)
       throw new NotFoundException('Usuário alvo não encontrado.');
 
     // Isolamento de Tenant
     if (
-      currentUser.role !== Role.SUPER_ADMIN &&
+      currentUserLevel !== 0 &&
       targetUser.organizationId !== currentUser.organizationId
     ) {
       throw new ConflictException(
@@ -150,22 +183,22 @@ export class UsersService {
     }
 
     // Proteção de Escalonamento (Escalation Protection)
-    if (currentUser.role === Role.GERENTE_GERAL) {
-      if (newRole === Role.SUPER_ADMIN) {
+    if (currentUserLevel !== 0) {
+      if (newRoleData.level <= currentUserLevel) {
         throw new ConflictException(
-          'Acesso negado: Você não pode promover usuários a Super Admin.',
+          'Acesso negado: Você não pode promover usuários para este cargo.',
         );
       }
-      if (targetUser.role === Role.SUPER_ADMIN) {
+      if (targetUser.role && targetUser.role.level <= currentUserLevel) {
         throw new ConflictException(
-          'Acesso negado: Você não pode rebaixar as permissões de um Super Admin.',
+          'Acesso negado: Você não pode alterar o perfil de um usuário com cargo igual ou superior ao seu.',
         );
       }
     }
 
     return this.prisma.user.update({
       where: { id: targetUserId },
-      data: { role: newRole as Role },
+      data: { roleId: newRoleId },
     });
   }
 
@@ -174,12 +207,13 @@ export class UsersService {
     if (currentUser.id === id)
       throw new ConflictException('Você não pode se excluir.');
 
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!user) throw new NotFoundException('Usuário não encontrado.');
 
+    const currentUserLevel = currentUser.role?.level ?? 999;
     // Isolamento de Tenant (preventivo, em caso de by-pass no prisma)
     if (
-      currentUser.role !== Role.SUPER_ADMIN &&
+      currentUserLevel !== 0 &&
       user.organizationId !== currentUser.organizationId
     ) {
       throw new ConflictException(
@@ -188,10 +222,10 @@ export class UsersService {
     }
 
     // Proteção de Escalonamento na Deleção
-    if (currentUser.role === Role.GERENTE_GERAL) {
-      if (user.role === Role.SUPER_ADMIN || user.role === Role.GERENTE_GERAL) {
+    if (currentUserLevel !== 0) {
+      if (user.role && user.role.level <= currentUserLevel) {
         throw new ConflictException(
-          'Acesso negado: Você não tem permissão para remover Super Admins ou outros Gerentes Gerais.',
+          'Acesso negado: Você não tem permissão para remover superiores ou usuários com o mesmo cargo.',
         );
       }
     }
@@ -224,7 +258,7 @@ export class UsersService {
 
     // Isolamento de Tenant (preventivo, em caso de by-pass no prisma)
     if (
-      currentUser.role !== Role.SUPER_ADMIN &&
+      currentUser.role?.level !== 0 &&
       targetUser.organizationId !== currentUser.organizationId
     ) {
       throw new ConflictException('Acesso negado: O usuário alvo pertence a outra organização.');

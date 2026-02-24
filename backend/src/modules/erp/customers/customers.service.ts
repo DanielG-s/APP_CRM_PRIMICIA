@@ -19,82 +19,112 @@ function rfmLabelToScore(label: string): number {
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  async findAll() {
-    const customers = await this.prisma.customer.findMany({
-      include: {
-        transactions: {
-          select: { id: true, totalValue: true, date: true, items: true },
-          orderBy: { date: 'desc' },
-        },
+  async findAll({
+    page = 1,
+    limit = 10,
+    search = '',
+    sortBy = 'createdAt',
+    sortDir = 'desc',
+    segments = [],
+  }: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortDir?: string;
+    segments?: string[];
+  } = {}) {
+    const offset = (page - 1) * limit;
+
+    const sortFieldMap: Record<string, string> = {
+      name: '"name"',
+      rfmScore: '"rfmLabel"',
+      campaignsCount: '"name"',
+      totalTransactions: '"totalTransactions"',
+      lastPurchase: '"lastPurchaseDate"',
+      ltv: 'ltv',
+      createdAt: '"createdAt"',
+    };
+    const orderField = sortFieldMap[sortBy] || '"createdAt"';
+    const orderDir = sortDir.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    const hasSegments = segments && segments.length > 0;
+
+    const query = `
+      WITH CustomerStats AS (
+        SELECT 
+          c.id, c.name, c.email, c.phone, c.cpf, c."createdAt",
+          COALESCE(SUM(t."totalValue"), 0) as ltv,
+          COUNT(t.id) as "totalTransactions",
+          MAX(t.date) as "lastPurchaseDate",
+          EXTRACT(EPOCH FROM (NOW() - MAX(t.date))) / 86400 as "daysSinceLastBuy"
+        FROM "Customer" c
+        LEFT JOIN "Transaction" t ON c.id = t."customerId"
+        WHERE c.name ILIKE $1 OR c.email ILIKE $1 OR c.cpf ILIKE $1
+        GROUP BY c.id
+      ),
+      CustomerWithRfm AS (
+        SELECT *,
+          CASE 
+            WHEN "totalTransactions" = 0 THEN 'Lead'
+            WHEN "daysSinceLastBuy" > 120 THEN 'Inativo'
+            WHEN "daysSinceLastBuy" > 60 THEN 'Em Risco'
+            WHEN ltv > 1000 AND "totalTransactions" > 3 THEN 'VIP'
+            WHEN "totalTransactions" = 1 THEN 'Novo'
+            ELSE 'Leal'
+          END as "rfmLabel"
+        FROM CustomerStats
+      ),
+      FilteredCustomers AS (
+        SELECT *, COUNT(*) OVER() as "fullCount" 
+        FROM CustomerWithRfm
+        WHERE ($2::boolean = false OR "rfmLabel" = ANY($3::text[]))
+      )
+      SELECT * FROM FilteredCustomers
+      ORDER BY ${orderField} ${orderDir}
+      LIMIT $4 OFFSET $5
+    `;
+
+    const rawCustomers: any[] = await this.prisma.$queryRawUnsafe(
+      query,
+      `%${search}%`,
+      hasSegments,
+      hasSegments ? segments : [],
+      limit,
+      offset,
+    );
+
+    const total = rawCustomers.length > 0 ? Number(rawCustomers[0].fullCount) : 0;
+
+    const data = rawCustomers.map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email || 'Sem e-mail',
+      phone: c.phone || 'Sem telefone',
+      cpf: c.cpf || '',
+
+      ltv: Number(c.ltv),
+      lastPurchase: c.lastPurchaseDate ? c.lastPurchaseDate.toISOString() : null,
+      daysSinceLastBuy: c.daysSinceLastBuy ? Math.floor(c.daysSinceLastBuy) : 9999,
+      totalTransactions: Number(c.totalTransactions),
+      status: c.daysSinceLastBuy > 120 ? 'inactive' : c.daysSinceLastBuy > 60 ? 'warning' : 'active',
+      rfmLabel: c.rfmLabel,
+      createdAt: c.createdAt,
+      campaignsCount: 0,
+      rfmScore: rfmLabelToScore(c.rfmLabel),
+      recentTransactions: [],
+    }));
+
+    return {
+      data,
+      pagination: {
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
       },
-      orderBy: { name: 'asc' },
-    });
-
-    const today = new Date();
-
-    return customers.map((customer) => {
-      // Cálculos (mantidos)
-      const ltv = customer.transactions.reduce(
-        (acc, curr) => acc + Number(curr.totalValue),
-        0,
-      );
-      const totalTransactions = customer.transactions.length;
-      let lastPurchaseDate: Date | null = null;
-      let daysSinceLastBuy = 9999;
-
-      if (totalTransactions > 0) {
-        lastPurchaseDate = customer.transactions[0].date;
-        daysSinceLastBuy = differenceInDays(today, lastPurchaseDate);
-      }
-
-      // Classificação (mantida)
-      let rfmLabel = 'Desconhecido';
-      let status = 'inactive';
-
-      if (totalTransactions === 0) {
-        rfmLabel = 'Lead';
-      } else {
-        if (daysSinceLastBuy > 120) {
-          rfmLabel = 'Inativo';
-          status = 'inactive';
-        } else if (daysSinceLastBuy > 60) {
-          rfmLabel = 'Em Risco';
-          status = 'warning';
-        } else {
-          status = 'active';
-          if (ltv > 1000 && totalTransactions > 3) rfmLabel = 'VIP';
-          else if (totalTransactions === 1) rfmLabel = 'Novo';
-          else rfmLabel = 'Leal';
-        }
-      }
-
-      return {
-        id: customer.id,
-        name: customer.name,
-        email: customer.email || 'Sem e-mail',
-        phone: customer.phone || 'Sem telefone',
-        cpf: customer.cpf || '',
-
-        ltv: ltv,
-        lastPurchase: lastPurchaseDate ? lastPurchaseDate.toISOString() : null,
-        daysSinceLastBuy,
-        totalTransactions,
-        status,
-        rfmLabel,
-        createdAt: customer.createdAt,
-        campaignsCount: 0, // TODO: Implement Campaigns Module
-        rfmScore: rfmLabelToScore(rfmLabel),
-        // --- NOVO: Histórico das últimas 5 compras para o Drawer ---
-        recentTransactions: customer.transactions.slice(0, 5).map((t) => ({
-          id: t.id,
-          date: t.date,
-          value: Number(t.totalValue),
-          // items: t.items // Se quiser mostrar itens, descomente
-        })),
-      };
-    });
+    };
   }
 
   async findById(id: string) {
@@ -106,7 +136,6 @@ export class CustomersService {
             id: true,
             totalValue: true,
             date: true,
-            items: true,
             channel: true,
             status: true,
             store: { select: { name: true, tradeName: true, code: true } },
