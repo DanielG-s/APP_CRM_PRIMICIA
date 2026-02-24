@@ -58,26 +58,37 @@ async function main() {
   await cleanTable(prisma.customer);
   await cleanTable(prisma.user);
   await cleanTable(prisma.store);
+  await cleanTable(prisma.organization);
+
+  // 1.5 Organization
+  const org = await prisma.organization.create({
+    data: {
+      id: 'DEFAULT_ORG',
+      name: 'Primícia Modas - Organização Principal',
+    }
+  });
 
   // 2. Loja e Admin
   const store = await prisma.store.create({
     data: {
       id: 'DEFAULT', // Force ID for SyncService compatibility
+      organizationId: org.id,
       name: 'Primícia Modas - Matriz',
       cnpj: '12.345.678/0001-90',
       cityNormalized: 'sao paulo',
       users: {
-        create: { name: 'Daniel Admin', email: 'admin@primicia.com', password: 'admin', role: 'ADMIN' },
+        create: { organizationId: org.id, clerkId: 'admin_seed', name: 'Daniel Admin', email: 'admin@primicia.com', role: 'GERENTE_GERAL' },
       },
       emailSettings: {
         create: {
+          organizationId: org.id,
           senderName: 'Equipe Primícia', senderEmail: 'news@primicia.com.br',
           host: 'smtp.sendgrid.net', port: 587, user: 'apikey', pass: 'SG.fake', secure: true
         }
       },
       whatsappNumbers: {
         create: [
-          { name: 'Loja 01', number: '5511999998888', provider: 'evolution', status: 'CONNECTED', isDefault: true }
+          { organizationId: org.id, name: 'Loja 01', number: '5511999998888', provider: 'evolution', status: 'CONNECTED', isDefault: true }
         ]
       }
     },
@@ -118,7 +129,7 @@ async function main() {
   for (const seg of segmentsList) {
     await prisma.segment.create({
       data: {
-        storeId: store.id, name: seg.name, active: true, isDynamic: true, rules: [], lastCount: 0
+        organizationId: org.id, storeId: store.id, name: seg.name, active: true, isDynamic: true, rules: [], lastCount: 0
       }
     });
   }

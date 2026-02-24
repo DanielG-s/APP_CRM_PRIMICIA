@@ -16,9 +16,16 @@ export class SalesService {
    * @param data DTO containing sale details (customer info, items, total).
    */
   async processSale(data: CreateSaleDto) {
+    // Busca a loja para extrair a organização (para manter retrocompatibilidade com webhooks que enviam apenas storeId)
+    const store = await this.prisma.store.findUnique({
+      where: { id: data.storeId }
+    });
+    if (!store) throw new Error('Store not found for the given storeId.');
+    const orgId = store.organizationId;
+
     // UPSERT Replacement (Email is not unique anymore)
     let customer = await this.prisma.customer.findFirst({
-      where: { email: data.customerEmail }
+      where: { email: data.customerEmail },
     });
 
     if (customer) {
@@ -27,7 +34,7 @@ export class SalesService {
         data: {
           name: data.customerName,
           // Do not overwrite other fields like storeId if they exist
-        }
+        },
       });
     } else {
       customer = await this.prisma.customer.create({
@@ -35,12 +42,14 @@ export class SalesService {
           name: data.customerName,
           email: data.customerEmail,
           cpf: data.customerCpf,
+          organizationId: orgId,
           storeId: data.storeId,
         },
       });
     }
     const transaction = await this.prisma.transaction.create({
       data: {
+        organizationId: orgId,
         storeId: data.storeId,
         customerId: customer.id,
         totalValue: data.totalValue,
@@ -144,8 +153,12 @@ export class SalesService {
     });
 
     // 1. Encontrar as lojas pelos códigos
-    const store006 = await (this.prisma.store as any).findUnique({ where: { code: '006' } });
-    const store007 = await (this.prisma.store as any).findUnique({ where: { code: '007' } });
+    const store006 = await (this.prisma.store as any).findUnique({
+      where: { code: '006' },
+    });
+    const store007 = await (this.prisma.store as any).findUnique({
+      where: { code: '007' },
+    });
 
     const stores = await (this.prisma.store as any).findMany({
       where: { code: { not: '006' } },
@@ -156,7 +169,12 @@ export class SalesService {
       campaigns: campaigns.map((c) => ({ id: c.id, name: c.name })),
       tags: Array.from(tagsSet).sort(),
       types: Array.from(typesSet).sort(),
-      stores: stores.map((s: any) => ({ id: s.id, name: s.name, tradeName: s.tradeName, code: s.code })),
+      stores: stores.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        tradeName: s.tradeName,
+        code: s.code,
+      })),
       channels: ['E-mail', 'SMS', 'Mobile push', 'WhatsApp'],
     };
   }
@@ -605,7 +623,11 @@ export class SalesService {
     const campaigns = await (this.prisma.campaign as any).findMany({
       where: campaignWhere,
       orderBy: { date: 'desc' },
-      include: { store: { select: { id: true, name: true, tradeName: true, code: true } } },
+      include: {
+        store: {
+          select: { id: true, name: true, tradeName: true, code: true },
+        },
+      },
     });
     const sales = await this.prisma.transaction.findMany({
       where: transactionWhere,

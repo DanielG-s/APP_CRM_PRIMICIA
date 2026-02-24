@@ -7,36 +7,63 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  stores          Store[]
+  users           User[]
+  customers       Customer[]
+  transactions    Transaction[]
+  campaigns       Campaign[]
+  segments        Segment[]
+  emailSettings   EmailSettings[]
+  goals           StoreGoal[]
+  whatsappNumbers StoreWhatsappNumber[]
+  accessLogs      AccessLog[]
+  products        Product[]
+  conversations   Conversation[]
+  jobRuns         JobRun[]
+}
+
 model Campaign {
-  id                String             @id @default(cuid())
-  storeId           String
+  id                String    @id @default(cuid())
+  organizationId    String
+  storeId           String?
   name              String
   channel           String
-  status            String             @default("draft")
-  date              DateTime           @default(now())
+  status            String    @default("draft")
+  date              DateTime  @default(now())
   type              String?
   tags              String[]
   segmentId         String?
-  audienceSize      Int?               @default(0)
+  audienceSize      Int?      @default(0)
   config            Json?
   content           Json?
   scheduledAt       DateTime?
-  sent              Int                @default(0)
-  delivered         Int                @default(0)
-  opens             Int                @default(0)
-  clicks            Int                @default(0)
-  softBounces       Int                @default(0)
-  hardBounces       Int                @default(0)
-  spamReports       Int                @default(0)
-  unsubscribes      Int                @default(0)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  attributionWindow Int?               @default(7)
+  sent              Int       @default(0)
+  delivered         Int       @default(0)
+  opens             Int       @default(0)
+  clicks            Int       @default(0)
+  softBounces       Int       @default(0)
+  hardBounces       Int       @default(0)
+  spamReports       Int       @default(0)
+  unsubscribes      Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  attributionWindow Int?      @default(7)
   conversionTrigger String?
-  store             Store              @relation(fields: [storeId], references: [id])
-  contents          CampaignContent[]
-  metrics           CampaignMetric?
-  schedules         CampaignSchedule[]
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  store        Store?             @relation(fields: [storeId], references: [id])
+  contents     CampaignContent[]
+  metrics      CampaignMetric?
+  schedules    CampaignSchedule[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, storeId])
 }
 
 model CampaignContent {
@@ -66,17 +93,23 @@ model CampaignSchedule {
 }
 
 model Conversation {
-  id         String   @id @default(cuid())
-  customerId String
-  storeId    String
-  status     String
-  messages   Json
-  customer   Customer @relation(fields: [customerId], references: [id])
+  id             String       @id @default(cuid())
+  customerId     String
+  organizationId String
+  storeId        String?
+  status         String
+  messages       Json
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  store          Store?       @relation(fields: [storeId], references: [id])
+
+  @@index([organizationId, storeId])
 }
 
 model Customer {
   id                     String    @id @default(cuid())
-  storeId                String
+  organizationId         String
+  storeId                String?
   externalId             String?
   name                   String
   email                  String?
@@ -106,11 +139,15 @@ model Customer {
 
   conversations   Conversation[]
   rfmScore        RfmScore?        @relation(fields: [rfmScoreId], references: [id])
-  store           Store            @relation(fields: [storeId], references: [id])
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  store           Store?           @relation(fields: [storeId], references: [id])
   customerEvents  CustomerEvent[]
   rfmHistory      RfmHistory[]
   surveyResponses SurveyResponse[]
   transactions    Transaction[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, storeId])
 }
 
 model CustomerEvent {
@@ -123,19 +160,21 @@ model CustomerEvent {
 }
 
 model EmailSettings {
-  id          String   @id @default(cuid())
-  storeId     String   @unique
-  senderName  String
-  senderEmail String
-  replyTo     String?
-  host        String
-  port        Int
-  user        String
-  pass        String
-  secure      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  store       Store    @relation(fields: [storeId], references: [id])
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  storeId        String?      @unique
+  senderName     String
+  senderEmail    String
+  replyTo        String?
+  host           String
+  port           Int
+  user           String
+  pass           String
+  secure         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  store          Store?       @relation(fields: [storeId], references: [id])
 }
 
 model RfmHistory {
@@ -156,20 +195,26 @@ model RfmScore {
 }
 
 model Segment {
-  id          String           @id @default(cuid())
-  name        String
-  logic       String?
-  rules       Json
-  isDynamic   Boolean          @default(true)
-  storeId     String
-  active      Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @default(now()) @updatedAt
-  updatedById String?
-  lastCount   Int              @default(0)
-  store       Store            @relation(fields: [storeId], references: [id])
-  updatedBy   User?            @relation(fields: [updatedById], references: [id])
-  history     SegmentHistory[]
+  id             String   @id @default(cuid())
+  name           String
+  logic          String?
+  rules          Json
+  isDynamic      Boolean  @default(true)
+  organizationId String
+  storeId        String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+  updatedById    String?
+  lastCount      Int      @default(0)
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  store        Store?           @relation(fields: [storeId], references: [id])
+  updatedBy    User?            @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  history      SegmentHistory[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, storeId])
 }
 
 model SegmentHistory {
@@ -183,45 +228,62 @@ model SegmentHistory {
 }
 
 model Store {
-  id              String                @id @default(cuid())
-  name            String
-  tradeName       String?
-  code            String?               @unique
-  cnpj            String?
-  isActive        Boolean               @default(true)
-  syncEnabled     Boolean               @default(true)
-  cityNormalized  String?
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  tradeName      String?
+  code           String? @unique
+  cnpj           String?
+  isActive       Boolean @default(true)
+  syncEnabled    Boolean @default(true)
+  cityNormalized String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
   campaigns       Campaign[]
   customers       Customer[]
+  conversations   Conversation[]
   emailSettings   EmailSettings?
   segments        Segment[]
   goals           StoreGoal[]
   whatsappNumbers StoreWhatsappNumber[]
   transactions    Transaction[]
   users           User[]
+  accessLogs      AccessLog[]
+  products        Product[]
+
+  @@index([organizationId])
 }
 
 model StoreGoal {
-  id            String @id @default(cuid())
-  storeId       String
-  month         Int
-  year          Int
-  whatsappLimit Int
-  emailLimit    Int
-  store         Store  @relation(fields: [storeId], references: [id])
+  id             String       @id @default(cuid())
+  organizationId String
+  storeId        String?
+  month          Int
+  year           Int
+  whatsappLimit  Int
+  emailLimit     Int
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  store          Store?       @relation(fields: [storeId], references: [id])
+
+  @@index([organizationId, storeId])
 }
 
 model StoreWhatsappNumber {
-  id           String  @id @default(cuid())
-  storeId      String
-  number       String
-  provider     String  @default("evolution")
-  instanceName String?
-  isDefault    Boolean @default(false)
-  name         String
-  status       String  @default("DISCONNECTED")
-  token        String?
-  store        Store   @relation(fields: [storeId], references: [id])
+  id             String       @id @default(cuid())
+  organizationId String
+  storeId        String?
+  number         String
+  provider       String       @default("evolution")
+  instanceName   String?
+  isDefault      Boolean      @default(false)
+  name           String
+  status         String       @default("DISCONNECTED")
+  token          String?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  store          Store?       @relation(fields: [storeId], references: [id])
+
+  @@index([organizationId, storeId])
 }
 
 model SurveyResponse {
@@ -236,60 +298,106 @@ model SurveyResponse {
 }
 
 model Transaction {
-  id            String   @id @default(cuid())
-  externalId    String?  @unique
-  customerId    String
-  storeId       String
-  salespersonId String?
-  totalValue    Decimal
-  items         Json
-  date          DateTime
-  channel       String   @default("Loja Física")
-  isInfluenced  Boolean  @default(false)
-  status        String   @default("PAID")
-  customer      Customer @relation(fields: [customerId], references: [id])
-  store         Store    @relation(fields: [storeId], references: [id])
+  id             String       @id @default(cuid())
+  externalId     String?      @unique
+  customerId     String
+  organizationId String
+  storeId        String?
+  salespersonId  String?
+  totalValue     Decimal
+  items          Json
+  date           DateTime
+  channel        String       @default("Loja Física")
+  isInfluenced   Boolean      @default(false)
+  status         String       @default("PAID")
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  store          Store?       @relation(fields: [storeId], references: [id])
+
+  @@index([organizationId, date])
+  @@index([organizationId, storeId])
+}
+
+enum Role {
+  SUPER_ADMIN
+  GERENTE_GERAL
+  GERENTE_LOJA
+  VENDEDOR
 }
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  password        String
-  role            String
+  id              String   @id @default(cuid())
+  clerkId         String?  @unique
+  email           String
+  role            Role     @default(VENDEDOR)
+  status          String   @default("INVITED") // "INVITED" | "ACTIVE"
   twoFactorSecret String?
+  organizationId  String
   storeId         String?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime @default(now())
   name            String?
-  segments        Segment[]
-  store           Store?    @relation(fields: [storeId], references: [id])
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id])
+  segments     Segment[]
+  accessLogs   AccessLog[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, storeId])
 }
 
 model Product {
-  id         String   @id @default(cuid())
-  storeId    String?
-  externalId String   @unique
-  name       String
-  price      Decimal?
-  category   String?
-  brand      String?
-  status     String?  @default("ACTIVE")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String?
+  externalId     String   @unique
+  name           String
+  price          Decimal?
+  category       String?
+  brand          String?
+  status         String?  @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
 
-  // Future relationships can be added here
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id])
+
+  @@index([organizationId, createdAt])
 }
 
 model JobRun {
-  id           String    @id @default(cuid())
-  queue        String
-  jobName      String
-  jobId        String
-  tenantId     String?
-  status       String    // "COMPLETED" | "FAILED"
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
-  durationMs   Int?
-  attemptsMade Int?
-  error        String?
-  safePayload  Json?     // Sanitized payload (no PII)
+  id             String    @id @default(cuid())
+  queue          String
+  jobName        String
+  jobId          String
+  organizationId String?
+  status         String // "COMPLETED" | "FAILED"
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  durationMs     Int?
+  attemptsMade   Int?
+  error          String?
+  safePayload    Json? // Sanitized payload (no PII)
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+}
+
+model AccessLog {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String?
+  storeId        String?
+  endpoint       String
+  method         String
+  timestamp      DateTime @default(now())
+  ip             String?
+  status         Int      @default(200)
+  actionType     String   @default("DATA_ACCESS")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  store        Store?        @relation(fields: [storeId], references: [id])
+
+  @@index([userId, timestamp])
+  @@index([organizationId, timestamp])
 }

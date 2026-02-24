@@ -16,7 +16,7 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 @Controller('campaigns')
 // @UseGuards(JwtAuthGuard) // <--- Descomente isso para proteger as rotas
 export class CampaignsController {
-  constructor(private readonly campaignsService: CampaignsService) {}
+  constructor(private readonly campaignsService: CampaignsService) { }
 
   /**
    * Creates a new marketing campaign.
@@ -24,19 +24,22 @@ export class CampaignsController {
    */
   @Post()
   async create(@Body() createCampaignDto: CreateCampaignDto, @Req() req: any) {
-    // 1. Tenta pegar o storeId do usuário logado (Token JWT)
+    // 1. Tenta pegar o organizationId do usuário logado (Token JWT)
+    const userOrgId = req.user?.organizationId;
     const userStoreId = req.user?.storeId;
 
-    // 2. Se o usuário estiver logado, forçamos o storeId dele no DTO por segurança
+    // 2. Se o usuário estiver logado, forçamos o orgId dele no DTO por segurança
+    if (userOrgId) {
+      createCampaignDto.organizationId = userOrgId;
+    }
     if (userStoreId) {
       createCampaignDto.storeId = userStoreId;
     }
 
-    // 3. Validação extra caso o storeId não venha nem do Token nem do Corpo
-    if (!createCampaignDto.storeId) {
-      // Se você estiver testando sem login, lembre-se de enviar "storeId" no JSON
+    // 3. Validação extra caso o orgId não venha nem do Token nem do Corpo
+    if (!createCampaignDto.organizationId) {
       throw new BadRequestException(
-        'Store ID não encontrado. Faça login ou envie o storeId.',
+        'Organization ID não encontrado. Faça login ou envie o organizationId.',
       );
     }
 
@@ -48,19 +51,15 @@ export class CampaignsController {
    */
   @Get()
   async findAll(@Req() req: any) {
-    // Pega o ID da loja do usuário logado
-    const storeId = req.user?.storeId;
+    const orgId = req.user?.organizationId;
 
-    // Se estiver testando sem login, você pode pegar de uma query param temporariamente:
-    // const storeId = req.query.storeId;
-
-    if (!storeId) {
-      // Retorna array vazio ou erro se não souber qual loja buscar
+    if (!orgId) {
+      // Retorna array vazio ou erro se não souber qual org buscar
       throw new BadRequestException(
-        'Store ID necessário para buscar campanhas.',
+        'Organization ID necessário para buscar campanhas.',
       );
     }
 
-    return this.campaignsService.findAll(storeId);
+    return this.campaignsService.findAll(orgId);
   }
 }

@@ -12,6 +12,7 @@ import {
     LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { API_BASE_URL } from "@/lib/config";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 // --- (TEMA VISUAL, TOOLTIPS, CONSTANTES ESTÁTICAS E COMPONENTES AUXILIARES MANTIDOS IGUAIS) ---
 // Para economizar espaço, estou colando abaixo APENAS o Componente Principal atualizado
@@ -84,6 +85,8 @@ const CustomSelect = ({ label, options, value, onChange, iconMap }: any) => {
 
 // --- PÁGINA PRINCIPAL ---
 export default function ChannelResultsPage() {
+    const { getToken } = useAuth();
+    const { user } = useUser();
     const getToday = () => new Date().toISOString().split('T')[0];
     const getStartOfMonth = () => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; };
 
@@ -125,7 +128,10 @@ export default function ChannelResultsPage() {
     useEffect(() => {
         const fetchOptions = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/sales/filter-options`);
+                const token = await getToken();
+                const res = await fetch(`${API_BASE_URL}/sales/filter-options`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
                 const data = await res.json();
                 if (data) {
                     setOptionsData({
@@ -138,11 +144,12 @@ export default function ChannelResultsPage() {
             } catch (error) { console.error(error); }
         };
         fetchOptions();
-    }, []);
+    }, [getToken]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
+            const token = await getToken();
             const params = new URLSearchParams();
             params.append('start', dateRange.start); params.append('end', dateRange.end);
             if (filters.channel !== 'Todos') params.append('channel', filters.channel);
@@ -152,7 +159,9 @@ export default function ChannelResultsPage() {
             filters.campaigns.forEach(id => params.append('campaigns', id));
             filters.campaignType.forEach(type => params.append('campaignType', type));
 
-            const res = await fetch(`${API_BASE_URL}/sales/channel-results?${params.toString()}`);
+            const res = await fetch(`${API_BASE_URL}/sales/channel-results?${params.toString()}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             const data = await res.json();
 
             if (data) {
@@ -298,7 +307,7 @@ export default function ChannelResultsPage() {
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
                 <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
                     <div><h1 className="text-xl font-bold text-slate-800 flex items-center gap-2"><span className="bg-emerald-100 text-emerald-600 p-1.5 rounded-md"><PieIcon size={18} /></span>Resultados de Canais</h1></div>
-                    <div className="flex items-center gap-3"><div className="text-right hidden sm:block"><p className="text-xs font-bold text-slate-700">Admin User</p><p className="text-[10px] text-slate-400">Diretor Comercial</p></div><div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">AD</div></div>
+                    <div className="flex items-center gap-3"><div className="text-right hidden sm:block"><p className="text-xs font-bold text-slate-700">{user?.fullName || 'Usuário'}</p><p className="text-[10px] text-slate-400">Merxios Auth</p></div><div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">{user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || ''}</div></div>
                 </header>
 
                 <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-8">

@@ -163,7 +163,7 @@ export class SegmentationQueryBuilder {
             items: {
               array_contains: [{ name: rawVal }],
             },
-          } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+          } as any);
         } else if (
           ['categoria', 'category', 'nome_categoria'].includes(f.field)
         ) {
@@ -171,7 +171,7 @@ export class SegmentationQueryBuilder {
             items: {
               array_contains: [{ category: rawVal }],
             },
-          } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+          } as any);
         }
       }
 

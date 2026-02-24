@@ -1,5 +1,6 @@
 import { Module, Global, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
 import { BullBoardModule } from '@bull-board/nestjs';
@@ -8,6 +9,12 @@ import basicAuth from 'express-basic-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma/prisma.service';
+import { APP_GUARD } from '@nestjs/core';
+import { ClerkAuthGuard } from './modules/config/users/clerk-auth.guard';
+import { RolesGuard } from './modules/config/users/roles.guard';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
 
 import { SalesModule } from 'src/modules/erp/sales/sales.module';
 import { CustomersModule } from './modules/erp/customers/customers.module';
@@ -23,12 +30,19 @@ import { HealthController } from './health.controller';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: parseInt(process.env.RATE_LIMIT || '100', 10),
+      },
+    ]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
         const nodeEnv = configService.get('NODE_ENV', 'development');
         // Docker environments use 'redis'. Local dev uses 'localhost'.
-        const defaultHost = (nodeEnv === 'production' || nodeEnv === 'qa') ? 'redis' : 'localhost';
+        const defaultHost =
+          nodeEnv === 'production' || nodeEnv === 'qa' ? 'redis' : 'localhost';
 
         return {
           connection: {
@@ -46,11 +60,11 @@ import { HealthController } from './health.controller';
     // Only import BullBoardModule if it is enabled. This prevents the route from even existing.
     ...(process.env.ENABLE_BULLBOARD === 'true'
       ? [
-        BullBoardModule.forRoot({
-          route: '/admin/queues',
-          adapter: ExpressAdapter,
-        }),
-      ]
+          BullBoardModule.forRoot({
+            route: '/admin/queues',
+            adapter: ExpressAdapter,
+          }),
+        ]
       : []),
     SalesModule,
     CustomersModule,
@@ -61,14 +75,38 @@ import { HealthController } from './health.controller';
     ErpModule,
   ],
   controllers: [AppController, HealthController],
-  providers: [AppService, PrismaService],
+  providers: [
+    AppService,
+    PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ClerkAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
+  ],
   exports: [PrismaService],
 })
 export class AppModule implements NestModule {
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   configure(consumer: MiddlewareConsumer) {
-    const isBullBoardEnabled = this.configService.get('ENABLE_BULLBOARD', 'false') === 'true';
+    const isBullBoardEnabled =
+      this.configService.get('ENABLE_BULLBOARD', 'false') === 'true';
 
     if (isBullBoardEnabled) {
       const user = this.configService.get('BULLBOARD_USER');

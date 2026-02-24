@@ -18,7 +18,8 @@ async function bootstrap() {
       '/admin/queues',
       basicAuth({
         users: {
-          [process.env.BULLBOARD_USER || 'admin']: process.env.BULLBOARD_PASS || 'merxios-secret',
+          [process.env.BULLBOARD_USER || 'admin']:
+            process.env.BULLBOARD_PASS || 'merxios-secret',
         },
         challenge: true,
       }),
@@ -37,7 +38,7 @@ async function bootstrap() {
   // Essa linha aqui cria a rota /api
   SwaggerModule.setup('api', app, document);
 
-  // 3. Liga o servidor na porta 3000
-  await app.listen(3000);
+  // 3. Liga o servidor na porta 3333 (para não conflitar com o frontend Next.js)
+  await app.listen(process.env.PORT || 3333);
 }
 bootstrap();

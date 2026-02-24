@@ -1,4 +1,9 @@
-import { OnWorkerEvent, Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
+import {
+  OnWorkerEvent,
+  Processor,
+  WorkerHost,
+  InjectQueue,
+} from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job, UnrecoverableError, Queue } from 'bullmq';
 import { CustomerSyncService } from './customer-sync.service';
@@ -7,161 +12,228 @@ import { StoreSyncService } from './store-sync.service';
 import { SyncService } from './sync.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as crypto from 'crypto';
+import { tenantContext } from '../../../common/tenancy/tenant.context';
 
 @Processor('erp-sync-queue', {
-    concurrency: 1, // Strict sequential processing per worker instance
-    limiter: {
-        max: 5,
-        duration: 1000 // 5 jobs per second max
-    }
+  concurrency: 1, // Strict sequential processing per worker instance
+  limiter: {
+    max: 5,
+    duration: 1000, // 5 jobs per second max
+  },
 })
 export class SyncProcessor extends WorkerHost {
-    private readonly logger = new Logger(SyncProcessor.name);
+  private readonly logger = new Logger(SyncProcessor.name);
 
-    constructor(
-        private readonly customerSyncService: CustomerSyncService,
-        private readonly productSyncService: ProductSyncService,
-        private readonly storeSyncService: StoreSyncService,
-        private readonly syncService: SyncService,
-        private readonly prisma: PrismaService,
-        @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
-    ) {
-        super();
+  constructor(
+    private readonly customerSyncService: CustomerSyncService,
+    private readonly productSyncService: ProductSyncService,
+    private readonly storeSyncService: StoreSyncService,
+    private readonly syncService: SyncService,
+    private readonly prisma: PrismaService,
+    @InjectQueue('erp-sync-queue') private readonly syncQueue: Queue,
+  ) {
+    super();
+  }
+
+  async process(job: Job<any, any, string>): Promise<any> {
+    this.logger.log(`Processing job ${job.id} of type ${job.name}`);
+
+    const tenantId = job.data?.tenantId || 'default';
+    const lockKey = `lock:erp-sync:${job.name}:${tenantId}`;
+    const lockToken = crypto.randomUUID();
+    const redisClient = await this.syncQueue.client;
+
+    // B-Audit: Parameterizable TTL and Refresh
+    const lockTTL = Number(process.env.ERP_SYNC_LOCK_TTL_SECONDS || 7200);
+    const refreshIntervalSeconds = Number(
+      process.env.ERP_SYNC_LOCK_REFRESH_SECONDS || lockTTL / 2,
+    );
+
+    // Acquire lock
+    const lockAcquired = await redisClient.set(
+      lockKey,
+      lockToken,
+      'EX',
+      lockTTL,
+      'NX',
+    );
+
+    if (!lockAcquired) {
+      this.logger.warn(
+        `Job ${job.name} for tenant ${tenantId} is already running. Lock active. Skipping duplicate.`,
+      );
+      return { skipped: true, reason: 'lock_active' };
     }
 
-    async process(job: Job<any, any, string>): Promise<any> {
-        this.logger.log(`Processing job ${job.id} of type ${job.name}`);
+    const startedAt = new Date();
 
-        const tenantId = job.data?.tenantId || 'default';
-        const lockKey = `lock:erp-sync:${job.name}:${tenantId}`;
-        const lockToken = crypto.randomUUID();
-        const redisClient = await this.syncQueue.client;
-
-        // B-Audit: Parameterizable TTL and Refresh
-        const lockTTL = Number(process.env.ERP_SYNC_LOCK_TTL_SECONDS || 7200);
-        const refreshIntervalSeconds = Number(process.env.ERP_SYNC_LOCK_REFRESH_SECONDS || lockTTL / 2);
-
-        // Acquire lock
-        const lockAcquired = await redisClient.set(lockKey, lockToken, 'EX', lockTTL, 'NX');
-
-        if (!lockAcquired) {
-            this.logger.warn(`Job ${job.name} for tenant ${tenantId} is already running. Lock active. Skipping duplicate.`);
-            return { skipped: true, reason: 'lock_active' };
-        }
-
-        const startedAt = new Date();
-
-        // Start heartbeat to refresh the lock
-        const refreshLuaScript = `
+    // Start heartbeat to refresh the lock
+    const refreshLuaScript = `
             if redis.call("get", KEYS[1]) == ARGV[1] then
                 return redis.call("expire", KEYS[1], ARGV[2])
             else
                 return 0
             end
         `;
-        const heartbeatTimer = setInterval(async () => {
-            try {
-                const refreshed = await redisClient.eval(refreshLuaScript, 1, lockKey, lockToken, lockTTL);
-                if (refreshed) {
-                    this.logger.debug(`Renewed lock for job ${job.name} (Tenant: ${tenantId}) for another ${lockTTL}s`);
-                }
-            } catch (err) {
-                this.logger.error(`Failed to refresh lock for tenant ${tenantId}`, err);
-            }
-        }, refreshIntervalSeconds * 1000);
+    const heartbeatTimer = setInterval(async () => {
+      try {
+        const refreshed = await redisClient.eval(
+          refreshLuaScript,
+          1,
+          lockKey,
+          lockToken,
+          lockTTL,
+        );
+        if (refreshed) {
+          this.logger.debug(
+            `Renewed lock for job ${job.name} (Tenant: ${tenantId}) for another ${lockTTL}s`,
+          );
+        }
+      } catch (err) {
+        this.logger.error(`Failed to refresh lock for tenant ${tenantId}`, err);
+      }
+    }, refreshIntervalSeconds * 1000);
 
-        try {
-            switch (job.name) {
-                case 'sync-customers':
-                    // Internal parallelism is handled by batchSize and chunkSize within the service
-                    await this.customerSyncService.syncCustomers(true);
-                    break;
-                case 'sync-products':
-                    await this.productSyncService.syncProducts();
-                    break;
-                case 'sync-stores':
-                    await this.storeSyncService.syncStores();
-                    break;
-                case 'sync-sales':
-                    const { start, end } = job.data;
-                    await this.syncService.syncSales(new Date(start), new Date(end));
-                    break;
-                default:
-                    this.logger.warn(`Unknown job type: ${job.name}`);
-            }
-            return { success: true, startedAt: startedAt.toISOString() };
-        } catch (error: any) {
-            this.logger.error(`Failed to process job ${job.name} (ID: ${job.id}): ${error.message}`);
+    let orgId = job.data?.organizationId;
+    if (!orgId && job.data?.tenantId) {
+      const store = await this.prisma.store.findUnique({ where: { id: job.data.tenantId } });
+      orgId = store?.organizationId;
+    }
 
-            const status = error.response?.status;
-            if (status >= 400 && status < 500 && status !== 429) {
-                throw new UnrecoverableError(`API returned ${status}. Manual fix required. Details: ${error.message}`);
-            }
+    if (!orgId) {
+      throw new UnrecoverableError(`Job ${job.name} aborted: Missing valid organizationId or failed to resolve tenantId.`);
+    }
 
-            throw error;
-        } finally {
-            clearInterval(heartbeatTimer); // Stop heartbeat
-            const luaScript = `
+    try {
+      return await tenantContext.run({ organizationId: orgId as string, role: 'SUPER_ADMIN' }, async () => {
+        switch (job.name) {
+          case 'sync-customers':
+            // Internal parallelism is handled by batchSize and chunkSize within the service
+            await this.customerSyncService.syncCustomers(true);
+            break;
+          case 'sync-products':
+            await this.productSyncService.syncProducts();
+            break;
+          case 'sync-stores':
+            await this.storeSyncService.syncStores();
+            break;
+          case 'sync-sales':
+            const { start, end } = job.data;
+            await this.syncService.syncSales(new Date(start), new Date(end));
+            break;
+          default:
+            this.logger.warn(`Unknown job type: ${job.name}`);
+        }
+        return { success: true, startedAt: startedAt.toISOString() };
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to process job ${job.name} (ID: ${job.id}): ${error.message}`,
+      );
+
+      const status = error.response?.status;
+      if (status >= 400 && status < 500 && status !== 429) {
+        throw new UnrecoverableError(
+          `API returned ${status}. Manual fix required. Details: ${error.message}`,
+        );
+      }
+
+      throw error;
+    } finally {
+      clearInterval(heartbeatTimer); // Stop heartbeat
+      const luaScript = `
                 if redis.call("get", KEYS[1]) == ARGV[1] then
                     return redis.call("del", KEYS[1])
                 else
                     return 0
                 end
             `;
-            await redisClient.eval(luaScript, 1, lockKey, lockToken);
-            this.logger.log(`Released safe lock for job ${job.name} (Tenant: ${tenantId})`);
-        }
+      await redisClient.eval(luaScript, 1, lockKey, lockToken);
+      this.logger.log(
+        `Released safe lock for job ${job.name} (Tenant: ${tenantId})`,
+      );
+    }
+  }
+
+  @OnWorkerEvent('completed')
+  async onCompleted(job: Job, result: any) {
+    const finishedAt = new Date();
+    const startedAt = job.processedOn
+      ? new Date(job.processedOn)
+      : new Date(job.timestamp);
+    const durationMs = finishedAt.getTime() - startedAt.getTime();
+
+    this.logger.log(`Job ${job.id} completed in ${durationMs}ms`);
+
+    let orgId = job.data?.organizationId;
+    if (!orgId && job.data?.tenantId) {
+      const store = await this.prisma.store.findUnique({ where: { id: job.data.tenantId } });
+      orgId = store?.organizationId;
     }
 
-    @OnWorkerEvent('completed')
-    async onCompleted(job: Job, result: any) {
-        const finishedAt = new Date();
-        const startedAt = job.processedOn ? new Date(job.processedOn) : new Date(job.timestamp);
-        const durationMs = finishedAt.getTime() - startedAt.getTime();
-
-        this.logger.log(`Job ${job.id} completed in ${durationMs}ms`);
-
-        await this.prisma.jobRun.create({
-            data: {
-                queue: 'erp-sync-queue',
-                jobName: job.name,
-                jobId: job.id || 'unknown',
-                tenantId: job.data?.tenantId,
-                status: 'COMPLETED',
-                startedAt,
-                finishedAt,
-                durationMs,
-                attemptsMade: job.attemptsMade,
-                safePayload: { tenantId: job.data?.tenantId },
-            }
-        });
+    if (!orgId) {
+      this.logger.warn(`Could not save JobRun completion: Missing organizationId for job ${job.id}`);
+      return;
     }
 
-    @OnWorkerEvent('failed')
-    async onFailed(job: Job, error: Error) {
-        this.logger.error(`Job ${job.id} failed with error ${error.message}. Attemps made: ${job.attemptsMade}`);
+    await this.prisma.jobRun.create({
+      data: {
+        queue: 'erp-sync-queue',
+        jobName: job.name,
+        jobId: job.id || 'unknown',
+        organizationId: orgId as string,
+        status: 'COMPLETED',
+        startedAt,
+        finishedAt,
+        durationMs,
+        attemptsMade: job.attemptsMade,
+        safePayload: { tenantId: job.data?.tenantId },
+      },
+    });
+  }
 
-        if (job.attemptsMade >= (job.opts.attempts || 1)) {
-            const finishedAt = new Date();
-            const startedAt = job.processedOn ? new Date(job.processedOn) : new Date(job.timestamp);
-            const durationMs = finishedAt.getTime() - startedAt.getTime();
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job, error: Error) {
+    this.logger.error(
+      `Job ${job.id} failed with error ${error.message}. Attemps made: ${job.attemptsMade}`,
+    );
 
-            await this.prisma.jobRun.create({
-                data: {
-                    queue: 'erp-sync-queue',
-                    jobName: job.name,
-                    jobId: job.id || 'unknown',
-                    tenantId: job.data?.tenantId,
-                    status: 'FAILED',
-                    startedAt,
-                    finishedAt,
-                    durationMs,
-                    attemptsMade: job.attemptsMade,
-                    error: error.message,
-                    safePayload: { tenantId: job.data?.tenantId },
-                }
-            });
-            this.logger.error(`Job ${job.id} permanently failed and recorded to JobRun table.`);
-        }
+    if (job.attemptsMade >= (job.opts.attempts || 1)) {
+      const finishedAt = new Date();
+      const startedAt = job.processedOn
+        ? new Date(job.processedOn)
+        : new Date(job.timestamp);
+      const durationMs = finishedAt.getTime() - startedAt.getTime();
+
+      let orgId = job.data?.organizationId;
+      if (!orgId && job.data?.tenantId) {
+        const store = await this.prisma.store.findUnique({ where: { id: job.data.tenantId } });
+        orgId = store?.organizationId;
+      }
+
+      if (!orgId) {
+        this.logger.warn(`Could not save JobRun failure: Missing organizationId for job ${job.id}`);
+        return;
+      }
+
+      await this.prisma.jobRun.create({
+        data: {
+          queue: 'erp-sync-queue',
+          jobName: job.name,
+          jobId: job.id || 'unknown',
+          organizationId: orgId as string,
+          status: 'FAILED',
+          startedAt,
+          finishedAt,
+          durationMs,
+          attemptsMade: job.attemptsMade,
+          error: error.message,
+          safePayload: { tenantId: job.data?.tenantId },
+        },
+      });
+      this.logger.error(
+        `Job ${job.id} permanently failed and recorded to JobRun table.`,
+      );
     }
+  }
 }

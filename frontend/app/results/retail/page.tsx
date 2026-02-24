@@ -12,6 +12,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Area, AreaChart
 } from 'recharts';
 import { API_BASE_URL } from "@/lib/config";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
@@ -45,6 +46,8 @@ const CHANNEL_ICONS: any = {
  * - Visualizations: Line Charts (Trend), Bar Charts (Segmentation), Pie/Area Charts (Revenue Attribution)
  */
 export default function RetailResultsPage() {
+    const { getToken } = useAuth();
+    const { user } = useUser();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -86,9 +89,15 @@ export default function RetailResultsPage() {
     async function fetchData(start: string, end: string, stores: string[]) {
         setLoading(true);
         try {
+            const token = await getToken();
             const storesQuery = stores.length > 0 ? `&stores=${stores.join(',')}` : '';
             const url = `${API_BASE_URL}/sales/retail-metrics?start=${start}&end=${end}${storesQuery}`;
-            const res = await fetch(url, { cache: 'no-store' });
+            const res = await fetch(url, {
+                cache: 'no-store',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
             if (!res.ok) throw new Error("Erro API");
             const json = await res.json();
             setData(json);
@@ -100,14 +109,19 @@ export default function RetailResultsPage() {
     useEffect(() => {
         async function loadStores() {
             try {
-                const res = await fetch(`${API_BASE_URL}/webhook/erp/stores`);
+                const token = await getToken();
+                const res = await fetch(`${API_BASE_URL}/webhook/erp/stores`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
                 if (res.ok) setAvailableStores(await res.json());
             } catch (e) { console.error(e); }
         }
         loadStores();
-    }, []);
+    }, [getToken]);
 
-    useEffect(() => { fetchData(dateRange.start, dateRange.end, selectedStores); }, []);
+    useEffect(() => { fetchData(dateRange.start, dateRange.end, selectedStores); }, [getToken]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -305,10 +319,10 @@ export default function RetailResultsPage() {
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="text-right hidden sm:block">
-                            <p className="text-xs font-bold text-slate-700">Admin User</p>
-                            <p className="text-[10px] text-slate-400">Diretor Comercial</p>
+                            <p className="text-xs font-bold text-slate-700">{user?.fullName || 'Usuário'}</p>
+                            <p className="text-[10px] text-slate-400">Merxios Auth</p>
                         </div>
-                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">AD</div>
+                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">{user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || ''}</div>
                     </div>
                 </header>
 

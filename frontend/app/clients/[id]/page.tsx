@@ -10,8 +10,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { API_BASE_URL } from "@/lib/config";
+import { useAuth } from "@clerk/nextjs";
 
 export default function ClientDetailPage() {
+    const { getToken } = useAuth();
     const { id } = useParams();
     const router = useRouter();
     const [client, setClient] = useState<any>(null);
@@ -23,7 +25,10 @@ export default function ClientDetailPage() {
         async function fetchClient() {
             try {
                 // ... inside the component
-                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers/${id}`);
+                const token = await getToken();
+                const res = await fetch(`${API_BASE_URL}/webhook/erp/customers/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
                 if (!res.ok) {
                     if (res.status === 404) {
                         setClient(null);
@@ -41,7 +46,7 @@ export default function ClientDetailPage() {
             }
         }
         fetchClient();
-    }, [id]);
+    }, [id, getToken]);
 
     if (loading) return <div className="flex h-screen items-center justify-center text-slate-400">Carregando perfil...</div>;
     if (!client) return <div className="flex h-screen items-center justify-center text-slate-400">Cliente não encontrado</div>;

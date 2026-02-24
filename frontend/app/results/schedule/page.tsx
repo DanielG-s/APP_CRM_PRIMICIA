@@ -10,6 +10,7 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
 import { API_BASE_URL } from "@/lib/config";
+import { useAuth } from "@clerk/nextjs";
 
 // --- UTILS ---
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -82,6 +83,7 @@ const ChartCursorTooltip = ({ active, payload, label, prefix, suffix }: any) => 
 
 // --- PÁGINA PRINCIPAL ---
 export default function AgendaPage() {
+    const { getToken } = useAuth();
     const getToday = () => new Date().toISOString().split('T')[0];
     const getStartOfMonth = () => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; };
 
@@ -104,22 +106,31 @@ export default function AgendaPage() {
     const [optionsData, setOptionsData] = useState({ tags: [], campaigns: [], stores: [], channels: [], sellers: [] });
 
     useEffect(() => {
-        fetch(`${API_BASE_URL}/sales/filter-options`).then(res => res.json()).then(data => {
-            if (data) {
-                setOptionsData({
-                    tags: (data.tags || []).map((t: string) => ({ label: t, value: t })),
-                    campaigns: (data.campaigns || []).map((c: any) => ({ label: c.name, value: c.id })),
-                    stores: (data.stores || []).map((s: any) => ({ label: s.name, value: s.id })),
-                    channels: data.channels || [],
-                    sellers: []
+        const fetchOptions = async () => {
+            try {
+                const token = await getToken();
+                const res = await fetch(`${API_BASE_URL}/sales/filter-options`, {
+                    headers: { Authorization: `Bearer ${token}` }
                 });
-            }
-        }).catch(e => console.error(e));
-    }, []);
+                const data = await res.json();
+                if (data) {
+                    setOptionsData({
+                        tags: (data.tags || []).map((t: string) => ({ label: t, value: t })),
+                        campaigns: (data.campaigns || []).map((c: any) => ({ label: c.name, value: c.id })),
+                        stores: (data.stores || []).map((s: any) => ({ label: s.name, value: s.id })),
+                        channels: data.channels || [],
+                        sellers: []
+                    });
+                }
+            } catch (error) { console.error(error); }
+        };
+        fetchOptions();
+    }, [getToken]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
+            const token = await getToken();
             const params = new URLSearchParams();
             params.append('start', dateRange.start); params.append('end', dateRange.end);
             if (filters.channel !== 'Todos') params.append('channel', filters.channel);
@@ -130,7 +141,9 @@ export default function AgendaPage() {
             filters.campaignType.forEach(t => params.append('campaignType', t));
             filters.stores.forEach(s => params.append('stores', s));
 
-            const res = await fetch(`${API_BASE_URL}/sales/schedule-metrics?${params.toString()}`);
+            const res = await fetch(`${API_BASE_URL}/sales/schedule-metrics?${params.toString()}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             const json = await res.json();
             setData(json);
         } catch (error) { console.error("Erro Agenda:", error); } finally { setLoading(false); }

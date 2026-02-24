@@ -38,6 +38,10 @@ export class CreateCampaignDto {
 
   @IsString()
   @IsOptional()
+  organizationId?: string;
+
+  @IsString()
+  @IsOptional()
   storeId?: string;
 
   // O erro "Expression Expected" geralmente acontece aqui se tiver uma vírgula extra

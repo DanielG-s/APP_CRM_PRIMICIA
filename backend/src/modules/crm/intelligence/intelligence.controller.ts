@@ -16,7 +16,7 @@ import type { Response } from 'express';
 @ApiTags('Inteligência (RFM)')
 @Controller('webhook/crm/intelligence') // Mantendo sua rota original
 export class IntelligenceController {
-  constructor(private readonly intelligenceService: IntelligenceService) { }
+  constructor(private readonly intelligenceService: IntelligenceService) {}
 
   /**
    * Returns the RFM analysis (Recency, Frequency, Monetary) for the customer base.
@@ -71,7 +71,10 @@ export class IntelligenceController {
   }
 
   @Put('segments/:id')
-  async updateSegment(@Param('id') id: string, @Body() body: { name: string; rules: any; isDynamic: boolean }) {
+  async updateSegment(
+    @Param('id') id: string,
+    @Body() body: { name: string; rules: any; isDynamic: boolean },
+  ) {
     // --- ATENÇÃO: MOCK DE USUÁRIO ---
     // Em produção, pegue isso do req.user.id (via AuthGuard)
     const mockUserId = undefined;

@@ -16,12 +16,13 @@ export class MilleniumService {
     private readonly configService: ConfigService,
   ) {
     this.apiUrl = this.configService.get<string>('MILLENIUM_API_URL') || '';
-    this.username = this.configService.get<string>('MILLENIUM_API_USERNAME') || '';
+    this.username =
+      this.configService.get<string>('MILLENIUM_API_USERNAME') || '';
     this.pass = this.configService.get<string>('MILLENIUM_API_PASSWORD') || '';
   }
 
   async getFaturamentos(startDate: Date, endDate: Date) {
-    // ... Keeping getFaturamentos same as before ... 
+    // ... Keeping getFaturamentos same as before ...
     // Optimization: Just copy the logic or simplified version since we are focusing on Customers
     // For safety, I'll restore the robust getFaturamentos logic I wrote earlier.
     const start = format(startDate, 'yyyy-MM-dd');
@@ -42,21 +43,24 @@ export class MilleniumService {
       // Need to add Auth here too!
       try {
         const response = await lastValueFrom(
-          this.httpService.get(`${this.apiUrl}/pedido_venda/listafaturamentos`, {
-            params: {
-              ...params,
-              // Map 'atualizacao' to 'emissao' as required by this specific endpoint
-              data_emissao_inicial: params.data_atualizacao_inicial,
-              data_atualizacao_inicial: undefined, // Remove original to avoid confusion
-              data_emissao_final: params.data_atualizacao_final,
-              data_atualizacao_final: undefined,
+          this.httpService.get(
+            `${this.apiUrl}/pedido_venda/listafaturamentos`,
+            {
+              params: {
+                ...params,
+                // Map 'atualizacao' to 'emissao' as required by this specific endpoint
+                data_emissao_inicial: params.data_atualizacao_inicial,
+                data_atualizacao_inicial: undefined, // Remove original to avoid confusion
+                data_emissao_final: params.data_atualizacao_final,
+                data_atualizacao_final: undefined,
 
-              aprovado: true,
-              $format: 'json'
+                aprovado: true,
+                $format: 'json',
+              },
+              auth: { username: this.username, password: this.pass },
+              timeout: 60000, // Extended timeout for sales
             },
-            auth: { username: this.username, password: this.pass },
-            timeout: 60000 // Extended timeout for sales
-          }),
+          ),
         );
         const data = response.data;
         const sales = data.value || [];
@@ -71,7 +75,9 @@ export class MilleniumService {
         if (allSales.length > 50000) break;
       } catch (error) {
         const errorData = error.response?.data;
-        this.logger.error(`Error fetching Millenium sales: ${error.message} - Data: ${JSON.stringify(errorData)}`);
+        this.logger.error(
+          `Error fetching Millenium sales: ${error.message} - Data: ${JSON.stringify(errorData)}`,
+        );
         throw error;
       }
     }
@@ -93,7 +99,7 @@ export class MilleniumService {
       const response = await lastValueFrom(
         this.httpService.get(`${this.apiUrl}/pedido_venda/listapedidos`, {
           params: queryParams,
-          auth: { username: this.username, password: this.pass }
+          auth: { username: this.username, password: this.pass },
         }),
       );
       return response.data.value?.[0] || null;
@@ -170,7 +176,9 @@ export class MilleniumService {
 
         // Logging progress every 5 batches
         if (loopCount % 5 === 0) {
-          this.logger.log(`Keyset Progress: Fetched ${allCustomers.length} so far. Last trans_id: ${lastId}`);
+          this.logger.log(
+            `Keyset Progress: Fetched ${allCustomers.length} so far. Last trans_id: ${lastId}`,
+          );
         }
 
         if (lastId <= currentTransId) {
@@ -183,7 +191,8 @@ export class MilleniumService {
 
         // Safety Limits
         if (allCustomers.length >= maxItems) break;
-        if (loopCount > 5000) { // Safety break
+        if (loopCount > 5000) {
+          // Safety break
           this.logger.warn('Hit safety loop limit.');
           break;
         }
@@ -191,13 +200,11 @@ export class MilleniumService {
 
       this.logger.log(`Fetched ${allCustomers.length} customers via Keyset.`);
       return allCustomers;
-
     } catch (error) {
       this.logger.error(`Error fetching customers (Keyset): ${error.message}`);
       throw error;
     }
   }
-
 
   async getCustomersBigBang(params: any = {}) {
     // Kept for reference or fallback

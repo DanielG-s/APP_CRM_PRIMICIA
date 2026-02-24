@@ -15,7 +15,10 @@ import { toast } from "sonner";
 import { settingsService } from "@/services/settings.service";
 import { Loader2, Plus, Trash2, Mail, MessageSquare, MessageCircle, Save, Store, User, Shield } from "lucide-react";
 
+import { useAuth } from "@clerk/nextjs";
+
 export default function SettingsPage() {
+  const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -76,11 +79,12 @@ export default function SettingsPage() {
   async function loadSettings() {
     setLoading(true);
     try {
+      const token = await getToken();
       const [storeData, usersData, emailData, wppData] = await Promise.all([
-        settingsService.getStore(),
-        settingsService.getUsers(),
-        settingsService.getEmailSettings(),
-        settingsService.getWhatsappInstances()
+        settingsService.getStore(token),
+        settingsService.getUsers(token),
+        settingsService.getEmailSettings(token),
+        settingsService.getWhatsappInstances(token)
       ]);
 
       if (storeData) setStoreConfig({ ...storeConfig, ...storeData });
@@ -100,7 +104,8 @@ export default function SettingsPage() {
   async function handleSaveStore() {
     setSaving(true);
     try {
-      await settingsService.updateStore(storeConfig);
+      const token = await getToken();
+      await settingsService.updateStore(token, storeConfig);
       toast.success("Dados da loja atualizados!");
     } catch (error) {
       toast.error("Erro ao salvar loja.");
@@ -114,11 +119,12 @@ export default function SettingsPage() {
     if (!newUser.name || !newUser.email || !newUser.password) return toast.warning("Preencha todos os campos.");
     setSaving(true);
     try {
-      await settingsService.createUser(newUser);
+      const token = await getToken();
+      await settingsService.createUser(token, newUser);
       toast.success("Usuário criado com sucesso.");
       setIsUserDialogOpen(false);
       setNewUser({ name: "", email: "", password: "", role: "user" });
-      const updatedUsers = await settingsService.getUsers();
+      const updatedUsers = await settingsService.getUsers(token);
       setUsers(updatedUsers);
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Erro ao criar usuário.");
@@ -130,7 +136,8 @@ export default function SettingsPage() {
   async function handleDeleteUser(id: string) {
     if (!confirm("Tem certeza que deseja remover este usuário?")) return;
     try {
-      await settingsService.deleteUser(id);
+      const token = await getToken();
+      await settingsService.deleteUser(token, id);
       toast.success("Usuário removido.");
       setUsers(users.filter(u => u.id !== id));
     } catch (error) {
@@ -142,7 +149,8 @@ export default function SettingsPage() {
   async function handleSaveEmail() {
     setSaving(true);
     try {
-      await settingsService.updateEmailSettings({
+      const token = await getToken();
+      await settingsService.updateEmailSettings(token, {
         ...emailConfig,
         port: Number(emailConfig.port)
       });
@@ -160,7 +168,8 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      await settingsService.addWhatsappInstance({
+      const token = await getToken();
+      await settingsService.addWhatsappInstance(token, {
         ...newWpp,
         isDefault: whatsappInstances.length === 0
       });
@@ -168,7 +177,7 @@ export default function SettingsPage() {
       setIsWppDialogOpen(false);
       setNewWpp({ name: "", number: "", provider: "evolution", instanceName: "", token: "" });
       // Recarrega apenas este
-      const wppData = await settingsService.getWhatsappInstances();
+      const wppData = await settingsService.getWhatsappInstances(token);
       setWhatsappInstances(wppData);
     } catch (error) {
       toast.error("Erro ao conectar WhatsApp.");
@@ -180,9 +189,10 @@ export default function SettingsPage() {
   async function handleDeleteWhatsapp(id: string) {
     if (!confirm("Remover esta conexão?")) return;
     try {
-      await settingsService.deleteWhatsappInstance(id);
+      const token = await getToken();
+      await settingsService.deleteWhatsappInstance(token, id);
       toast.success("Conexão removida.");
-      const wppData = await settingsService.getWhatsappInstances();
+      const wppData = await settingsService.getWhatsappInstances(token);
       setWhatsappInstances(wppData);
     } catch (error) {
       toast.error("Erro ao remover.");
@@ -193,7 +203,8 @@ export default function SettingsPage() {
   async function handleSaveSms() {
     setSaving(true);
     try {
-      await settingsService.saveSmsSettings(smsConfig);
+      const token = await getToken();
+      await settingsService.saveSmsSettings(token, smsConfig);
       toast.success("Configurações de SMS salvas (Visual)");
     } catch (error) {
       toast.error("Erro ao salvar SMS.");
