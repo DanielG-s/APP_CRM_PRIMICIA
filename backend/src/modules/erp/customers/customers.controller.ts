@@ -1,9 +1,11 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
+import { Permissions } from '../../../common/decorators/permissions.decorator';
 
 @ApiTags('Clientes (CRM)')
 @Controller('webhook/erp/customers')
+@Permissions('app:customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) { }
 

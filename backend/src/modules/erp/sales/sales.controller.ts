@@ -12,6 +12,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { User } from '@prisma/client';
 
 @ApiTags('Integração ERP')
@@ -42,18 +43,21 @@ export class SalesController {
    * Returns total sales and transaction count for the current day.
    */
   @Get('dashboard-total')
+  @Permissions('app:dashboard')
   @ApiOperation({ summary: 'Retorna o total vendido HOJE' })
   async getDashboardTotal() {
     return this.salesService.getDailyTotal();
   }
 
   @Get('dashboard-history')
+  @Permissions('app:dashboard')
   @ApiOperation({ summary: 'Retorna histórico de 7 dias' })
   async getSalesHistory() {
     return this.salesService.getSalesHistory();
   }
 
   @Get('recent-sales')
+  @Permissions('app:dashboard')
   @ApiOperation({ summary: 'Retorna as 5 últimas vendas' })
   async getRecentSales() {
     return this.salesService.getRecentSales();
@@ -63,6 +67,7 @@ export class SalesController {
    * Lists all active stores.
    */
   @Get('stores')
+  @Permissions('app:dashboard')
   @ApiOperation({ summary: 'Lista todas as lojas' })
   async getStores() {
     return this.salesService.getStores();
@@ -70,6 +75,7 @@ export class SalesController {
 
   // --- 1. FILTROS (CANAIS) ---
   @Get('filter-options')
+  @Permissions('app:sales')
   async getFilterOptions() {
     return this.salesService.getFilterOptions();
   }
@@ -80,6 +86,7 @@ export class SalesController {
    * Analyzes sales by acquisition channel (WhatsApp, Email, etc.)
    */
   @Get('channel-results')
+  @Permissions('app:sales')
   async getChannelResults(
     @Query('start') start: string,
     @Query('end') end: string,
@@ -128,6 +135,7 @@ export class SalesController {
    * Provides high-level KPIs (Revenue, Ticket, etc.) filtered by date and store.
    */
   @Get('retail-metrics')
+  @Permissions('app:sales')
   @ApiOperation({ summary: 'Métricas de Varejo filtradas' })
   @ApiQuery({ name: 'start', required: false })
   @ApiQuery({ name: 'end', required: false })
@@ -168,6 +176,7 @@ export class SalesController {
 
   // --- 4. DASHBOARD DE AGENDA ---
   @Get('schedule-metrics')
+  @Permissions('app:sales')
   @ApiOperation({ summary: 'Métricas da página de Agenda' })
   async getScheduleMetrics(
     @CurrentUser() user: any,

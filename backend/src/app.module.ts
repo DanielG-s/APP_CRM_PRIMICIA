@@ -12,6 +12,8 @@ import { PrismaService } from './prisma/prisma.service';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './modules/config/users/clerk-auth.guard';
 import { RolesGuard } from './modules/config/users/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
@@ -82,7 +84,7 @@ import { HealthController } from './health.controller';
     PrismaService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: UserThrottlerGuard,
     },
     {
       provide: APP_GUARD,
@@ -91,6 +93,10 @@ import { HealthController } from './health.controller';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard,
     },
     {
       provide: APP_INTERCEPTOR,

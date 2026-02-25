@@ -56,6 +56,7 @@ export class UsersService {
     email: string,
     name: string,
     roleId: string,
+    storeIds?: string[],
     targetOrganizationId?: string,
   ) {
     const roleData = await this.prisma.role.findUnique({ where: { id: roleId } });
@@ -135,6 +136,9 @@ export class UsersService {
           roleId: roleId,
           status: 'INVITED',
           organizationId: finalOrgId,
+          ...(storeIds && storeIds.length > 0 && {
+            accessibleStores: { connect: storeIds.map((id) => ({ id })) },
+          }),
         } as any,
       });
     } catch (error: any) {
@@ -148,7 +152,7 @@ export class UsersService {
     }
   }
 
-  async updateRole(currentUser: any, targetUserId: string, newRoleId: string) {
+  async updateRole(currentUser: any, targetUserId: string, newRoleId: string, storeIds?: string[]) {
     if (currentUser.id === targetUserId) {
       throw new ConflictException(
         'Operação bloqueada: Você não pode alterar sua própria patente.',
@@ -198,7 +202,12 @@ export class UsersService {
 
     return this.prisma.user.update({
       where: { id: targetUserId },
-      data: { roleId: newRoleId },
+      data: {
+        roleId: newRoleId,
+        ...(storeIds !== undefined && { // can be [] if we want to remove all
+          accessibleStores: { set: storeIds.map((id) => ({ id })) },
+        }),
+      },
     });
   }
 

@@ -58,6 +58,11 @@ export const settingsService = {
   },
 
   // --- USUÁRIOS (EQUIPE) ---
+  getStores: async (token: string | null) => {
+    const response = await axios.get(`${API_URL}/sales/stores`, getHeaders(token));
+    return response.data;
+  },
+
   getUsers: async (token: string | null) => {
     const response = await axios.get(`${API_URL}/users`, getHeaders(token));
     return response.data;
@@ -68,8 +73,8 @@ export const settingsService = {
     return response.data;
   },
 
-  updateUserRole: async (token: string | null, userId: string, roleId: string) => {
-    const response = await axios.patch(`${API_URL}/users/${userId}/role`, { roleId }, getHeaders(token));
+  updateUserRole: async (token: string | null, userId: string, roleId: string, storeIds?: string[]) => {
+    const response = await axios.patch(`${API_URL}/users/${userId}/role`, { roleId, storeIds }, getHeaders(token));
     return response.data;
   },
 
@@ -85,6 +90,11 @@ export const settingsService = {
 
   createRole: async (token: string | null, data: any) => {
     const response = await axios.post(`${API_URL}/config/roles`, data, getHeaders(token));
+    return response.data;
+  },
+
+  updateRole: async (token: string | null, roleId: string, data: any) => {
+    const response = await axios.patch(`${API_URL}/config/roles/${roleId}`, data, getHeaders(token));
     return response.data;
   },
 

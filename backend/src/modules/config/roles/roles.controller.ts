@@ -11,9 +11,11 @@ import {
 } from '@nestjs/common';
 import { RolesService } from './roles.service';
 import { ClerkAuthGuard } from '../users/clerk-auth.guard';
+import { Permissions } from '../../../common/decorators/permissions.decorator';
 
 @UseGuards(ClerkAuthGuard)
 @Controller('config/roles')
+@Permissions('app:roles')
 export class RolesController {
     constructor(private readonly rolesService: RolesService) { }
 

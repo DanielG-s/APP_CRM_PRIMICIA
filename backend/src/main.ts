@@ -3,14 +3,47 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import basicAuth from 'express-basic-auth';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  // 1. Trust Proxy (Para o Rate Limiting funcionar atrás de Nginx/AWS/Cloudflare)
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
-  // 1. Ativa a Validação Global (para o DTO funcionar e barrar dados errados)
-  app.useGlobalPipes(new ValidationPipe());
+  // 2. Helmet (Headers de Segurança)
+  app.use(helmet());
+
+  // 3. CORS Dinâmico (Restrito a origens conhecidas)
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:3001',
+    process.env.ADMIN_URL || 'http://localhost:3000',
+    // Permitir origens de preview do Vercel caso aplicável, etc.
+  ];
+
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Liberar sem origin (ex: chamadas de S2S ou Postman em ambiente de dev local) 
+      // Em produção estrita, pode ser interessante bloquear calls sem origin, mas isso pode quebrar webhooks.
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        // NestJS converte ForbiddenException adequadamente em 403 em vez de 500
+        const { ForbiddenException } = require('@nestjs/common');
+        callback(new ForbiddenException('Origin not allowed by CORS'));
+      }
+    },
+    credentials: true,
+  });
+
+  // 4. Ativa a Validação Global Estrita (para o DTO funcionar, barrar dados errados e evitar Mass Assignment)
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   // 3. Proteção do BullBoard com Basic Auth (se habilitado)
   if (process.env.ENABLE_BULLBOARD === 'true') {

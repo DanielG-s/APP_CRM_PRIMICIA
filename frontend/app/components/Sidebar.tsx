@@ -8,8 +8,9 @@ import { UserButton, useUser } from "@clerk/nextjs";
 import {
     Home, Users, BarChart2, PieChart as PieIcon,
     CalendarRange, MessageCircle, Target, ChevronLeft, ChevronRight,
-    Layers, Settings // <--- 1. ADICIONEI O ÍCONE SETTINGS
+    Layers, Settings, Moon, Sun // <--- ADICIONEI OS ÍCONES DE TEMA
 } from "lucide-react";
+import { useTheme } from "next-themes";
 
 // O componente NavItem permanece igual
 function NavItem({ icon, label, href, isCollapsed }: { icon: React.ReactNode, label: string, href: string, isCollapsed: boolean }) {
@@ -37,6 +38,12 @@ function NavItem({ icon, label, href, isCollapsed }: { icon: React.ReactNode, la
 
 export function Sidebar() {
     const { isCollapsed, toggleSidebar } = useSidebar();
+    const { theme, setTheme } = useTheme();
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     return (
         <aside
@@ -89,8 +96,22 @@ export function Sidebar() {
                 <NavItem href="/settings" icon={<Settings size={20} />} label="Configurações" isCollapsed={isCollapsed} />
             </nav>
 
-            {/* PROFILE SECTION */}
-            <div className="absolute bottom-4 left-0 w-full px-4">
+            {/* PROFILE & THEME SECTION */}
+            <div className="absolute bottom-4 left-0 w-full px-4 flex flex-col gap-2">
+                {mounted && (
+                    <button
+                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        className={`p-3 bg-slate-800/40 rounded-xl border border-slate-700/50 flex flex-row items-center cursor-pointer shadow-lg backdrop-blur-sm transition-all overflow-hidden hover:bg-slate-800/80 ${isCollapsed ? 'justify-center' : 'justify-start gap-3'}`}
+                    >
+                        <div className="shrink-0 flex items-center justify-center text-slate-400">
+                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                        </div>
+                        <span className={`text-sm font-medium transition-all duration-300 overflow-hidden text-slate-200 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 flex-1 text-left'}`}>
+                            Tema {theme === 'dark' ? 'Claro' : 'Escuro'}
+                        </span>
+                    </button>
+                )}
+
                 <div className={`p-3 bg-slate-800/40 rounded-xl border border-slate-700/50 flex items-center shadow-lg backdrop-blur-sm transition-all overflow-hidden ${isCollapsed ? 'justify-center' : 'justify-start gap-3'}`}>
                     <div className="shrink-0 flex items-center justify-center">
                         <UserButton afterSignOutUrl="/sign-in" />

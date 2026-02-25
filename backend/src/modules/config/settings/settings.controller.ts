@@ -2,10 +2,12 @@ import { Controller, Get, Post, Body, Delete, Param } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { UpdateEmailSettingsDto } from './dto/update-email-settings.dto';
 import { CreateWhatsappInstanceDto } from './dto/create-whatsapp.dto';
+import { Permissions } from '../../../common/decorators/permissions.decorator';
 
 @Controller('settings')
+@Permissions('app:settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(private readonly settingsService: SettingsService) { }
 
   // --- Rotas da Loja (Geral) ---
   @Get('store')
