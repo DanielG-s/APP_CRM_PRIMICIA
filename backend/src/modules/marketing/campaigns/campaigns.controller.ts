@@ -24,6 +24,7 @@ export class CampaignsController {
    * Automatically assigns the store ID based on the logged-in user.
    */
   @Post()
+  @Permissions('app:campaigns:send')
   async create(@Body() createCampaignDto: CreateCampaignDto, @Req() req: any) {
     // 1. Tenta pegar o organizationId do usuário logado (Token JWT)
     const userOrgId = req.user?.organizationId;

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { intelligenceService } from '@/services/intelligence.service';
 import { API_BASE_URL } from '@/lib/config';
 import { useAuth } from '@clerk/nextjs';
+import { useRBAC } from '../../contexts/RBACContext';
 
 // Se você não tiver este arquivo criado, me avise que eu crio ele pra você
 import { SegmentImpactPanel } from '../shared/components';
@@ -30,18 +31,18 @@ const ListTutorialModal = ({ isOpen, onClose }: any) => {
       title: "Domine sua Audiência",
       content: (
         <div className="space-y-4">
-          <p className="text-slate-600 text-lg leading-relaxed">
+          <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed">
             Esta não é apenas uma lista de contatos. É o seu <strong>Centro de Inteligência</strong>.
             Aqui você transforma dados brutos em oportunidades de venda, criando grupos ultra-segmentados para suas campanhas.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-              <div className="font-bold text-indigo-700 text-sm">🎯 Precisão</div>
-              <div className="text-xs text-indigo-600">Filtre por comportamento, RFM e perfil.</div>
+            <div className="bg-indigo-50 dark:bg-indigo-900/40 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
+              <div className="font-bold text-indigo-700 dark:text-indigo-400 text-sm">🎯 Precisão</div>
+              <div className="text-xs text-indigo-600 dark:text-indigo-300">Filtre por comportamento, RFM e perfil.</div>
             </div>
-            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-              <div className="font-bold text-emerald-700 text-sm">📈 Retenção</div>
-              <div className="text-xs text-emerald-600">Recupere clientes antes que eles sumam.</div>
+            <div className="bg-emerald-50 dark:bg-emerald-900/40 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800">
+              <div className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">📈 Retenção</div>
+              <div className="text-xs text-emerald-600 dark:text-emerald-300">Recupere clientes antes que eles sumam.</div>
             </div>
           </div>
         </div>
@@ -55,22 +56,22 @@ const ListTutorialModal = ({ isOpen, onClose }: any) => {
       title: "Dinâmico ou Estático?",
       content: (
         <div className="space-y-4">
-          <p className="text-slate-600">
+          <p className="text-slate-600 dark:text-slate-300">
             Você tem dois superpoderes aqui. Escolha o ideal para cada momento:
           </p>
           <ul className="space-y-3 mt-2">
             <li className="flex gap-3 items-start">
-              <div className="p-1.5 bg-blue-100 rounded text-blue-600 mt-0.5"><RefreshCcw size={14} /></div>
+              <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded text-blue-600 dark:text-blue-400 mt-0.5"><RefreshCcw size={14} /></div>
               <div>
-                <strong className="block text-slate-800 text-sm">Dinâmico (Automático)</strong>
-                <span className="text-slate-500 text-xs">O sistema atualiza a lista todo dia. Ideal para "Aniversariantes" ou "Novos Clientes".</span>
+                <strong className="block text-slate-800 dark:text-slate-100 text-sm">Dinâmico (Automático)</strong>
+                <span className="text-slate-500 dark:text-slate-400 text-xs">O sistema atualiza a lista todo dia. Ideal para "Aniversariantes" ou "Novos Clientes".</span>
               </div>
             </li>
             <li className="flex gap-3 items-start">
-              <div className="p-1.5 bg-amber-100 rounded text-amber-600 mt-0.5"><Lock size={14} /></div>
+              <div className="p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded text-amber-600 dark:text-amber-400 mt-0.5"><Lock size={14} /></div>
               <div>
-                <strong className="block text-slate-800 text-sm">Estático (Snapshot)</strong>
-                <span className="text-slate-500 text-xs">Uma lista fixa que não muda. Perfeito para "Participantes do Evento X".</span>
+                <strong className="block text-slate-800 dark:text-slate-100 text-sm">Estático (Snapshot)</strong>
+                <span className="text-slate-500 dark:text-slate-400 text-xs">Uma lista fixa que não muda. Perfeito para "Participantes do Evento X".</span>
               </div>
             </li>
           </ul>
@@ -85,26 +86,26 @@ const ListTutorialModal = ({ isOpen, onClose }: any) => {
       title: "Monitore a Saúde",
       content: (
         <div className="space-y-4">
-          <p className="text-slate-600">
+          <p className="text-slate-600 dark:text-slate-300">
             A nova coluna de <strong>Alcance</strong> é o seu termômetro. Não olhe apenas o número total:
           </p>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                 <TrendingUp size={18} />
               </div>
-              <div className="text-sm">
-                <span className="font-bold text-emerald-700 block">Crescimento (Verde)</span>
+              <div className="text-sm dark:text-slate-300">
+                <span className="font-bold text-emerald-700 dark:text-emerald-400 block">Crescimento (Verde)</span>
                 Novos clientes entraram no perfil.
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+              <div className="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
                 <TrendingDown size={18} />
               </div>
-              <div className="text-sm">
-                <span className="font-bold text-rose-700 block">Redução (Vermelho)</span>
+              <div className="text-sm dark:text-slate-300">
+                <span className="font-bold text-rose-700 dark:text-rose-400 block">Redução (Vermelho)</span>
                 Clientes saíram ou deixaram de comprar.
               </div>
             </div>
@@ -120,16 +121,16 @@ const ListTutorialModal = ({ isOpen, onClose }: any) => {
       title: "Profundidade num Clique",
       content: (
         <div className="space-y-4">
-          <p className="text-slate-600">
+          <p className="text-slate-600 dark:text-slate-300">
             Precisa de mais detalhes sem sair da tela?
           </p>
-          <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-xl border border-amber-100 mb-2">
-            <MousePointerClick size={24} className="text-amber-600" />
-            <div className="text-sm text-slate-700">
+          <div className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-900/40 rounded-xl border border-amber-100 dark:border-amber-800 mb-2">
+            <MousePointerClick size={24} className="text-amber-600 dark:text-amber-400" />
+            <div className="text-sm text-slate-700 dark:text-slate-300">
               <strong>Clique em qualquer linha da tabela</strong> para abrir a gaveta lateral. Lá você vê canais disponíveis (Email/Whats) e receita estimada.
             </div>
           </div>
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
             Use o botão <Download size={14} className="inline mx-1" /> para baixar o CSV e usar em outras ferramentas.
           </p>
         </div>
@@ -251,6 +252,7 @@ const Sparkline = ({ data, color = "#10b981" }: { data: number[], color?: string
 
 export default function SegmentListPage() {
   const { getToken } = useAuth();
+  const { hasPermission } = useRBAC();
   const [segments, setSegments] = useState<any[]>([]);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -421,15 +423,15 @@ export default function SegmentListPage() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans text-slate-900">
+    <div className="flex h-screen bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100">
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <ListTutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
 
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
-          <div><h1 className="text-xl font-bold text-slate-800">Minhas Audiências</h1><p className="text-sm text-slate-500">Gerencie seus grupos de clientes e regras de segmentação.</p></div>
+        <header className="h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
+          <div><h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Minhas Audiências</h1><p className="text-sm text-slate-500 dark:text-slate-400">Gerencie seus grupos de clientes e regras de segmentação.</p></div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsTutorialOpen(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors text-xs font-bold cursor-pointer"><BookOpen size={16} className="text-indigo-500" /> Como usar?</button>
-            <div className="h-6 w-px bg-slate-200 mx-1"></div>
+            <button onClick={() => setIsTutorialOpen(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-bold cursor-pointer"><BookOpen size={16} className="text-indigo-500 dark:text-indigo-400" /> Como usar?</button>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
             <Link href="/segments/new"><button className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 cursor-pointer"><Plus size={20} /> Novo Segmento</button></Link>
           </div>
         </header>
@@ -438,35 +440,35 @@ export default function SegmentListPage() {
           <div className="flex-1 overflow-y-auto p-8">
             <div className="max-w-6xl mx-auto space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4"><div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Users size={24} /></div><div><p className="text-slate-500 text-sm font-medium">Total de Segmentos</p><p className="text-2xl font-bold text-slate-800">{segments.length}</p></div></div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4"><div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><RefreshCcw size={24} /></div><div><p className="text-slate-500 text-sm font-medium">Dinâmicos (Auto)</p><p className="text-2xl font-bold text-slate-800">{segments.filter(s => s.isDynamic).length}</p></div></div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4"><div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><Lock size={24} /></div><div><p className="text-slate-500 text-sm font-medium">Estáticos (Snapshot)</p><p className="text-2xl font-bold text-slate-800">{segments.filter(s => !s.isDynamic).length}</p></div></div>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4"><div className="p-3 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl"><Users size={24} /></div><div><p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total de Segmentos</p><p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{segments.length}</p></div></div>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4"><div className="p-3 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-xl"><RefreshCcw size={24} /></div><div><p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Dinâmicos (Auto)</p><p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{segments.filter(s => s.isDynamic).length}</p></div></div>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4"><div className="p-3 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-xl"><Lock size={24} /></div><div><p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Estáticos (Snapshot)</p><p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{segments.filter(s => !s.isDynamic).length}</p></div></div>
               </div>
 
-              <div className="flex items-center gap-4 bg-white p-2 rounded-xl border border-slate-200 shadow-sm relative z-10">
-                <Search className="text-slate-400 ml-2" size={20} />
-                <input type="text" placeholder="Buscar segmento por nome..." className="flex-1 border-none focus:ring-0 text-sm bg-transparent outline-none text-slate-700 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <div className="flex items-center gap-4 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative z-10">
+                <Search className="text-slate-400" size={20} />
+                <input type="text" placeholder="Buscar segmento por nome..." className="flex-1 border-none focus:ring-0 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 <div className="relative" ref={filterMenuRef}>
-                  <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`p-2 rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${filterType !== 'all' ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-100 text-slate-500'}`}><Filter size={18} />{filterType !== 'all' && <span className="text-xs font-bold capitalize">{filterType === 'active' ? 'Ativos' : filterType === 'inactive' ? 'Inativos' : filterType === 'dynamic' ? 'Dinâmicos' : 'Estáticos'}</span>}</button>
+                  <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`p-2 rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${filterType !== 'all' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400'}`}><Filter size={18} />{filterType !== 'all' && <span className="text-xs font-bold capitalize">{filterType === 'active' ? 'Ativos' : filterType === 'inactive' ? 'Inativos' : filterType === 'dynamic' ? 'Dinâmicos' : 'Estáticos'}</span>}</button>
                   {isFilterMenuOpen && (
-                    <div className="absolute right-0 top-12 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="absolute right-0 top-12 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 py-2 animate-in fade-in zoom-in-95 duration-200">
                       <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Filtrar por</div>
-                      {['all', 'active', 'inactive', 'dynamic', 'static'].map(type => (<button key={type} onClick={() => { setFilterType(type); setIsFilterMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex justify-between items-center capitalize">{type === 'all' ? 'Todos' : type === 'active' ? 'Ativos' : type === 'inactive' ? 'Inativos' : type === 'dynamic' ? 'Dinâmicos' : 'Estáticos'}{filterType === type && <Check size={14} className="text-indigo-600" />}</button>))}
+                      {['all', 'active', 'inactive', 'dynamic', 'static'].map(type => (<button key={type} onClick={() => { setFilterType(type); setIsFilterMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex justify-between items-center capitalize">{type === 'all' ? 'Todos' : type === 'active' ? 'Ativos' : type === 'inactive' ? 'Inativos' : type === 'dynamic' ? 'Dinâmicos' : 'Estáticos'}{filterType === type && <Check size={14} className="text-indigo-600 dark:text-indigo-400" />}</button>))}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden flex flex-col">
                 <div className="overflow-x-auto">
                   {isLoading ? (
                     <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-2"><RefreshCcw className="animate-spin text-indigo-500" size={24} />Carregando segmentos...</div>
                   ) : filteredSegments.length === 0 ? (
-                    <div className="p-12 text-center flex flex-col items-center"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-300"><AlertCircle size={32} /></div><h3 className="text-lg font-bold text-slate-700">Nenhum segmento encontrado</h3><Link href="/segments/new"><button className="text-indigo-600 font-bold hover:underline cursor-pointer mt-2">Criar agora</button></Link></div>
+                    <div className="p-12 text-center flex flex-col items-center"><div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4 text-slate-300 dark:text-slate-600"><AlertCircle size={32} /></div><h3 className="text-lg font-bold text-slate-700 dark:text-slate-300">Nenhum segmento encontrado</h3><Link href="/segments/new"><button className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer mt-2">Criar agora</button></Link></div>
                   ) : (
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           <TableHeader label="Nome do Segmento" sortKey="name" align="left" />
                           <TableHeader label="Tipo" sortKey="type" />
                           <TableHeader label="Status" sortKey="active" />
@@ -476,7 +478,7 @@ export default function SegmentListPage() {
                           <th className="p-4 text-right pr-6">Ações</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
                         {paginatedSegments.map((seg) => {
                           const percent = totalCustomers > 0 ? Math.round(((seg.lastCount || 0) / totalCustomers) * 100) : 0;
                           const trend = parseFloat(seg.metrics?.trend || "0");
@@ -485,17 +487,17 @@ export default function SegmentListPage() {
                             <tr
                               key={seg.id}
                               onClick={() => setSelectedSegment(seg)}
-                              className={`transition-colors group cursor-pointer ${selectedSegment?.id === seg.id ? 'bg-indigo-50/60 border-l-4 border-indigo-500' : 'hover:bg-slate-50/80 border-l-4 border-transparent'}`}
+                              className={`transition-colors group cursor-pointer ${selectedSegment?.id === seg.id ? 'bg-indigo-50/60 dark:bg-indigo-900/20 border-l-4 border-indigo-500' : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50 border-l-4 border-transparent'}`}
                             >
                               <td className="p-4 pl-6">
-                                <div className={`font-bold text-sm ${selectedSegment?.id === seg.id ? 'text-indigo-700' : 'text-slate-800'}`}>{seg.name}</div>
+                                <div className={`font-bold text-sm ${selectedSegment?.id === seg.id ? 'text-indigo-700 dark:text-indigo-400' : 'text-slate-800 dark:text-slate-200'}`}>{seg.name}</div>
                                 <div className="text-xs text-slate-400 mt-0.5">{Array.isArray(seg.rules) ? seg.rules.length : 0} regras aplicadas</div>
                               </td>
                               <td className="p-4">
-                                {seg.isDynamic ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-100 uppercase tracking-wide"><RefreshCcw size={10} /> Dinâmico</span> : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200 uppercase tracking-wide"><Lock size={10} /> Estático</span>}
+                                {seg.isDynamic ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 text-[10px] font-bold border border-indigo-100 dark:border-indigo-800 uppercase tracking-wide"><RefreshCcw size={10} /> Dinâmico</span> : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold border border-slate-200 dark:border-slate-700 uppercase tracking-wide"><Lock size={10} /> Estático</span>}
                               </td>
                               <td className="p-4">
-                                <button onClick={(e) => handleToggleStatus(seg.id, e)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${seg.active ? 'bg-emerald-500' : 'bg-slate-300'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${seg.active ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                                <button onClick={(e) => handleToggleStatus(seg.id, e)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${seg.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${seg.active ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                               </td>
 
                               {/* COLUNA DE ALCANCE (COM SPARKLINE E TENDÊNCIA) */}
@@ -503,10 +505,10 @@ export default function SegmentListPage() {
                                 <div className="flex items-center gap-4">
                                   <div className="w-[100px]">
                                     <div className="flex justify-between text-xs mb-1">
-                                      <span className="font-bold text-slate-700">{seg.lastCount}</span>
+                                      <span className="font-bold text-slate-700 dark:text-slate-300">{seg.lastCount}</span>
                                       <span className="text-slate-400 text-[10px]">{percent}%</span>
                                     </div>
-                                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                       <div className={`h-full rounded-full ${percent > 50 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${percent}%` }}></div>
                                     </div>
                                   </div>
@@ -525,22 +527,24 @@ export default function SegmentListPage() {
                                 </div>
                               </td>
 
-                              <td className="p-4 text-xs text-slate-500 font-medium"><div className="flex items-center gap-2"><Calendar size={14} className="text-slate-300" />{formatDate(seg.createdAt)}</div></td>
-                              <td className="p-4"><div className="text-xs font-bold text-slate-700">{formatDate(seg.updatedAt)}</div><div className="text-[10px] text-slate-400 mt-0.5">por {seg.updatedBy?.name || seg.updatedBy?.email || 'Sistema'}</div></td>
+                              <td className="p-4 text-xs text-slate-500 dark:text-slate-400 font-medium"><div className="flex items-center gap-2"><Calendar size={14} className="text-slate-300 dark:text-slate-500" />{formatDate(seg.createdAt)}</div></td>
+                              <td className="p-4"><div className="text-xs font-bold text-slate-700 dark:text-slate-300">{formatDate(seg.updatedAt)}</div><div className="text-[10px] text-slate-400 mt-0.5">por {seg.updatedBy?.name || seg.updatedBy?.email || 'Sistema'}</div></td>
                               <td className="p-4 text-right pr-6">
                                 <div className="flex items-center justify-end gap-2 transition-opacity">
 
                                   {/* BOTÃO EXPORTAR CSV */}
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleExportCsv(seg.id); }}
-                                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer group"
-                                    title="Exportar CSV"
-                                  >
-                                    <Download size={18} />
-                                  </button>
+                                  {hasPermission('app:export') && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleExportCsv(seg.id); }}
+                                      className="p-2 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-colors cursor-pointer group"
+                                      title="Exportar CSV"
+                                    >
+                                      <Download size={18} />
+                                    </button>
+                                  )}
 
-                                  <Link href={`/segments/edit/${seg.id}`} onClick={(e) => e.stopPropagation()}><button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"><Edit3 size={18} /></button></Link>
-                                  <button onClick={(e) => handleDelete(seg.id, e)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"><Trash2 size={18} /></button>
+                                  <Link href={`/segments/edit/${seg.id}`} onClick={(e) => e.stopPropagation()}><button className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-colors cursor-pointer"><Edit3 size={18} /></button></Link>
+                                  <button onClick={(e) => handleDelete(seg.id, e)} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg transition-colors cursor-pointer"><Trash2 size={18} /></button>
                                 </div>
                               </td>
                             </tr>
@@ -551,9 +555,9 @@ export default function SegmentListPage() {
                   )}
                 </div>
                 {filteredSegments.length > 0 && (
-                  <div className="bg-slate-50 border-t border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3"><span className="text-xs text-slate-500">Exibir</span><select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="text-xs border border-slate-200 rounded-lg bg-white py-1.5 px-2 text-slate-700 focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer"><option value={10}>10</option><option value={50}>50</option><option value={100}>100</option></select><span className="text-xs text-slate-500">de <span className="font-bold">{filteredSegments.length}</span> resultados</span></div>
-                    <div className="flex items-center gap-2"><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} /></button><span className="text-sm font-medium text-slate-700 px-2">Página {currentPage} de {totalPages || 1}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronRight size={16} /></button></div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700/50 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3"><span className="text-xs text-slate-500 dark:text-slate-400">Exibir</span><select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 py-1.5 px-2 text-slate-700 dark:text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer"><option value={10}>10</option><option value={50}>50</option><option value={100}>100</option></select><span className="text-xs text-slate-500 dark:text-slate-400">de <span className="font-bold">{filteredSegments.length}</span> resultados</span></div>
+                    <div className="flex items-center gap-2"><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} /></button><span className="text-sm font-medium text-slate-700 dark:text-slate-300 px-2">Página {currentPage} de {totalPages || 1}</span><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronRight size={16} /></button></div>
                   </div>
                 )}
               </div>

@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { useRBAC } from "../../contexts/RBACContext";
 
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
@@ -1002,6 +1003,7 @@ function StoresTableSection({ stores }: { stores: any[] }) {
 }
 
 function ChannelsTable({ data }: { data: any[] }) {
+    const { hasPermission } = useRBAC();
     const [search, setSearch] = useState("");
     const deferred = useDeferredValue(search);
     const filtered = useMemo(() => data.filter(c => c.name.toLowerCase().includes(deferred.toLowerCase())), [data, deferred]);

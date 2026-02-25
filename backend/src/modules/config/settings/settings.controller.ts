@@ -22,27 +22,32 @@ export class SettingsController {
 
   // --- Rotas de E-mail ---
   @Get('email')
+  @Permissions('app:integrations')
   getEmail() {
     return this.settingsService.getEmailSettings();
   }
 
   @Post('email')
+  @Permissions('app:integrations')
   updateEmail(@Body() data: UpdateEmailSettingsDto) {
     return this.settingsService.upsertEmailSettings(data);
   }
 
   // --- Rotas de WhatsApp ---
   @Get('whatsapp')
+  @Permissions('app:integrations')
   listWhatsapp() {
     return this.settingsService.listWhatsappInstances();
   }
 
   @Post('whatsapp')
+  @Permissions('app:integrations')
   addWhatsapp(@Body() data: CreateWhatsappInstanceDto) {
     return this.settingsService.addWhatsappInstance(data);
   }
 
   @Delete('whatsapp/:id')
+  @Permissions('app:integrations')
   deleteWhatsapp(@Param('id') id: string) {
     return this.settingsService.deleteWhatsappInstance(id);
   }

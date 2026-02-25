@@ -11,6 +11,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { useRBAC } from "../contexts/RBACContext";
 
 // --- CORES DAS TAGS ---
 const RFM_COLORS: any = {
@@ -220,6 +221,7 @@ const ClientsTutorialModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: (
 export default function ClientsPage() {
     const { getToken } = useAuth();
     const { user } = useUser();
+    const { hasPermission } = useRBAC();
     const router = useRouter();
     const [clients, setClients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -344,7 +346,7 @@ export default function ClientsPage() {
                                 placeholder="Buscar por nome ou e-mail"
                                 className="bg-transparent outline-none text-sm w-full placeholder-slate-400 dark:placeholder-slate-500 text-slate-700 dark:text-slate-100"
                                 value={search}
-                                onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+                                onChange={e => { setSearch(e.target.value); setPage(1); }}
                             />
                         </div>
                         <div className="flex gap-2">
@@ -401,7 +403,7 @@ export default function ClientsPage() {
                                         <SortHeader label="Campanhas" sortKey="campaignsCount" />
                                         <SortHeader label="Compras" sortKey="totalTransactions" />
                                         <SortHeader label="Última Compra" sortKey="lastPurchase" />
-                                        <SortHeader label="Receita Total" sortKey="ltv" />
+                                        {hasPermission('app:financials') && <SortHeader label="Receita Total" sortKey="ltv" />}
                                         <SortHeader label="Cadastro" sortKey="createdAt" />
                                     </tr>
                                 </thead>
@@ -437,18 +439,16 @@ export default function ClientsPage() {
                                             </td>
 
                                             <td className="px-6 py-4">
-                                                {client.lastPurchase ? (
-                                                    <span className="text-slate-600 dark:text-slate-400 font-medium text-xs">
-                                                        {new Date(client.lastPurchase).toLocaleDateString('pt-BR')}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-slate-400 text-xs">-</span>
-                                                )}
+                                                <span className="text-slate-600 dark:text-slate-400 font-medium text-xs">
+                                                    {client.lastPurchase ? new Date(client.lastPurchase).toLocaleDateString('pt-BR') : '-'}
+                                                </span>
                                             </td>
 
-                                            <td className="px-6 py-4 font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
-                                                {client.ltv > 0 ? client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                                            </td>
+                                            {hasPermission('app:financials') && (
+                                                <td className="px-6 py-4 font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
+                                                    {client.ltv > 0 ? client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                                </td>
+                                            )}
 
                                             <td className="px-6 py-4">
                                                 <span className="text-slate-500 dark:text-slate-400 text-xs">

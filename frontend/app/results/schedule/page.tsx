@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth } from "@clerk/nextjs";
+import { useRBAC } from "../../contexts/RBACContext";
 
 // --- UTILS ---
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -268,6 +269,7 @@ const ScheduleTutorialModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: 
 // --- PÁGINA PRINCIPAL ---
 export default function AgendaPage() {
     const { getToken } = useAuth();
+    const { hasPermission } = useRBAC();
     const getToday = () => new Date().toISOString().split('T')[0];
     const getStartOfMonth = () => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; };
 
@@ -559,7 +561,9 @@ export default function AgendaPage() {
                                 <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-transparent border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-700 dark:text-slate-200 outline-none w-48 focus:border-violet-500 transition-colors" />
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={14} />
                             </div>
-                            <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-emerald-500 text-emerald-600 rounded text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"><Download size={14} /> Exportar CSV</button>
+                            {hasPermission('app:export') && (
+                                <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-emerald-500 text-emerald-600 rounded text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"><Download size={14} /> Exportar CSV</button>
+                            )}
                         </div>
                     </div>
 
