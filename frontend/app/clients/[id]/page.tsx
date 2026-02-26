@@ -11,9 +11,11 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth } from "@clerk/nextjs";
+import { useRBAC } from "../../contexts/RBACContext";
 
 export default function ClientDetailPage() {
     const { getToken } = useAuth();
+    const { hasPermission } = useRBAC();
     const { id } = useParams();
     const router = useRouter();
     const [client, setClient] = useState<any>(null);
@@ -127,18 +129,22 @@ export default function ClientDetailPage() {
                 <div className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
                     <div className="flex gap-4 w-full">
                         {/* KPI CARDS */}
-                        <KpiCard
-                            label="Receita total"
-                            value={client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            icon={<CreditCard size={16} className="text-white" />}
-                            color="bg-emerald-500"
-                        />
-                        <KpiCard
-                            label="Ticket médio"
-                            value={(client.totalTransactions > 0 ? client.ltv / client.totalTransactions : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            icon={<CreditCard size={16} className="text-white" />} // Icon repeated as placeholder
-                            color="bg-violet-500"
-                        />
+                        {hasPermission('app:financials') && (
+                            <>
+                                <KpiCard
+                                    label="Receita total"
+                                    value={client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    icon={<CreditCard size={16} className="text-white" />}
+                                    color="bg-emerald-500"
+                                />
+                                <KpiCard
+                                    label="Ticket médio"
+                                    value={(client.totalTransactions > 0 ? client.ltv / client.totalTransactions : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    icon={<CreditCard size={16} className="text-white" />} // Icon repeated as placeholder
+                                    color="bg-violet-500"
+                                />
+                            </>
+                        )}
                         <KpiCard
                             label="Compras"
                             value={client.totalTransactions}

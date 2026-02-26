@@ -12,6 +12,8 @@ import { PrismaService } from './prisma/prisma.service';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './modules/config/users/clerk-auth.guard';
 import { RolesGuard } from './modules/config/users/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
@@ -22,6 +24,7 @@ import { IntelligenceModule } from './modules/crm/intelligence/intelligence.modu
 import { CampaignsModule } from './modules/marketing/campaigns/campaigns.module';
 import { SettingsModule } from './modules/config/settings/settings.module';
 import { UsersModule } from './modules/config/users/users.module';
+import { RolesModule } from './modules/config/roles/roles.module';
 import { ErpModule } from './modules/erp/erp.module';
 import { HealthController } from './health.controller';
 
@@ -60,11 +63,11 @@ import { HealthController } from './health.controller';
     // Only import BullBoardModule if it is enabled. This prevents the route from even existing.
     ...(process.env.ENABLE_BULLBOARD === 'true'
       ? [
-          BullBoardModule.forRoot({
-            route: '/admin/queues',
-            adapter: ExpressAdapter,
-          }),
-        ]
+        BullBoardModule.forRoot({
+          route: '/admin/queues',
+          adapter: ExpressAdapter,
+        }),
+      ]
       : []),
     SalesModule,
     CustomersModule,
@@ -72,6 +75,7 @@ import { HealthController } from './health.controller';
     CampaignsModule,
     SettingsModule,
     UsersModule,
+    RolesModule,
     ErpModule,
   ],
   controllers: [AppController, HealthController],
@@ -80,7 +84,7 @@ import { HealthController } from './health.controller';
     PrismaService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: UserThrottlerGuard,
     },
     {
       provide: APP_GUARD,
@@ -89,6 +93,10 @@ import { HealthController } from './health.controller';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard,
     },
     {
       provide: APP_INTERCEPTOR,
@@ -102,7 +110,7 @@ import { HealthController } from './health.controller';
   exports: [PrismaService],
 })
 export class AppModule implements NestModule {
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   configure(consumer: MiddlewareConsumer) {
     const isBullBoardEnabled =

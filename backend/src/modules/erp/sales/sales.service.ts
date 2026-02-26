@@ -89,6 +89,7 @@ export class SalesService {
     startDate.setHours(0, 0, 0, 0);
     const transactions = await this.prisma.transaction.findMany({
       where: { date: { gte: startDate, lte: endDate }, status: 'PAID' },
+      select: { date: true, totalValue: true },
       orderBy: { date: 'asc' },
     });
     const historyMap = new Map();
@@ -113,7 +114,11 @@ export class SalesService {
       take: 5,
       orderBy: { date: 'desc' },
       where: { status: 'PAID' },
-      include: {
+      select: {
+        id: true,
+        totalValue: true,
+        date: true,
+        channel: true,
         customer: { select: { name: true, email: true } },
         store: { select: { name: true } },
       },
@@ -212,7 +217,22 @@ export class SalesService {
     const campaignsRaw = await this.prisma.campaign.findMany({
       where: campaignWhere,
       orderBy: { date: 'desc' },
-      include: { schedules: true },
+      select: {
+        id: true,
+        name: true,
+        channel: true,
+        date: true,
+        status: true,
+        sent: true,
+        delivered: true,
+        opens: true,
+        clicks: true,
+        softBounces: true,
+        hardBounces: true,
+        spamReports: true,
+        unsubscribes: true,
+        schedules: true,
+      }
     });
 
     const salesRaw = await (this.prisma.transaction as any).findMany({
@@ -403,7 +423,15 @@ export class SalesService {
 
     const transactions = await this.prisma.transaction.findMany({
       where: whereClause,
-      include: { store: true },
+      select: {
+        totalValue: true,
+        storeId: true,
+        channel: true,
+        isInfluenced: true,
+        date: true,
+        customerId: true,
+        store: { select: { name: true, tradeName: true, code: true } }
+      },
       orderBy: { date: 'asc' },
     });
 
@@ -623,11 +651,20 @@ export class SalesService {
     const campaigns = await (this.prisma.campaign as any).findMany({
       where: campaignWhere,
       orderBy: { date: 'desc' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        date: true,
+        channel: true,
+        sent: true,
+        delivered: true,
+        clicks: true,
+        unsubscribes: true,
+        storeId: true,
         store: {
           select: { id: true, name: true, tradeName: true, code: true },
         },
-      },
+      }
     });
     const sales = await this.prisma.transaction.findMany({
       where: transactionWhere,

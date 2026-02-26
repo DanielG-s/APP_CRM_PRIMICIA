@@ -1,4 +1,5 @@
 import LayoutWrapper from "./components/LayoutWrapper";
+import { ThemeProvider } from "./components/ThemeProvider";
 import JsonLd from "../components/JsonLd";
 import "./globals.css";
 
@@ -43,25 +44,32 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider localization={ptBR}>
-      <html lang="pt-BR">
-        <body>
-          <JsonLd
-            data={{
-              "@context": "https://schema.org",
-              "@type": "Organization",
-              name: "Merxios CRM",
-              url: API_BASE_URL,
-              logo: `${API_BASE_URL}/logo.png`,
-              sameAs: [
-                "https://www.facebook.com/merxios",
-                "https://twitter.com/merxios",
-                "https://www.linkedin.com/company/merxios",
-              ],
-            }}
-          />
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
+      <html lang="pt-BR" suppressHydrationWarning>
+        <body className="bg-background text-foreground transition-colors duration-300">
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <JsonLd
+              data={{
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                name: "Merxios CRM",
+                url: API_BASE_URL,
+                logo: `${API_BASE_URL}/logo.png`,
+                sameAs: [
+                  "https://www.facebook.com/merxios",
+                  "https://twitter.com/merxios",
+                  "https://www.linkedin.com/company/merxios",
+                ],
+              }}
+            />
+            <LayoutWrapper>
+              {children}
+            </LayoutWrapper>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -58,18 +58,48 @@ export const settingsService = {
   },
 
   // --- USUÁRIOS (EQUIPE) ---
+  getStores: async (token: string | null) => {
+    const response = await axios.get(`${API_URL}/sales/stores`, getHeaders(token));
+    return response.data;
+  },
+
   getUsers: async (token: string | null) => {
     const response = await axios.get(`${API_URL}/users`, getHeaders(token));
     return response.data;
   },
 
   createUser: async (token: string | null, data: any) => {
-    const response = await axios.post(`${API_URL}/users`, data, getHeaders(token));
+    const response = await axios.post(`${API_URL}/users/invite`, data, getHeaders(token));
+    return response.data;
+  },
+
+  updateUserRole: async (token: string | null, userId: string, roleId: string, storeIds?: string[]) => {
+    const response = await axios.patch(`${API_URL}/users/${userId}/role`, { roleId, storeIds }, getHeaders(token));
     return response.data;
   },
 
   deleteUser: async (token: string | null, id: string) => {
     const response = await axios.delete(`${API_URL}/users/${id}`, getHeaders(token));
+    return response.data;
+  },
+
+  getRoles: async (token: string | null) => {
+    const response = await axios.get(`${API_URL}/config/roles`, getHeaders(token));
+    return response.data;
+  },
+
+  createRole: async (token: string | null, data: any) => {
+    const response = await axios.post(`${API_URL}/config/roles`, data, getHeaders(token));
+    return response.data;
+  },
+
+  updateRole: async (token: string | null, roleId: string, data: any) => {
+    const response = await axios.patch(`${API_URL}/config/roles/${roleId}`, data, getHeaders(token));
+    return response.data;
+  },
+
+  deleteRole: async (token: string | null, roleId: string) => {
+    const response = await axios.delete(`${API_URL}/config/roles/${roleId}`, getHeaders(token));
     return response.data;
   }
 };

@@ -4,13 +4,14 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
     CalendarRange, Plus, ChevronDown, Download,
     Filter, Search, Check, Smartphone, MessageSquare, Mail, PieChart as PieIcon,
-    Info, MessageCircle, List // <--- Adicionado 'List' aqui
+    Info, MessageCircle, List, BookOpen, X, FileText // <--- Adicionado 'List', 'BookOpen', 'X', 'FileText' aqui
 } from "lucide-react";
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth } from "@clerk/nextjs";
+import { useRBAC } from "../../contexts/RBACContext";
 
 // --- UTILS ---
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -45,8 +46,8 @@ const CustomTooltipWrapper = ({ children, text }: { children: React.ReactNode; t
     <div className="group relative flex flex-col items-center">
         {children}
         <div className="absolute top-full mt-2 hidden flex-col items-center group-hover:flex z-50 w-64 pointer-events-none">
-            <div className="h-3 w-3 -mb-2 rotate-45 bg-[#1e293b]"></div>
-            <div className="relative z-10 p-3 text-xs leading-relaxed text-white bg-[#1e293b] rounded-lg shadow-lg text-center">{text}</div>
+            <div className="h-3 w-3 -mb-2 rotate-45 bg-[#1e293b] dark:bg-slate-700"></div>
+            <div className="relative z-10 p-3 text-xs leading-relaxed text-white bg-[#1e293b] dark:bg-slate-700 rounded-lg shadow-lg text-center">{text}</div>
         </div>
     </div>
 );
@@ -55,14 +56,14 @@ const CustomSelect = ({ label, options, value, onChange, iconMap }: any) => {
     const [isOpen, setIsOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
     useEffect(() => { const c = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setIsOpen(false); }; document.addEventListener("mousedown", c); return () => document.removeEventListener("mousedown", c); }, []);
     const s = options.find((o: any) => o.value === value); const Icon = iconMap && s ? iconMap[s.value] : null;
-    return (<div className="relative w-full min-w-[180px]" ref={ref}><label className="block text-xs font-bold text-slate-700 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 cursor-pointer flex justify-between items-center hover:border-violet-500 transition select-none shadow-sm"><div className="flex items-center gap-2 overflow-hidden">{Icon && <Icon size={16} className="text-slate-500 shrink-0" />}<span className="text-slate-700 truncate">{s?.label || value}</span></div><ChevronDown size={16} className="text-slate-400 opacity-70 shrink-0" /></div>{isOpen && (<div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden py-1 max-h-60 overflow-y-auto">{options.map((opt: any) => <div key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false) }} className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer ${value === opt.value ? 'bg-violet-50 text-violet-700 font-medium' : 'hover:bg-slate-50 text-slate-600'}`}>{iconMap && iconMap[opt.value] && <span className={value === opt.value ? 'text-violet-600' : 'text-slate-400'}>{React.createElement(iconMap[opt.value], { size: 16 })}</span>}<span className="text-sm">{opt.label}</span></div>)}</div>)}</div>)
+    return (<div className="relative w-full min-w-[180px]" ref={ref}><label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white dark:bg-[#0f172a] border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center hover:border-violet-500 transition select-none shadow-sm"><div className="flex items-center gap-2 overflow-hidden">{Icon && <Icon size={16} className="text-slate-500 dark:text-slate-400 shrink-0" />}<span className="text-slate-700 dark:text-slate-200 truncate">{s?.label || value}</span></div><ChevronDown size={16} className="text-slate-400 dark:text-slate-500 opacity-70 shrink-0" /></div>{isOpen && (<div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden py-1 max-h-60 overflow-y-auto">{options.map((opt: any) => <div key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false) }} className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer ${value === opt.value ? 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-300'}`}>{iconMap && iconMap[opt.value] && <span className={value === opt.value ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-slate-500'}>{React.createElement(iconMap[opt.value], { size: 16 })}</span>}<span className="text-sm">{opt.label}</span></div>)}</div>)}</div>)
 };
 
 const FilterMultiSelect = ({ label, options, selected, onChange, placeholder, helperText }: any) => {
     const [isOpen, setIsOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
     useEffect(() => { const c = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setIsOpen(false); }; document.addEventListener("mousedown", c); return () => document.removeEventListener("mousedown", c); }, []);
     const toggle = (val: string) => { if (selected.includes(val)) onChange(selected.filter((i: string) => i !== val)); else onChange([...selected, val]); };
-    return (<div className="relative w-full min-w-[180px]" ref={ref}><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 cursor-pointer flex justify-between items-center hover:border-violet-300 transition select-none shadow-sm"><span className="truncate block max-w-[140px] text-slate-600">{selected.length === 0 ? placeholder : `${selected.length} selecionados`}</span><ChevronDown size={14} className="text-slate-400 opacity-70 shrink-0" /></div>{isOpen && (<div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto p-0 flex flex-col">{helperText && <div className="px-3 py-2 text-[10px] text-slate-400 border-b border-slate-100 bg-slate-50/50">{helperText}</div>}<div className="p-2 space-y-1">{options.length === 0 && <div className="text-xs text-slate-400 p-2 text-center">Vazio</div>}{options.map((opt: any) => (<div key={opt.value} onClick={() => toggle(opt.value)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer group transition-colors"><span className={`text-sm ${selected.includes(opt.value) ? 'text-violet-700 font-medium' : 'text-slate-600'}`}>{opt.label}</span><div className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${selected.includes(opt.value) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white group-hover:border-violet-400'}`}>{selected.includes(opt.value) && <Check size={10} className="text-white" strokeWidth={4} />}</div></div>))}</div></div>)}</div>)
+    return (<div className="relative w-full min-w-[180px]" ref={ref}><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center hover:border-violet-300 transition select-none shadow-sm"><span className="truncate block max-w-[140px] text-slate-600 dark:text-slate-300">{selected.length === 0 ? placeholder : `${selected.length} selecionados`}</span><ChevronDown size={14} className="text-slate-400 dark:text-slate-500 opacity-70 shrink-0" /></div>{isOpen && (<div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto p-0 flex flex-col">{helperText && <div className="px-3 py-2 text-[10px] text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">{helperText}</div>}<div className="p-2 space-y-1">{options.length === 0 && <div className="text-xs text-slate-400 p-2 text-center">Vazio</div>}{options.map((opt: any) => (<div key={opt.value} onClick={() => toggle(opt.value)} className="flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded cursor-pointer group transition-colors"><span className={`text-sm ${selected.includes(opt.value) ? 'text-violet-700 dark:text-violet-400 font-medium' : 'text-slate-600 dark:text-slate-300'}`}>{opt.label}</span><div className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${selected.includes(opt.value) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-transparent group-hover:border-violet-400'}`}>{selected.includes(opt.value) && <Check size={10} className="text-white" strokeWidth={4} />}</div></div>))}</div></div>)}</div>)
 };
 
 const CampaignMultiSelect = ({ label, options, selected, onChange }: any) => {
@@ -70,20 +71,205 @@ const CampaignMultiSelect = ({ label, options, selected, onChange }: any) => {
     useEffect(() => { const c = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setIsOpen(false); }; document.addEventListener("mousedown", c); return () => document.removeEventListener("mousedown", c); }, []);
     const toggle = (val: string) => { if (selected.includes(val)) onChange(selected.filter((i: string) => i !== val)); else onChange([...selected, val]); };
     const selectedOpts = options.filter((o: any) => selected.includes(o.value)); const unselectedOpts = options.filter((o: any) => !selected.includes(o.value) && o.label.toLowerCase().includes(search.toLowerCase()));
-    return (<div className="relative w-full min-w-[200px]" ref={ref}><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 cursor-pointer flex justify-between items-center hover:border-violet-300 transition select-none shadow-sm"><span className="truncate block max-w-[140px] text-slate-600">{selected.length === 0 ? <span className="text-slate-400">Todas as campanhas</span> : <div className="flex gap-1 items-center"><span className="bg-violet-100 text-violet-700 px-2 py-0.5 rounded text-xs font-bold max-w-[100px] truncate block">{selectedOpts[0]?.label}</span>{selected.length > 1 && <span className="text-xs text-slate-500 font-medium">+{selected.length - 1}</span>}</div>}</span><ChevronDown size={14} className="text-slate-400 opacity-70 shrink-0" /></div>{isOpen && (<div className="absolute top-full left-0 w-full min-w-[320px] mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto p-0 flex flex-col"><div className="p-2 sticky top-0 bg-white border-b border-slate-100 z-10"><input autoFocus type="text" placeholder="Buscar..." className="w-full text-xs bg-slate-50 border border-slate-200 rounded p-2 outline-none focus:border-violet-400" value={search} onChange={e => setSearch(e.target.value)} /></div><div className="p-2 space-y-1">{selectedOpts.length > 0 && (<div className="mb-2"><div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase font-bold text-slate-400"><span>Selecionados</span></div>{selectedOpts.map((opt: any) => <div key={opt.value} onClick={() => toggle(opt.value)} className="flex items-center justify-between p-2 bg-violet-50 hover:bg-violet-100 rounded cursor-pointer"><span className="text-xs font-bold text-violet-700 truncate">{opt.label}</span><Check size={10} className="text-violet-600" /></div>)}<div className="my-2 border-t border-slate-100"></div></div>)}<div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase font-bold text-slate-400"><span>Existentes</span></div>{unselectedOpts.map((opt: any) => <div key={opt.value} onClick={() => toggle(opt.value)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer"><span className="text-xs font-medium text-slate-600 truncate">{opt.label}</span><div className="w-4 h-4 border border-slate-300 rounded shrink-0"></div></div>)}</div></div>)}</div>)
+    return (<div className="relative w-full min-w-[200px]" ref={ref}><label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">{label}</label><div onClick={() => setIsOpen(!isOpen)} className="w-full p-2.5 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 cursor-pointer flex justify-between items-center hover:border-violet-300 transition select-none shadow-sm"><span className="truncate block max-w-[140px] text-slate-600 dark:text-slate-300">{selected.length === 0 ? <span className="text-slate-400 dark:text-slate-500">Todas as campanhas</span> : <div className="flex gap-1 items-center"><span className="bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded text-xs font-bold max-w-[100px] truncate block">{selectedOpts[0]?.label}</span>{selected.length > 1 && <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">+{selected.length - 1}</span>}</div>}</span><ChevronDown size={14} className="text-slate-400 dark:text-slate-500 opacity-70 shrink-0" /></div>{isOpen && (<div className="absolute top-full left-0 w-full min-w-[320px] mt-1 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto p-0 flex flex-col"><div className="p-2 sticky top-0 bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-slate-800 z-10"><input autoFocus type="text" placeholder="Buscar..." className="w-full text-xs bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded p-2 outline-none focus:border-violet-400" value={search} onChange={e => setSearch(e.target.value)} /></div><div className="p-2 space-y-1">{selectedOpts.length > 0 && (<div className="mb-2"><div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500"><span>Selecionados</span></div>{selectedOpts.map((opt: any) => <div key={opt.value} onClick={() => toggle(opt.value)} className="flex items-center justify-between p-2 bg-violet-50 dark:bg-violet-900/30 hover:bg-violet-100 dark:hover:bg-violet-900/50 rounded cursor-pointer"><span className="text-xs font-bold text-violet-700 dark:text-violet-400 truncate">{opt.label}</span><Check size={10} className="text-violet-600 dark:text-violet-400" /></div>)}<div className="my-2 border-t border-slate-100 dark:border-slate-800"></div></div>)}<div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500"><span>Existentes</span></div>{unselectedOpts.map((opt: any) => <div key={opt.value} onClick={() => toggle(opt.value)} className="flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded cursor-pointer"><span className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{opt.label}</span><div className="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded shrink-0"></div></div>)}</div></div>)}</div>)
 };
 
 const MiniProgressCircle = ({ percent, color }: { percent: number; color: string }) => {
     const data = [{ name: "C", value: percent }, { name: "R", value: 100 - percent }]; const COLORS = [color, "#E2E8F0"];
-    return (<div className="relative w-12 h-12 flex items-center justify-center"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} cx="50%" cy="50%" innerRadius={16} outerRadius={21} startAngle={90} endAngle={-270} dataKey="value" stroke="none">{data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Pie></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">{Math.round(percent)}%</div></div>);
+    return (<div className="relative w-12 h-12 flex items-center justify-center"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data} cx="50%" cy="50%" innerRadius={16} outerRadius={21} startAngle={90} endAngle={-270} dataKey="value" stroke="none">{data.map((entry, index) => <Cell key={`cell-${index}`} fill={index === 1 ? 'var(--tw-colors-slate-200)' : COLORS[index % COLORS.length]} className="dark:fill-slate-700" />)}</Pie></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700 dark:text-slate-200">{Math.round(percent)}%</div></div>);
 };
 const ChartCursorTooltip = ({ active, payload, label, prefix, suffix }: any) => {
-    if (active && payload && payload.length) { return (<div className="bg-white border border-gray-100 p-3 rounded shadow-md text-xs"><p className="text-slate-400 mb-1 font-medium uppercase">{label}</p><p className="text-base font-bold text-slate-800">{prefix}{payload[0].value.toLocaleString('pt-BR')}{suffix}</p></div>); } return null;
+    if (active && payload && payload.length) { return (<div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 p-3 rounded shadow-md text-xs"><p className="text-slate-400 mb-1 font-medium uppercase">{label}</p><p className="text-base font-bold text-slate-800 dark:text-slate-100">{prefix}{payload[0].value.toLocaleString('pt-BR')}{suffix}</p></div>); } return null;
+};
+
+// --- COMPONENTE: MODAL DE TUTORIAL (AGENDA HORÁRIOS) ---
+const ScheduleTutorialModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+    const [step, setStep] = useState(0);
+    const [dontShowAgain, setDontShowAgain] = useState(false);
+
+    if (!isOpen) return null;
+
+    const tutorials = [
+        {
+            badge: "Operação",
+            title: "Gestão Ativa",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600 text-lg leading-relaxed">
+                        Mensure o esforço do time de loja! Aqui você acompanha os contatos humanizados via <strong>Agenda</strong>.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                        <div className="bg-violet-50 p-3 rounded-lg border border-violet-100">
+                            <div className="font-bold text-violet-700 text-sm">📅 Disponibilizados</div>
+                            <div className="text-xs text-violet-600">Total de contatos atribuídos ao vendedor.</div>
+                        </div>
+                        <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                            <div className="font-bold text-emerald-700 text-sm">✅ Realizados</div>
+                            <div className="text-xs text-emerald-600">Quantos clientes a equipe de fato chamou.</div>
+                        </div>
+                    </div>
+                </div>
+            ),
+            icon: <CalendarRange size={56} className="text-white" />,
+            color: "bg-violet-600",
+            bgElement: "bg-violet-400"
+        },
+        {
+            badge: "Retorno",
+            title: "Engajamento",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600">
+                        O cliente respondeu? Monitore o sucesso da interação:
+                    </p>
+                    <ul className="space-y-3 mt-2">
+                        <li className="flex gap-3 items-start">
+                            <div className="p-1.5 bg-blue-100 rounded text-blue-600 mt-0.5"><MessageCircle size={14} /></div>
+                            <div>
+                                <strong className="block text-slate-800 text-sm">Contatos Confirmados</strong>
+                                <span className="text-slate-500 text-xs">Acompanhe se a conversa gerou interação e engajamento positivo.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            ),
+            icon: <MessageCircle size={56} className="text-white" />,
+            color: "bg-blue-600",
+            bgElement: "bg-blue-400"
+        },
+        {
+            badge: "Conversão",
+            title: "Impacto nas Vendas",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600">
+                        O esforço da agenda se pagou?
+                    </p>
+                    <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 mb-2">
+                        <PieIcon size={24} className="text-emerald-600" />
+                        <div className="text-sm text-slate-700">
+                            Veja a <strong>Receita Influenciada</strong> e as <strong>Conversões</strong> geradas pelos contatos que a equipe de loja fez.
+                        </div>
+                    </div>
+                </div>
+            ),
+            icon: <PieIcon size={56} className="text-white" />,
+            color: "bg-emerald-600",
+            bgElement: "bg-emerald-400"
+        },
+        {
+            badge: "Análise",
+            title: "Desempenho por Vendedor",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600">
+                        Quem está performando melhor?
+                    </p>
+                    <ul className="space-y-3 mt-2">
+                        <li className="flex gap-3 items-start">
+                            <div className="p-1.5 bg-amber-100 rounded text-amber-600 mt-0.5"><FileText size={14} /></div>
+                            <div>
+                                <strong className="block text-slate-800 text-sm">Tabela Consolidada</strong>
+                                <span className="text-slate-500 text-xs">Mude o filtro <strong>Agrupar por</strong> para <em>Vendedores</em> e compare quem faz mais contatos e quem traz mais resultado financeiro!</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            ),
+            icon: <List size={56} className="text-white" />,
+            color: "bg-amber-500",
+            bgElement: "bg-amber-300"
+        }
+    ];
+
+    const currentStep = tutorials[step];
+
+    const handleNext = () => {
+        if (step < tutorials.length - 1) setStep(step + 1);
+        else handleFinish();
+    };
+
+    const handleFinish = () => {
+        if (dontShowAgain) {
+            localStorage.setItem('crm_schedule_tutorial_hide', 'true');
+        } else {
+            localStorage.removeItem('crm_schedule_tutorial_hide');
+        }
+        onClose();
+        setTimeout(() => setStep(0), 300);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row min-h-[500px] animate-in slide-in-from-bottom-4 duration-500">
+
+                {/* ESQUERDA */}
+                <div className={`${currentStep.color} md:w-5/12 relative overflow-hidden transition-colors duration-500 flex flex-col items-center justify-center p-10 text-center`}>
+                    <div className={`absolute top-0 right-0 w-64 h-64 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2`}></div>
+                    <div className={`absolute bottom-0 left-0 w-48 h-48 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2`}></div>
+
+                    <div className="relative z-10 mb-6 transform transition-all duration-500 hover:scale-110">
+                        <div className="w-24 h-24 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner border border-white/20">
+                            {currentStep.icon}
+                        </div>
+                    </div>
+
+                    <h3 className="text-white font-bold text-2xl relative z-10">{currentStep.badge}</h3>
+                    <div className="mt-2 text-white/60 text-sm font-medium tracking-widest uppercase">Passo {step + 1} de {tutorials.length}</div>
+                </div>
+
+                {/* DIREITA */}
+                <div className="flex-1 p-10 flex flex-col justify-between relative bg-white">
+                    <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                        <X size={20} />
+                    </button>
+
+                    <div className="mt-4 animate-in fade-in slide-in-from-right-4 duration-300" key={step}>
+                        <h2 className="text-3xl font-bold text-slate-800 mb-6">{currentStep.title}</h2>
+                        {currentStep.content}
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <div className="flex gap-2">
+                                {tutorials.map((_, i) => (
+                                    <div key={i} className={`h-2 rounded-full transition-all duration-300 ${i === step ? 'w-8 ' + currentStep.color.replace('bg-', 'bg-') : 'w-2 bg-slate-200'}`}></div>
+                                ))}
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                {step > 0 ? (
+                                    <button onClick={() => setStep(step - 1)} className="text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors">
+                                        Voltar
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setDontShowAgain(!dontShowAgain)}>
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${dontShowAgain ? 'bg-slate-800 border-slate-800' : 'border-slate-300'}`}>
+                                            {dontShowAgain && <Check size={10} className="text-white" />}
+                                        </div>
+                                        <span className="text-xs text-slate-400 group-hover:text-slate-600 select-none">Não mostrar mais</span>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleNext}
+                                    className={`px-8 py-3 rounded-xl text-white font-bold shadow-lg transform hover:-translate-y-0.5 transition-all ${step === tutorials.length - 1 ? 'bg-slate-900 hover:bg-slate-800' : currentStep.color + ' hover:opacity-90'}`}
+                                >
+                                    {step === tutorials.length - 1 ? 'Começar a Usar' : 'Próximo'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // --- PÁGINA PRINCIPAL ---
 export default function AgendaPage() {
     const { getToken } = useAuth();
+    const { hasPermission } = useRBAC();
     const getToday = () => new Date().toISOString().split('T')[0];
     const getStartOfMonth = () => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; };
 
@@ -104,6 +290,13 @@ export default function AgendaPage() {
         tags: [] as string[], campaigns: [] as string[], campaignType: [] as string[], stores: [] as string[], vendedores: [] as string[]
     });
     const [optionsData, setOptionsData] = useState({ tags: [], campaigns: [], stores: [], channels: [], sellers: [] });
+
+    const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+
+    useEffect(() => {
+        const userHidTutorial = localStorage.getItem('crm_schedule_tutorial_hide');
+        if (userHidTutorial !== 'true') setIsTutorialOpen(true);
+    }, []);
 
     useEffect(() => {
         const fetchOptions = async () => {
@@ -229,8 +422,8 @@ export default function AgendaPage() {
         return safeVal(val).toLocaleString('pt-BR');
     };
 
-    if (loading) return <div className="flex h-screen items-center justify-center bg-[#F8FAFC] text-slate-500 font-medium">Carregando Agenda...</div>;
-    if (!data) return <div className="flex h-screen items-center justify-center bg-[#F8FAFC] text-slate-500">Sem dados.</div>;
+    if (loading) return <div className="flex h-screen items-center justify-center bg-[#F8FAFC] dark:bg-[#0f172a] text-slate-500 dark:text-slate-400 font-medium">Carregando Agenda...</div>;
+    if (!data) return <div className="flex h-screen items-center justify-center bg-[#F8FAFC] dark:bg-[#0f172a] text-slate-500 dark:text-slate-400">Sem dados.</div>;
 
     const kpiValues = {
         "Receita influenciada": { value: formatCurrency(data.kpis.receitaInfluenciada), suffix: '' },
@@ -243,34 +436,40 @@ export default function AgendaPage() {
     return (
         <main className="p-8 h-full w-full overflow-y-auto custom-scrollbar">
             <div className="max-w-[1600px] mx-auto">
+                <ScheduleTutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
                 <div className="flex flex-wrap justify-between items-end mb-6 gap-4">
-                    <div><div className="text-xs text-slate-400 mb-1">Campanhas</div><h1 className="text-3xl font-bold text-[#1e293b]">Agenda</h1></div>
-                    <button className="bg-[#10B981] hover:bg-[#059669] text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 shadow-sm"><Plus size={16} /> Criar campanha</button>
+                    <div><div className="text-xs text-slate-400 dark:text-slate-500 mb-1">Campanhas</div><h1 className="text-3xl font-bold text-[#1e293b] dark:text-slate-100">Agenda</h1></div>
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setIsTutorialOpen(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-bold cursor-pointer">
+                            <BookOpen size={16} className="text-violet-500 dark:text-violet-400" /> Como usar?
+                        </button>
+                        <button className="bg-[#10B981] dark:bg-emerald-600 hover:bg-[#059669] dark:hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 shadow-sm"><Plus size={16} /> Criar campanha</button>
+                    </div>
                 </div>
 
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5 mb-8">
+                <div className="bg-white dark:bg-[#0f172a] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5 mb-8">
                     <div className="flex justify-between items-center flex-wrap gap-4">
                         <div className="relative" ref={dateRef}>
-                            <div onClick={() => setIsDateOpen(!isDateOpen)} className="bg-white border border-gray-200 text-slate-600 text-sm rounded px-3 py-2 flex items-center gap-2 shadow-sm cursor-pointer hover:border-gray-300 transition-colors w-fit">
+                            <div onClick={() => setIsDateOpen(!isDateOpen)} className="bg-white dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm rounded px-3 py-2 flex items-center gap-2 shadow-sm cursor-pointer hover:border-gray-300 dark:hover:border-slate-600 transition-colors w-fit">
                                 <CalendarRange size={16} className="text-slate-400" />
-                                <span className="font-medium">{formatDateDisplay(dateRange.start)}</span><span className="text-slate-300">→</span><span className="font-medium">{formatDateDisplay(dateRange.end)}</span>
-                                <ChevronDown size={14} className="text-slate-400 ml-2" />
+                                <span className="font-medium">{formatDateDisplay(dateRange.start)}</span><span className="text-slate-300 dark:text-slate-600">→</span><span className="font-medium">{formatDateDisplay(dateRange.end)}</span>
+                                <ChevronDown size={14} className="text-slate-400 dark:text-slate-500 ml-2" />
                             </div>
                             {isDateOpen && (
-                                <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 z-50">
+                                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-4 w-64 z-50">
                                     <div className="space-y-3">
-                                        <div><label className="block text-xs text-slate-500 mb-1">De:</label><input type="date" value={draftDate.start} onChange={(e) => setDraftDate({ ...draftDate, start: e.target.value })} className="w-full border rounded p-1.5 text-xs outline-none" /></div>
-                                        <div><label className="block text-xs text-slate-500 mb-1">Até:</label><input type="date" value={draftDate.end} onChange={(e) => setDraftDate({ ...draftDate, end: e.target.value })} className="w-full border rounded p-1.5 text-xs outline-none" /></div>
+                                        <div><label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De:</label><input type="date" value={draftDate.start} onChange={(e) => setDraftDate({ ...draftDate, start: e.target.value })} className="w-full bg-transparent border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded p-1.5 text-xs outline-none" /></div>
+                                        <div><label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até:</label><input type="date" value={draftDate.end} onChange={(e) => setDraftDate({ ...draftDate, end: e.target.value })} className="w-full bg-transparent border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded p-1.5 text-xs outline-none" /></div>
                                     </div>
-                                    <div className="border-t mt-3 pt-3 flex justify-end">
+                                    <div className="border-t border-slate-200 dark:border-slate-700 mt-3 pt-3 flex justify-end">
                                         <button className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded" onClick={() => { setDateRange(draftDate); setIsDateOpen(false); }}>Aplicar</button>
                                     </div>
                                 </div>
                             )}
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={handleClear} className="px-4 py-2 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg hover:bg-slate-200 transition">Limpar Filtros</button>
-                            <button onClick={handleApply} className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition flex items-center gap-2 shadow-sm">{loading ? '...' : 'Aplicar Filtros'}</button>
+                            <button onClick={handleClear} className="px-4 py-2 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition">Limpar Filtros</button>
+                            <button onClick={handleApply} className="px-4 py-2 bg-slate-800 dark:bg-violet-600 text-white text-xs font-bold rounded-lg hover:bg-slate-700 dark:hover:bg-violet-700 transition flex items-center gap-2 shadow-sm">{loading ? '...' : 'Aplicar Filtros'}</button>
                         </div>
                     </div>
 
@@ -288,8 +487,8 @@ export default function AgendaPage() {
                 </div>
 
                 <section className="mb-8">
-                    <h2 className="text-xl font-bold text-[#1e293b] mb-4">Consolidado da marca</h2>
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                    <h2 className="text-xl font-bold text-[#1e293b] dark:text-slate-100 mb-4">Consolidado da marca</h2>
+                    <div className="bg-white dark:bg-[#0f172a] p-6 rounded-lg shadow-sm border border-gray-100 dark:border-slate-800">
                         <div className="flex flex-wrap gap-4 mb-8">
                             {Object.keys(KPI_META).map((label) => {
                                 const isSelected = selectedKpi === label;
@@ -297,9 +496,9 @@ export default function AgendaPage() {
                                 const val = kpiValues[label as keyof typeof kpiValues];
                                 return (
                                     <CustomTooltipWrapper key={label} text={meta.tooltip}>
-                                        <button onClick={() => setSelectedKpi(label)} className={`text-left px-4 py-3 rounded-lg border transition-all min-w-[160px] outline-none relative top-0 hover:-top-[1px] ${isSelected ? "border-violet-600 bg-violet-50 ring-1 ring-violet-600" : "border-gray-100 hover:border-gray-300 bg-white"}`}>
-                                            <div className="text-xs text-slate-500 mb-1 font-medium">{label}</div>
-                                            <div className="text-lg font-bold text-[#1e293b]">{val.value}{val.suffix}</div>
+                                        <button onClick={() => setSelectedKpi(label)} className={`text-left px-4 py-3 rounded-lg border transition-all min-w-[160px] outline-none relative top-0 hover:-top-[1px] ${isSelected ? "border-violet-600 dark:border-violet-500 bg-violet-50 dark:bg-violet-900/20 ring-1 ring-violet-600 dark:ring-violet-500" : "border-gray-100 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500 bg-white dark:bg-[#0f172a]"}`}>
+                                            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 font-medium">{label}</div>
+                                            <div className="text-lg font-bold text-[#1e293b] dark:text-slate-100">{val.value}{val.suffix}</div>
                                         </button>
                                     </CustomTooltipWrapper>
                                 )
@@ -322,56 +521,58 @@ export default function AgendaPage() {
 
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                     <CustomTooltipWrapper text="Total de contatos gerados (sent).">
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4 h-24 w-full">
-                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-600 text-xs">100%</div>
-                            <div><div className="text-xs text-slate-500 mb-1">Disponibilizados</div><div className="text-lg font-bold text-[#1e293b]">{data.kpis.disponibilizados.toLocaleString('pt-BR')}</div></div>
+                        <div className="bg-white dark:bg-[#0f172a] p-4 rounded-lg shadow-sm border border-gray-100 dark:border-slate-800 flex items-center gap-4 h-24 w-full">
+                            <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800/50 rounded-full flex items-center justify-center font-bold text-slate-600 dark:text-slate-400 text-xs">100%</div>
+                            <div><div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Disponibilizados</div><div className="text-lg font-bold text-[#1e293b] dark:text-slate-100">{data.kpis.disponibilizados.toLocaleString('pt-BR')}</div></div>
                         </div>
                     </CustomTooltipWrapper>
                     <CustomTooltipWrapper text="Contatos que falharam ou ainda não foram entregues.">
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4 h-24 w-full">
+                        <div className="bg-white dark:bg-[#0f172a] p-4 rounded-lg shadow-sm border border-gray-100 dark:border-slate-800 flex items-center gap-4 h-24 w-full">
                             <MiniProgressCircle percent={data.kpis.disponibilizados > 0 ? (data.kpis.naoConfirmados / data.kpis.disponibilizados) * 100 : 0} color="#ef4444" />
-                            <div><div className="text-xs text-slate-500 mb-1">Não Realizados</div><div className="text-lg font-bold text-[#1e293b]">{data.kpis.naoConfirmados.toLocaleString('pt-BR')}</div></div>
+                            <div><div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Não Realizados</div><div className="text-lg font-bold text-[#1e293b] dark:text-slate-100">{data.kpis.naoConfirmados.toLocaleString('pt-BR')}</div></div>
                         </div>
                     </CustomTooltipWrapper>
                     <CustomTooltipWrapper text="Estimativa de clientes únicos atingidos.">
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4 h-24 w-full">
+                        <div className="bg-white dark:bg-[#0f172a] p-4 rounded-lg shadow-sm border border-gray-100 dark:border-slate-800 flex items-center gap-4 h-24 w-full">
                             <MiniProgressCircle percent={95} color="#4f46e5" />
-                            <div><div className="text-xs text-slate-500 mb-1">Clientes únicos</div><div className="text-lg font-bold text-[#1e293b]">{data.kpis.clientesUnicos.toLocaleString('pt-BR')}</div></div>
+                            <div><div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Clientes únicos</div><div className="text-lg font-bold text-[#1e293b] dark:text-slate-100">{data.kpis.clientesUnicos.toLocaleString('pt-BR')}</div></div>
                         </div>
                     </CustomTooltipWrapper>
                     <CustomTooltipWrapper text="Média de vezes que cada cliente recebeu contato.">
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4 h-24 w-full">
-                            <div className="w-12 h-12 rounded-full bg-[#eef2ff] text-[#6366f1] flex items-center justify-center"><List size={22} /></div>
-                            <div><div className="text-xs text-slate-500 mb-1">Frequência</div><div className="text-lg font-bold text-[#1e293b]">{data.kpis.frequencia}</div></div>
+                        <div className="bg-white dark:bg-[#0f172a] p-4 rounded-lg shadow-sm border border-gray-100 dark:border-slate-800 flex items-center gap-4 h-24 w-full">
+                            <div className="w-12 h-12 rounded-full bg-[#eef2ff] dark:bg-violet-900/30 text-[#6366f1] dark:text-violet-400 flex items-center justify-center"><List size={22} /></div>
+                            <div><div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Frequência</div><div className="text-lg font-bold text-[#1e293b] dark:text-slate-100">{data.kpis.frequencia}</div></div>
                         </div>
                     </CustomTooltipWrapper>
                 </section>
 
                 <section>
                     <div className="flex flex-wrap justify-between items-end mb-4 gap-4">
-                        <h2 className="text-xl font-bold text-[#1e293b]">Performance</h2>
+                        <h2 className="text-xl font-bold text-[#1e293b] dark:text-slate-100">Performance</h2>
                         <div className="flex items-center gap-4">
-                            <span className="text-xs text-slate-500">Agrupar por</span>
-                            <select value={grouping} onChange={(e) => setGrouping(e.target.value)} className="bg-white border border-gray-200 text-slate-700 text-sm rounded px-3 py-2 outline-none cursor-pointer">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Agrupar por</span>
+                            <select value={grouping} onChange={(e) => setGrouping(e.target.value)} className="bg-white dark:bg-[#0f172a] border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm rounded px-3 py-2 outline-none cursor-pointer">
                                 <option>Campanhas</option>
                                 <option>Lojas</option>
                                 <option>Vendedores</option>
                                 <option>Visão diária</option>
                             </select>
                             <div className="relative">
-                                <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 border border-slate-200 rounded text-sm text-slate-700 outline-none w-48 focus:border-violet-500 transition-colors" />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-transparent border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-700 dark:text-slate-200 outline-none w-48 focus:border-violet-500 transition-colors" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={14} />
                             </div>
-                            <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-emerald-500 text-emerald-600 rounded text-sm font-bold hover:bg-emerald-50 transition-colors"><Download size={14} /> Exportar CSV</button>
+                            {hasPermission('app:export') && (
+                                <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-emerald-500 text-emerald-600 rounded text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"><Download size={14} /> Exportar CSV</button>
+                            )}
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white dark:bg-[#0f172a] rounded-lg shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
                         <div className="overflow-x-auto custom-scrollbar pb-2">
                             {grouping === 'Campanhas' && (
-                                <table className="w-full text-left text-xs text-slate-600 whitespace-nowrap min-w-[1200px]">
+                                <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap min-w-[1200px]">
                                     <thead>
-                                        <tr className="border-b border-gray-100 uppercase font-bold text-slate-500 bg-slate-50">
+                                        <tr className="border-b border-gray-100 dark:border-slate-800/50 uppercase font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50">
                                             <th className="p-4 pl-6 min-w-[250px]">Campanhas</th>
                                             <th className="p-4">Data</th>
                                             <th className="p-4">Canal</th>
@@ -383,21 +584,21 @@ export default function AgendaPage() {
                                             <th className="p-4 text-center">CTOR</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-50">
+                                    <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
                                         {filteredTableRows.map((row: any, idx: number) => (
-                                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                            <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                                 <td className="p-4 pl-6">
-                                                    <div className="font-bold text-violet-700">{row.name}</div>
-                                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ID: {row.id.substring(0, 8)}</div>
+                                                    <div className="font-bold text-violet-700 dark:text-violet-400">{row.name}</div>
+                                                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded w-fit">ID: {row.id.substring(0, 8)}</div>
                                                 </td>
-                                                <td className="p-4 text-slate-500">{formatDateDisplay(row.date)}</td>
-                                                <td className="p-4"><span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded font-bold text-[10px]">{row.channel}</span></td>
-                                                <td className="p-4 text-center font-bold text-slate-600">{row.disponibilizados || 0}</td>
-                                                <td className="p-4 text-center text-slate-500">{row.realizados}</td>
-                                                <td className="p-4 text-center text-slate-500">{safeVal(row.realizados * 0.6).toFixed(0)}</td>
-                                                <td className="p-4 text-center text-slate-500">{row.confirmados}</td>
-                                                <td className="p-4 text-center text-emerald-600 font-bold">29.6%</td>
-                                                <td className="p-4 text-center text-blue-600 font-bold">31.1%</td>
+                                                <td className="p-4 text-slate-500 dark:text-slate-400">{formatDateDisplay(row.date)}</td>
+                                                <td className="p-4"><span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50 px-2 py-1 rounded font-bold text-[10px]">{row.channel}</span></td>
+                                                <td className="p-4 text-center font-bold text-slate-600 dark:text-slate-300">{row.disponibilizados || 0}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{row.realizados}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{safeVal(row.realizados * 0.6).toFixed(0)}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{row.confirmados}</td>
+                                                <td className="p-4 text-center text-emerald-600 dark:text-emerald-400 font-bold">29.6%</td>
+                                                <td className="p-4 text-center text-blue-600 dark:text-blue-400 font-bold">31.1%</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -405,9 +606,9 @@ export default function AgendaPage() {
                             )}
 
                             {grouping !== 'Campanhas' && (
-                                <table className="w-full text-left text-xs text-slate-600 whitespace-nowrap min-w-[1200px]">
+                                <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap min-w-[1200px]">
                                     <thead>
-                                        <tr className="border-b border-gray-100 uppercase font-bold text-slate-500 bg-slate-50">
+                                        <tr className="border-b border-gray-100 dark:border-slate-800/50 uppercase font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50">
                                             <th className="p-4 pl-6 min-w-[200px]">{grouping === 'Visão diária' ? 'Dias' : grouping}</th>
                                             {grouping === 'Vendedores' && <th className="p-4">Lojas</th>}
                                             <th className="p-4">Receita influenciada</th>
@@ -421,28 +622,28 @@ export default function AgendaPage() {
                                             <th className="p-4 text-center">Não Conf.</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-50">
+                                    <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
                                         {filteredTableRows.map((row: any, idx: number) => (
-                                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                            <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                                 <td className="p-4 pl-6">
-                                                    <div className="font-bold text-[#4f46e5]">{row.name || row.date}</div>
-                                                    {row.id && <div className="text-[10px] text-slate-400 font-mono mt-0.5 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ID: {row.id.toString().substring(0, 8)}</div>}
+                                                    <div className="font-bold text-[#4f46e5] dark:text-indigo-400">{row.name || row.date}</div>
+                                                    {row.id && <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded w-fit">ID: {row.id.toString().substring(0, 8)}</div>}
                                                 </td>
                                                 {grouping === 'Vendedores' && (
                                                     <td className="p-4">
-                                                        <div className="font-medium text-violet-700">{row.storeName}</div>
-                                                        <div className="text-[10px] text-slate-400 font-mono mt-0.5 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ID: {row.storeId?.substring(0, 3)}</div>
+                                                        <div className="font-medium text-violet-700 dark:text-violet-400">{row.storeName}</div>
+                                                        <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded w-fit">ID: {row.storeId?.substring(0, 3)}</div>
                                                     </td>
                                                 )}
-                                                <td className="p-4 font-medium text-slate-700">{formatCurrency(row.receitaInf)}</td>
-                                                <td className="p-4 text-slate-500">{formatCurrency(row.receitaCont)}</td>
-                                                <td className="p-4 text-center text-slate-500">{row.vendasInf}</td>
-                                                <td className="p-4 text-center text-slate-500">{safeVal(row.vendasCont).toFixed(1)}</td>
-                                                <td className="p-4 text-center text-slate-500">{formatPercent(row.conversoes)}</td>
-                                                <td className="p-4 text-center font-bold text-slate-600">{row.disponibilizados || 0}</td>
-                                                <td className="p-4 text-center text-slate-500">{fmt(row.realizados, row.disponibilizados)}</td>
-                                                <td className="p-4 text-center text-emerald-600 font-bold">{fmt(row.confirmados, row.realizados)}</td>
-                                                <td className="p-4 text-center text-red-400">{fmt(row.naoConf, row.realizados)}</td>
+                                                <td className="p-4 font-medium text-slate-700 dark:text-slate-200">{formatCurrency(row.receitaInf)}</td>
+                                                <td className="p-4 text-slate-500 dark:text-slate-400">{formatCurrency(row.receitaCont)}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{row.vendasInf}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{safeVal(row.vendasCont).toFixed(1)}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{formatPercent(row.conversoes)}</td>
+                                                <td className="p-4 text-center font-bold text-slate-600 dark:text-slate-300">{row.disponibilizados || 0}</td>
+                                                <td className="p-4 text-center text-slate-500 dark:text-slate-400">{fmt(row.realizados, row.disponibilizados)}</td>
+                                                <td className="p-4 text-center text-emerald-600 dark:text-emerald-400 font-bold">{fmt(row.confirmados, row.realizados)}</td>
+                                                <td className="p-4 text-center text-red-500 dark:text-red-400">{fmt(row.naoConf, row.realizados)}</td>
                                             </tr>
                                         ))}
                                     </tbody>

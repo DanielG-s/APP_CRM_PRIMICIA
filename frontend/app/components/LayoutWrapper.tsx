@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { SidebarProvider } from "../contexts/SidebarContext";
 import LayoutShell from "./LayoutShell";
 
+import { RBACProvider } from "../contexts/RBACContext";
+
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
 
@@ -14,10 +16,12 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
     // Otherwise, wrap with the standard CRM layout
     return (
-        <SidebarProvider>
-            <LayoutShell>
-                {children}
-            </LayoutShell>
-        </SidebarProvider>
+        <RBACProvider>
+            <SidebarProvider>
+                <LayoutShell>
+                    {children}
+                </LayoutShell>
+            </SidebarProvider>
+        </RBACProvider>
     );
 }

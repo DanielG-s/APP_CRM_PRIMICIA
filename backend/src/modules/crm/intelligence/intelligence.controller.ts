@@ -12,11 +12,13 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IntelligenceService } from './intelligence.service';
 import type { Response } from 'express';
+import { Permissions } from '../../../common/decorators/permissions.decorator';
 
 @ApiTags('Inteligência (RFM)')
 @Controller('webhook/crm/intelligence') // Mantendo sua rota original
+@Permissions('app:segments')
 export class IntelligenceController {
-  constructor(private readonly intelligenceService: IntelligenceService) {}
+  constructor(private readonly intelligenceService: IntelligenceService) { }
 
   /**
    * Returns the RFM analysis (Recency, Frequency, Monetary) for the customer base.

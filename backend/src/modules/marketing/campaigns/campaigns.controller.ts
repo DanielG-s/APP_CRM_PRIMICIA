@@ -11,9 +11,10 @@ import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 
 // Se você já tem o AuthGuard configurado (JWT), importe ele aqui:
-// import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { Permissions } from '../../../common/decorators/permissions.decorator';
 
 @Controller('campaigns')
+@Permissions('app:campaigns')
 // @UseGuards(JwtAuthGuard) // <--- Descomente isso para proteger as rotas
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) { }
@@ -23,6 +24,7 @@ export class CampaignsController {
    * Automatically assigns the store ID based on the logged-in user.
    */
   @Post()
+  @Permissions('app:campaigns:send')
   async create(@Body() createCampaignDto: CreateCampaignDto, @Req() req: any) {
     // 1. Tenta pegar o organizationId do usuário logado (Token JWT)
     const userOrgId = req.user?.organizationId;

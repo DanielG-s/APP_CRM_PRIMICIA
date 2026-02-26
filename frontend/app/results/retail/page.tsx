@@ -5,7 +5,8 @@ import {
     Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell,
     ShoppingBag, TrendingUp, DollarSign, ArrowUp, ArrowDown, RefreshCw, Activity, Wallet,
     Download, Search, ChevronDown, Smartphone, Mail, CalendarDays, Zap, Layers, Check,
-    ChevronLeft, ChevronRight, Filter, Store, X, FileText, PieChart as PieIcon, Info
+    ChevronLeft, ChevronRight, Filter, Store, X, FileText, PieChart as PieIcon, Info,
+    BookOpen, MousePointerClick
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -13,6 +14,7 @@ import {
 } from 'recharts';
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { useRBAC } from "../../contexts/RBACContext";
 
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
@@ -35,6 +37,195 @@ const CHANNEL_ICONS: any = {
     'Outros': <Target size={24} />
 };
 
+// --- COMPONENTE: MODAL DE TUTORIAL (RETAIL) ---
+const RetailTutorialModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+    const [step, setStep] = useState(0);
+    const [dontShowAgain, setDontShowAgain] = useState(false);
+
+    if (!isOpen) return null;
+
+    const tutorials = [
+        {
+            badge: "Dashboard",
+            title: "Visão Executiva",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600 text-lg leading-relaxed">
+                        Bem-vindo à sua central de <strong>Performance Executiva</strong>.
+                        Aqui você tem a visão 360° da saúde financeira da sua rede.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                        <div className="bg-violet-50 p-3 rounded-lg border border-violet-100">
+                            <div className="font-bold text-violet-700 text-sm">💰 Faturamento</div>
+                            <div className="text-xs text-violet-600">Acompanhe a receita e o volume de vendas.</div>
+                        </div>
+                        <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                            <div className="font-bold text-emerald-700 text-sm">🔄 Retenção</div>
+                            <div className="text-xs text-emerald-600">Monitorando ticket médio e taxa de recompra.</div>
+                        </div>
+                    </div>
+                </div>
+            ),
+            icon: <BarChart2 size={56} className="text-white" />,
+            color: "bg-slate-900",
+            bgElement: "bg-violet-500"
+        },
+        {
+            badge: "ROI",
+            title: "Atribuição de Receita",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600">
+                        Descubra exatamente qual o impacto do seu CRM na receita total.
+                    </p>
+                    <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 mb-2">
+                        <PieIcon size={24} className="text-emerald-600" />
+                        <div className="text-sm text-slate-700">
+                            O painel de <strong>Atribuição de Receita</strong> mostra o percentual do faturamento que foi influenciado por nossas campanhas, diretamente na sua linha do tempo.
+                        </div>
+                    </div>
+                </div>
+            ),
+            icon: <PieIcon size={56} className="text-white" />,
+            color: "bg-emerald-600",
+            bgElement: "bg-emerald-400"
+        },
+        {
+            badge: "Inteligência",
+            title: "Comportamento do Cliente",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600">
+                        Entenda o ritmo de compra da sua base.
+                    </p>
+                    <ul className="space-y-3 mt-2">
+                        <li className="flex gap-3 items-start">
+                            <div className="p-1.5 bg-blue-100 rounded text-blue-600 mt-0.5"><Activity size={14} /></div>
+                            <div>
+                                <strong className="block text-slate-800 text-sm">LTV & Frequência</strong>
+                                <span className="text-slate-500 text-xs">Mensure quanto cada cliente gasta no ano e quantas vezes ele retorna.</span>
+                            </div>
+                        </li>
+                        <li className="flex gap-3 items-start">
+                            <div className="p-1.5 bg-amber-100 rounded text-amber-600 mt-0.5"><Calendar size={14} /></div>
+                            <div>
+                                <strong className="block text-slate-800 text-sm">Ciclo de Compra</strong>
+                                <span className="text-slate-500 text-xs">A média de dias que um cliente leva entre duas compras.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            ),
+            icon: <TrendingUp size={56} className="text-white" />,
+            color: "bg-blue-600",
+            bgElement: "bg-blue-400"
+        },
+        {
+            badge: "Lojas",
+            title: "Ranking e Filtros",
+            content: (
+                <div className="space-y-4">
+                    <p className="text-slate-600">
+                        Compare o desempenho de cada unidade.
+                    </p>
+                    <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-xl border border-amber-100 mb-2">
+                        <Store size={24} className="text-amber-600" />
+                        <div className="text-sm text-slate-700">
+                            Use o <strong>Ranking de Lojas</strong> no final da página para comparar métricas chave por PDV. Se quiser, use o filtro do topo para analisar apenas as lojas selecionadas!
+                        </div>
+                    </div>
+                </div>
+            ),
+            icon: <Store size={56} className="text-white" />,
+            color: "bg-amber-500",
+            bgElement: "bg-amber-300"
+        }
+    ];
+
+    const currentStep = tutorials[step];
+
+    const handleNext = () => {
+        if (step < tutorials.length - 1) setStep(step + 1);
+        else handleFinish();
+    };
+
+    const handleFinish = () => {
+        if (dontShowAgain) {
+            localStorage.setItem('crm_retail_tutorial_hide', 'true');
+        } else {
+            localStorage.removeItem('crm_retail_tutorial_hide');
+        }
+        onClose();
+        setTimeout(() => setStep(0), 300);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row min-h-[500px] animate-in slide-in-from-bottom-4 duration-500">
+
+                {/* ESQUERDA */}
+                <div className={`${currentStep.color} md:w-5/12 relative overflow-hidden transition-colors duration-500 flex flex-col items-center justify-center p-10 text-center`}>
+                    <div className={`absolute top-0 right-0 w-64 h-64 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2`}></div>
+                    <div className={`absolute bottom-0 left-0 w-48 h-48 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2`}></div>
+
+                    <div className="relative z-10 mb-6 transform transition-all duration-500 hover:scale-110">
+                        <div className="w-24 h-24 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner border border-white/20">
+                            {currentStep.icon}
+                        </div>
+                    </div>
+
+                    <h3 className="text-white font-bold text-2xl relative z-10">{currentStep.badge}</h3>
+                    <div className="mt-2 text-white/60 text-sm font-medium tracking-widest uppercase">Passo {step + 1} de {tutorials.length}</div>
+                </div>
+
+                {/* DIREITA */}
+                <div className="flex-1 p-10 flex flex-col justify-between relative bg-white">
+                    <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                        <X size={20} />
+                    </button>
+
+                    <div className="mt-4 animate-in fade-in slide-in-from-right-4 duration-300" key={step}>
+                        <h2 className="text-3xl font-bold text-slate-800 mb-6">{currentStep.title}</h2>
+                        {currentStep.content}
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <div className="flex gap-2">
+                                {tutorials.map((_, i) => (
+                                    <div key={i} className={`h-2 rounded-full transition-all duration-300 ${i === step ? 'w-8 ' + currentStep.color.replace('bg-', 'bg-') : 'w-2 bg-slate-200'}`}></div>
+                                ))}
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                {step > 0 ? (
+                                    <button onClick={() => setStep(step - 1)} className="text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors">
+                                        Voltar
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setDontShowAgain(!dontShowAgain)}>
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${dontShowAgain ? 'bg-slate-800 border-slate-800' : 'border-slate-300'}`}>
+                                            {dontShowAgain && <Check size={10} className="text-white" />}
+                                        </div>
+                                        <span className="text-xs text-slate-400 group-hover:text-slate-600 select-none">Não mostrar mais</span>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleNext}
+                                    className={`px-8 py-3 rounded-xl text-white font-bold shadow-lg transform hover:-translate-y-0.5 transition-all ${step === tutorials.length - 1 ? 'bg-slate-900 hover:bg-slate-800' : currentStep.color + ' hover:opacity-90'}`}
+                                >
+                                    {step === tutorials.length - 1 ? 'Começar a Usar' : 'Próximo'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 /**
  * Retail Results Page.
  * Displays a comprehensive dashboard for retail performance metrics.
@@ -48,6 +239,7 @@ const CHANNEL_ICONS: any = {
 export default function RetailResultsPage() {
     const { getToken } = useAuth();
     const { user } = useUser();
+    const { hasPermission } = useRBAC();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -78,6 +270,13 @@ export default function RetailResultsPage() {
     const dateRef = useRef<HTMLDivElement>(null);
     const globalFilterRef = useRef<HTMLDivElement>(null);
     const channelFilterRef = useRef<HTMLDivElement>(null);
+
+    const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+
+    useEffect(() => {
+        const userHidTutorial = localStorage.getItem('crm_retail_tutorial_hide');
+        if (userHidTutorial !== 'true') setIsTutorialOpen(true);
+    }, []);
 
     /**
      * Fetches retail metrics from the API.
@@ -306,44 +505,50 @@ export default function RetailResultsPage() {
     };
 
     return (
-        <div className="flex h-screen bg-[#f1f5f9] font-sans text-slate-900">
+        <div className="flex h-screen bg-[#f1f5f9] dark:bg-[#020817] font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+                <RetailTutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+
                 {/* HEADER */}
-                <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
+                <header className="h-20 bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <span className="bg-violet-100 text-violet-700 p-1.5 rounded-md"><BarChart2 size={18} /></span>
+                        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                            <span className="bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 p-1.5 rounded-md"><BarChart2 size={18} /></span>
                             Performance Executiva
                         </h1>
                     </div>
                     <div className="flex items-center gap-3">
+                        <button onClick={() => setIsTutorialOpen(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-bold cursor-pointer">
+                            <BookOpen size={16} className="text-violet-500" /> Como usar?
+                        </button>
+                        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
                         <div className="text-right hidden sm:block">
-                            <p className="text-xs font-bold text-slate-700">{user?.fullName || 'Usuário'}</p>
-                            <p className="text-[10px] text-slate-400">Merxios Auth</p>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{user?.fullName || 'Usuário'}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Merxios Auth</p>
                         </div>
-                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs">{user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || ''}</div>
+                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-xs">{user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || ''}</div>
                     </div>
                 </header>
 
                 <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-10 scroll-smooth">
 
                     {/* BARRA DE FILTROS */}
-                    <div className="bg-white p-1.5 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center pl-2 pr-2 relative z-50">
+                    <div className="bg-white dark:bg-[#0f172a] p-1.5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-wrap justify-between items-center pl-2 pr-2 relative z-50">
                         <div className="flex items-center gap-2">
                             {/* Date Picker */}
-                            <div onClick={() => setIsDateOpen(!isDateOpen)} className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition relative" ref={dateRef}>
+                            <div onClick={() => setIsDateOpen(!isDateOpen)} className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer transition relative" ref={dateRef}>
                                 <Calendar size={14} className="text-violet-500" />
                                 <span>{formatDateDisplay(dateRange.start)}</span>
-                                <span className="text-slate-300">→</span>
+                                <span className="text-slate-300 dark:text-slate-600">→</span>
                                 <span>{formatDateDisplay(dateRange.end)}</span>
                                 {isDateOpen && (
-                                    <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 z-50" onClick={(e) => e.stopPropagation()}>
+                                    <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-4 w-64 z-50" onClick={(e) => e.stopPropagation()}>
                                         <div className="space-y-3">
-                                            <div><label className="block text-xs text-slate-500 mb-1">De:</label><input type="date" value={draftDate.start} onChange={(e) => setDraftDate({ ...draftDate, start: e.target.value })} className="w-full border rounded p-1.5 text-xs outline-none focus:border-violet-500" /></div>
-                                            <div><label className="block text-xs text-slate-500 mb-1">Até:</label><input type="date" value={draftDate.end} onChange={(e) => setDraftDate({ ...draftDate, end: e.target.value })} className="w-full border rounded p-1.5 text-xs outline-none focus:border-violet-500" /></div>
+                                            <div><label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De:</label><input type="date" value={draftDate.start} onChange={(e) => setDraftDate({ ...draftDate, start: e.target.value })} className="w-full bg-transparent text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded p-1.5 text-xs outline-none focus:border-violet-500" /></div>
+                                            <div><label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até:</label><input type="date" value={draftDate.end} onChange={(e) => setDraftDate({ ...draftDate, end: e.target.value })} className="w-full bg-transparent text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded p-1.5 text-xs outline-none focus:border-violet-500" /></div>
                                         </div>
-                                        <div className="border-t mt-3 pt-3 flex justify-end gap-2">
+                                        <div className="border-t border-slate-200 dark:border-slate-800 mt-3 pt-3 flex justify-end gap-2">
                                             <button className="text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 px-3 py-1.5 rounded" onClick={handleApplyGlobalFilters}>Filtrar</button>
                                         </div>
                                     </div>
@@ -352,24 +557,24 @@ export default function RetailResultsPage() {
 
                             {/* Loja Selector */}
                             <div className="relative" ref={globalFilterRef}>
-                                <div onClick={() => { setDraftStores([...selectedStores]); setIsFilterMenuOpen(!isFilterMenuOpen); }} className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition select-none">
+                                <div onClick={() => { setDraftStores([...selectedStores]); setIsFilterMenuOpen(!isFilterMenuOpen); }} className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer transition select-none">
                                     <Store size={14} className="text-violet-500" />
                                     {selectedStores.length > 0 ? `${selectedStores.length} Lojas Selecionadas` : 'Todas as Lojas'}
-                                    <ChevronDown size={12} />
+                                    <ChevronDown size={12} className="text-slate-400 dark:text-slate-500" />
                                 </div>
                                 {isFilterMenuOpen && (
-                                    <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-xl p-3 z-50">
+                                    <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 z-50">
                                         <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
                                             {availableStores.map(store => (
-                                                <label key={store.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
-                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>
+                                                <label key={store.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded cursor-pointer">
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${draftStores.includes(store.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-transparent'}`} onClick={(e) => { e.preventDefault(); toggleStoreSelection(store.id); }}>
                                                         {draftStores.includes(store.id) && <Check size={10} className="text-white" />}
                                                     </div>
-                                                    <span className="text-xs text-slate-700 truncate font-medium">{store.code ? `${store.code} - ${store.tradeName || store.name}` : (store.tradeName || store.name)}</span>
+                                                    <span className="text-xs text-slate-700 dark:text-slate-300 truncate font-medium">{store.code ? `${store.code} - ${store.tradeName || store.name}` : (store.tradeName || store.name)}</span>
                                                 </label>
                                             ))}
                                         </div>
-                                        <div className="pt-2 mt-2 border-t flex justify-end">
+                                        <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
                                             <button className="text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 px-3 py-1.5 rounded" onClick={handleApplyGlobalFilters}>Confirmar</button>
                                         </div>
                                     </div>
@@ -377,8 +582,8 @@ export default function RetailResultsPage() {
                             </div>
                         </div>
                         <div className="flex gap-2 pr-1">
-                            <button onClick={handleClearFilters} className="text-xs text-slate-500 hover:text-slate-800 font-medium px-3 py-1.5">Limpar</button>
-                            <button onClick={handleApplyGlobalFilters} className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 shadow-sm transition-all">Atualizar Dashboard</button>
+                            <button onClick={handleClearFilters} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium px-3 py-1.5">Limpar</button>
+                            <button onClick={handleApplyGlobalFilters} className="bg-slate-900 dark:bg-violet-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 dark:hover:bg-violet-700 shadow-sm transition-all">Atualizar Dashboard</button>
                         </div>
                     </div>
 
@@ -393,10 +598,10 @@ export default function RetailResultsPage() {
                         </div>
 
                         {/* Gráfico Principal */}
-                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 relative">
-                            <div className="absolute top-6 right-6 z-10 flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+                        <div className="bg-white dark:bg-[#0f172a] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm h-80 relative">
+                            <div className="absolute top-6 right-6 z-10 flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded-lg">
                                 {['mensal', 'trimestral'].map((m: any) => (
-                                    <button key={m} onClick={() => setViewMode(m)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase ${viewMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{m}</button>
+                                    <button key={m} onClick={() => setViewMode(m)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase ${viewMode === m ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>{m}</button>
                                 ))}
                             </div>
                             <ResponsiveContainer width="100%" height="100%">
@@ -426,7 +631,7 @@ export default function RetailResultsPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <section>
                             <SectionTitle title="Evolução da Carteira" subtitle={TEXTS.carteira} />
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-[380px]">
+                            <div className="bg-white dark:bg-[#0f172a] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm h-[380px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={mainGraphData}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.grid} />
@@ -442,7 +647,7 @@ export default function RetailResultsPage() {
                         </section>
                         <section>
                             <SectionTitle title="Comportamento de Compra" subtitle={TEXTS.comportamento} />
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-[380px] flex flex-col">
+                            <div className="bg-white dark:bg-[#0f172a] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm h-[380px] flex flex-col">
                                 <div className="flex gap-2 mb-4">
                                     <TabButton
                                         label="LTV Anual"
@@ -481,10 +686,10 @@ export default function RetailResultsPage() {
                     {/* 4. SEGMENTAÇÃO */}
                     <section>
                         <SectionTitle title="Segmentação da Base" subtitle={TEXTS.segmentacao} />
-                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 relative">
-                            <div className="absolute top-6 right-6 z-10 flex gap-1 bg-slate-100 p-0.5 rounded-lg">
-                                <button onClick={() => setGroupMode('people')} className={`px-3 py-1 text-[10px] font-bold rounded transition ${groupMode === 'people' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>Pessoas</button>
-                                <button onClick={() => setGroupMode('revenue')} className={`px-3 py-1 text-[10px] font-bold rounded transition ${groupMode === 'revenue' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>Receita</button>
+                        <div className="bg-white dark:bg-[#0f172a] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm h-80 relative">
+                            <div className="absolute top-6 right-6 z-10 flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded-lg">
+                                <button onClick={() => setGroupMode('people')} className={`px-3 py-1 text-[10px] font-bold rounded transition ${groupMode === 'people' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>Pessoas</button>
+                                <button onClick={() => setGroupMode('revenue')} className={`px-3 py-1 text-[10px] font-bold rounded transition ${groupMode === 'revenue' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>Receita</button>
                             </div>
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={mainGraphData} barSize={24}>
@@ -509,24 +714,24 @@ export default function RetailResultsPage() {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                             {/* 1/3: Donut (Snapshot) */}
                             <div className="lg:col-span-1">
-                                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center h-full">
+                                <div className="bg-white dark:bg-[#0f172a] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center h-full">
                                     <div className="relative w-48 h-48">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
                                                 <Pie data={[{ value: Number(donutTotals.percent) }, { value: 100 - Number(donutTotals.percent) }]} innerRadius={60} outerRadius={75} startAngle={90} endAngle={-270} dataKey="value" stroke="none" paddingAngle={5}>
-                                                    <Cell fill={COLORS.success} /> <Cell fill="#f1f5f9" />
+                                                    <Cell fill={COLORS.success} /> <Cell fill="#f1f5f9" className="dark:fill-slate-800" />
                                                 </Pie>
                                             </PieChart>
                                         </ResponsiveContainer>
                                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                            <span className="text-3xl font-black text-slate-800 tracking-tighter">{donutTotals.percent}%</span>
+                                            <span className="text-3xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{donutTotals.percent}%</span>
                                             <span className="text-[10px] font-bold text-slate-400 uppercase">TAXA DE INFLUÊNCIA</span>
                                         </div>
                                     </div>
                                     <div className="w-full mt-6 space-y-3">
-                                        <div className="flex justify-between text-sm border-b border-slate-100 pb-2">
-                                            <span className="text-slate-500">Receita Total</span>
-                                            <span className="font-bold text-slate-700">{donutTotals.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                        <div className="flex justify-between text-sm border-b border-slate-100 dark:border-slate-800 pb-2">
+                                            <span className="text-slate-500 dark:text-slate-400">Receita Total</span>
+                                            <span className="font-bold text-slate-700 dark:text-slate-200">{donutTotals.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-emerald-600 font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>Influenciada</span>
@@ -538,12 +743,12 @@ export default function RetailResultsPage() {
 
                             {/* 2/3: Gráfico de Área (Evolução) */}
                             <div className="lg:col-span-2">
-                                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                                <div className="bg-white dark:bg-[#0f172a] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm h-full">
                                     <div className="flex justify-between items-center mb-4">
-                                        <h3 className="text-sm font-bold text-slate-800">Evolução: Orgânico vs. Influenciado</h3>
-                                        <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+                                        <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Evolução: Orgânico vs. Influenciado</h3>
+                                        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded-lg">
                                             {['mensal', 'trimestral'].map((m: any) => (
-                                                <button key={m} onClick={() => setImpactViewMode(m)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase ${impactViewMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{m}</button>
+                                                <button key={m} onClick={() => setImpactViewMode(m)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase ${impactViewMode === m ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>{m}</button>
                                             ))}
                                         </div>
                                     </div>
@@ -571,22 +776,22 @@ export default function RetailResultsPage() {
 
                                 {/* FILTRO CANAIS */}
                                 <div className="relative" ref={channelFilterRef}>
-                                    <button onClick={(e) => { e.stopPropagation(); setIsChannelFilterOpen(!isChannelFilterOpen); }} className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:border-violet-400 transition">
+                                    <button onClick={(e) => { e.stopPropagation(); setIsChannelFilterOpen(!isChannelFilterOpen); }} className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-transparent border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg hover:border-violet-400 dark:hover:border-violet-500 transition">
                                         <Filter size={12} /> Filtrar Canais <ChevronDown size={12} />
                                     </button>
                                     {isChannelFilterOpen && (
-                                        <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-xl p-3 z-50" onClick={(e) => e.stopPropagation()}>
+                                        <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 z-50" onClick={(e) => e.stopPropagation()}>
                                             <div className="space-y-1">
                                                 {PRIMITIVE_CHANNELS.map(ch => (
-                                                    <div key={ch} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleChannelFilter(ch); }}>
-                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${activeFilters.includes(ch) ? 'bg-violet-600 border-violet-600' : 'bg-white border-slate-300'}`}>
+                                                    <div key={ch} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleChannelFilter(ch); }}>
+                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${activeFilters.includes(ch) ? 'bg-violet-600 border-violet-600' : 'bg-white dark:bg-transparent border-slate-300 dark:border-slate-600'}`}>
                                                             {activeFilters.includes(ch) && <Check size={10} className="text-white" />}
                                                         </div>
-                                                        <span className="text-xs text-slate-700">{ch}</span>
+                                                        <span className="text-xs text-slate-700 dark:text-slate-300">{ch}</span>
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div className="pt-2 mt-2 border-t text-right">
+                                            <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 text-right">
                                                 <span onClick={(e) => { e.stopPropagation(); setActiveFilters([]) }} className="text-[10px] font-bold text-red-500 cursor-pointer hover:underline">Limpar</span>
                                             </div>
                                         </div>
@@ -622,7 +827,7 @@ export default function RetailResultsPage() {
 function SectionTitle({ title, subtitle }: { title: string, subtitle?: string }) {
     return (
         <div className="mb-4">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <span className="w-1 h-5 bg-violet-500 rounded-full"></span>
                 {title}
             </h2>
@@ -640,17 +845,17 @@ function ModernKPICard({ label, value, percent, active, onClick, icon, isRed, is
     }
 
     return (
-        <div onClick={onClick} className={`relative bg-white p-5 rounded-xl border transition-all cursor-pointer group hover:-translate-y-1 ${active ? 'border-violet-500 shadow-md ring-1 ring-violet-500' : 'border-slate-200 hover:border-violet-300 shadow-sm'}`}>
-            <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${active ? 'bg-violet-500' : 'bg-transparent group-hover:bg-violet-200'}`} />
+        <div onClick={onClick} className={`relative bg-white dark:bg-[#0f172a] p-5 rounded-xl border transition-all cursor-pointer group hover:-translate-y-1 ${active ? 'border-violet-500 shadow-md ring-1 ring-violet-500' : 'border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500 shadow-sm'}`}>
+            <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${active ? 'bg-violet-500' : 'bg-transparent group-hover:bg-violet-200 dark:group-hover:bg-violet-800'}`} />
             <div className="flex justify-between items-start mb-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${isRed ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${isRed ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'}`}>
                     {percent > 0 ? <ArrowUp size={10} /> : <ArrowDown size={10} />} {Math.abs(percent)}%
                 </span>
             </div>
             <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${active ? 'bg-violet-100 text-violet-700' : 'bg-slate-50 text-slate-400 group-hover:text-violet-500'}`}>{icon}</div>
-                <span className="text-2xl font-bold text-slate-800 tracking-tight">{display}</span>
+                <div className={`p-2 rounded-lg ${active ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400' : 'bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 group-hover:text-violet-500 dark:group-hover:text-violet-400'}`}>{icon}</div>
+                <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{display}</span>
             </div>
         </div>
     )
@@ -659,14 +864,14 @@ function ModernKPICard({ label, value, percent, active, onClick, icon, isRed, is
 function TabButton({ label, active, onClick, tooltip }: any) {
     return (
         <div className="relative group">
-            <button onClick={onClick} className={`flex items-center gap-2 px-4 py-1.5 text-xs font-bold rounded-full border transition-all ${active ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+            <button onClick={onClick} className={`flex items-center gap-2 px-4 py-1.5 text-xs font-bold rounded-full border transition-all ${active ? 'bg-slate-800 dark:bg-slate-700 text-white border-slate-800 dark:border-slate-700' : 'bg-white dark:bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
                 {label}
-                {tooltip && <Info size={10} className={active ? 'text-slate-400' : 'text-slate-300'} />}
+                {tooltip && <Info size={10} className={active ? 'text-slate-400' : 'text-slate-300 dark:text-slate-500'} />}
             </button>
             {tooltip && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-800 text-white text-[10px] p-2 rounded-lg shadow-xl hidden group-hover:block z-50 text-center leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-800 dark:bg-slate-700 text-white text-[10px] p-2 rounded-lg shadow-xl hidden group-hover:block z-50 text-center leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                     {tooltip}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800 dark:border-t-slate-700"></div>
                 </div>
             )}
         </div>
@@ -686,26 +891,26 @@ function NavItem({ icon, label, active }: any) {
 function ModernChannelCard({ data, isBig }: any) {
     if (!data) return null;
     return (
-        <div className="relative overflow-hidden rounded-xl bg-white border border-slate-200 p-4 h-full flex flex-col justify-between hover:shadow-md transition-shadow group">
+        <div className="relative overflow-hidden rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 p-4 h-full flex flex-col justify-between hover:shadow-md transition-shadow group">
             <div className="flex justify-between items-start">
-                <div className={`p-3 rounded-lg ${data.isOther ? 'bg-slate-100 text-slate-500' : 'bg-violet-50 text-violet-600'}`}>
+                <div className={`p-3 rounded-lg ${data.isOther ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400' : 'bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'}`}>
                     {CHANNEL_ICONS[data.name] || <Target size={20} />}
                 </div>
-                <span className="bg-slate-50 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-full border border-slate-100">
+                <span className="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 text-[10px] font-bold px-2 py-1 rounded-full border border-slate-100 dark:border-slate-700/50">
                     {data.percent}%
                 </span>
             </div>
             <div>
-                <h4 className="text-slate-500 text-xs font-bold uppercase mb-1 mt-2">{data.name}</h4>
-                <p className="text-lg font-bold text-slate-800">
+                <h4 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase mb-1 mt-2">{data.name}</h4>
+                <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(data.value)}
                 </p>
             </div>
             {data.isOther && (
-                <div className="absolute inset-0 bg-white/95 backdrop-blur flex flex-col p-4 opacity-0 group-hover:opacity-100 transition-opacity justify-center">
+                <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex flex-col p-4 opacity-0 group-hover:opacity-100 transition-opacity justify-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Detalhes</p>
                     {data.items.slice(0, 3).map((it: any, idx: number) => (
-                        <div key={idx} className="flex justify-between text-xs py-1 border-b border-slate-100">
+                        <div key={idx} className="flex justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800/50 text-slate-700 dark:text-slate-200">
                             <span>{it.name}</span>
                             <span className="font-bold">{it.percent}%</span>
                         </div>
@@ -717,7 +922,7 @@ function ModernChannelCard({ data, isBig }: any) {
 }
 
 const SortHeader = ({ label, k, align = "left", sortConfig, onSort }: any) => (
-    <th className={`px-6 py-3 text-xs font-bold text-slate-500 uppercase cursor-pointer hover:text-violet-600 transition text-${align}`} onClick={() => onSort(k)}>
+    <th className={`px-6 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:text-violet-600 dark:hover:text-violet-400 transition text-${align}`} onClick={() => onSort(k)}>
         <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}>
             {label} {sortConfig.key === k && (sortConfig.direction === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
         </div>
@@ -756,13 +961,13 @@ function StoresTableSection({ stores }: { stores: any[] }) {
     return (
         <section>
             <SectionTitle title="Ranking de Lojas" />
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+            <div className="bg-white dark:bg-[#0f172a] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                     <Search className="text-slate-400" size={16} />
-                    <input type="text" placeholder="Filtrar lojas..." value={search} onChange={(e) => setSearch(e.target.value)} className="text-sm outline-none w-full placeholder-slate-400 text-slate-700" />
+                    <input type="text" placeholder="Filtrar lojas..." value={search} onChange={(e) => setSearch(e.target.value)} className="text-sm outline-none w-full placeholder-slate-400 dark:placeholder-slate-500 text-slate-700 dark:text-slate-200 bg-transparent" />
                 </div>
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
+                    <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                         <tr>
                             <SortHeader label="Loja" k="name" sortConfig={sortConfig} onSort={handleSort} />
                             <SortHeader label="Receita" k="revenue" sortConfig={sortConfig} onSort={handleSort} />
@@ -773,24 +978,24 @@ function StoresTableSection({ stores }: { stores: any[] }) {
                             <SortHeader label="Ticket Médio" k="ticket" align="right" sortConfig={sortConfig} onSort={handleSort} />
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {paginatedStores.map((s: any) => (
-                            <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 font-bold text-slate-700">{s.code ? `${s.code} - ${s.tradeName || s.name}` : (s.tradeName || s.name)}</td>
-                                <td className="px-6 py-4 font-mono text-slate-600">R$ {s.revenue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
-                                <td className="px-6 py-4 font-mono text-slate-600">R$ {s.revenueInfluenced.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
-                                <td className="px-6 py-4 text-slate-500">{s.transactions}</td>
-                                <td className="px-6 py-4 text-center"><span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">{s.repurchase}%</span></td>
-                                <td className="px-6 py-4 text-center text-slate-600 font-mono">{s.itemsPerTicket}</td>
-                                <td className="px-6 py-4 text-right font-bold text-slate-700">R$ {s.ticket.toFixed(2)}</td>
+                            <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">{s.code ? `${s.code} - ${s.tradeName || s.name}` : (s.tradeName || s.name)}</td>
+                                <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">R$ {s.revenue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
+                                <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">R$ {s.revenueInfluenced.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
+                                <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{s.transactions}</td>
+                                <td className="px-6 py-4 text-center"><span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded text-xs font-bold">{s.repurchase}%</span></td>
+                                <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-300 font-mono">{s.itemsPerTicket}</td>
+                                <td className="px-6 py-4 text-right font-bold text-slate-700 dark:text-slate-200">R$ {s.ticket.toFixed(2)}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-                <div className="p-4 border-t border-slate-100 flex justify-end gap-2 text-xs text-slate-500">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="disabled:opacity-30 hover:text-violet-600 font-bold"><ChevronLeft size={16} /></button>
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="disabled:opacity-30 hover:text-violet-600 dark:hover:text-violet-400 font-bold"><ChevronLeft size={16} /></button>
                     <span>Página {page} de {totalPages}</span>
-                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="disabled:opacity-30 hover:text-violet-600 font-bold"><ChevronRight size={16} /></button>
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="disabled:opacity-30 hover:text-violet-600 dark:hover:text-violet-400 font-bold"><ChevronRight size={16} /></button>
                 </div>
             </div>
         </section>
@@ -798,29 +1003,32 @@ function StoresTableSection({ stores }: { stores: any[] }) {
 }
 
 function ChannelsTable({ data }: { data: any[] }) {
+    const { hasPermission } = useRBAC();
     const [search, setSearch] = useState("");
     const deferred = useDeferredValue(search);
     const filtered = useMemo(() => data.filter(c => c.name.toLowerCase().includes(deferred.toLowerCase())), [data, deferred]);
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-6">
-            <div className="p-4 border-b border-slate-100 flex justify-between">
-                <div className="flex items-center gap-2 w-full max-w-xs bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+        <div className="bg-white dark:bg-[#0f172a] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mt-6">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between">
+                <div className="flex items-center gap-2 w-full max-w-xs bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
                     <Search size={14} className="text-slate-400" />
-                    <input type="text" placeholder="Buscar canal..." className="bg-transparent outline-none text-xs w-full" value={search} onChange={e => setSearch(e.target.value)} />
+                    <input type="text" placeholder="Buscar canal..." className="bg-transparent text-slate-700 dark:text-slate-200 outline-none text-xs w-full" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
-                <button className="text-xs font-bold text-violet-600 hover:bg-violet-50 px-3 py-1.5 rounded-lg transition">Exportar CSV</button>
+                {hasPermission('app:export') && (
+                    <button className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 px-3 py-1.5 rounded-lg transition">Exportar CSV</button>
+                )}
             </div>
             <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase text-left">
+                <thead className="bg-slate-50 dark:bg-slate-900/50 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase text-left">
                     <tr><th className="px-6 py-3">Canal</th><th className="px-6 py-3">Receita</th><th className="px-6 py-3 text-right">% Share</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {filtered.map((ch: any, i: number) => (
-                        <tr key={i} className="hover:bg-slate-50">
-                            <td className="px-6 py-3 font-bold text-slate-700 flex items-center gap-2">{CHANNEL_ICONS[ch.name] || <Target size={16} />} {ch.name}</td>
-                            <td className="px-6 py-3 font-mono text-slate-600">R$ {ch.value.toLocaleString('pt-BR')}</td>
-                            <td className="px-6 py-3 text-right"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{ch.percent}%</span></td>
+                        <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td className="px-6 py-3 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">{CHANNEL_ICONS[ch.name] || <Target size={16} />} {ch.name}</td>
+                            <td className="px-6 py-3 font-mono text-slate-600 dark:text-slate-300">R$ {ch.value.toLocaleString('pt-BR')}</td>
+                            <td className="px-6 py-3 text-right"><span className="bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded text-xs font-bold">{ch.percent}%</span></td>
                         </tr>
                     ))}
                 </tbody>
