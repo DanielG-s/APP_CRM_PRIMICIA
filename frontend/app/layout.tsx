@@ -4,9 +4,17 @@ import JsonLd from "../components/JsonLd";
 import "./globals.css";
 
 import { API_BASE_URL } from "@/lib/config";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: {
@@ -15,6 +23,15 @@ export const metadata: Metadata = {
   },
   description: "Dashboard de performance comercial e gestão de relacionamento com o cliente.",
   metadataBase: new URL(API_BASE_URL),
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Merxios",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   openGraph: {
     title: "Merxios CRM",
     description: "Dashboard de performance comercial e gestão de relacionamento.",
@@ -39,12 +56,31 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  icons: {
+    icon: "/icons/icon-192.svg",
+    apple: "/icons/icon-192.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider localization={ptBR}>
       <html lang="pt-BR" suppressHydrationWarning>
+        <head>
+          <meta name="mobile-web-app-capable" content="yes" />
+          {/* Service Worker Registration */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  });
+                }
+              `,
+            }}
+          />
+        </head>
         <body className="bg-background text-foreground transition-colors duration-300">
           <ThemeProvider
             attribute="class"

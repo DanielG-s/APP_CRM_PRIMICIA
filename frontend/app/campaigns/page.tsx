@@ -310,8 +310,79 @@ export default function CampaignListPage() {
         </div>
       </div>
 
-      {/* TABELA */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+      {/* ── CARD VIEW (mobile < md) ── */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="p-8 text-center text-gray-500 animate-pulse">Carregando campanhas...</div>
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">Nenhuma campanha encontrada.</div>
+        ) : (
+          filteredCampaigns.map((campaign) => (
+            <div
+              key={`card-${campaign.id}`}
+              className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 active:scale-[0.99] transition-all"
+            >
+              <div className="flex items-start gap-3 mb-3">
+                <div className="p-2 bg-gray-100 dark:bg-slate-800 rounded-lg shrink-0">
+                  {getChannelIcon(campaign.channel)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">{campaign.name}</p>
+                  <p className="text-xs text-green-600 dark:text-green-500 truncate mt-0.5">
+                    {campaign.segment}
+                  </p>
+                </div>
+                <StatusBadge
+                  status={campaign.status}
+                  colorMap={CAMPAIGN_STATUS_COLORS}
+                  size="sm"
+                  dot
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
+                <div>
+                  <span className="font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide text-[10px]">Início</span>
+                  <p className="mt-0.5">{campaign.startDate}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide text-[10px]">Tipo</span>
+                  <p className="mt-0.5">{campaign.type}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate max-w-[130px]">
+                  {campaign.id}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDuplicate(campaign)}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  >
+                    <Copy size={15} />
+                  </button>
+                  <button
+                    onClick={() => handleEdit(campaign.id)}
+                    className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-slate-800 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  >
+                    <FileEdit size={15} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(campaign.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── TABLE VIEW (desktop ≥ md) ── */}
+      <div className="hidden md:block bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -368,7 +439,7 @@ export default function CampaignListPage() {
                       <p className="text-xs text-gray-400 dark:text-gray-500">{campaign.editedBy}</p>
                     </td>
                     <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => handleDuplicate(campaign)}
                           title="Duplicar"

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useDeferredValue, useRef } from 'react';
 import {
     Users, Filter, Target, ShoppingBag,
-    Lightbulb, MousePointerClick, Star, TrendingUp
+    Lightbulb, MousePointerClick, Star, TrendingUp, ChevronRight
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
@@ -235,84 +235,149 @@ export default function ClientsPage() {
                             Carregando dados do CRM...
                         </div>
                     ) : (
-                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                                    <tr>
-                                        <SortableHeader label="Nome" sortKey="name" sortConfig={sortConfig} onSort={handleSort} />
-                                        <SortableHeader label="Comportamento" sortKey="rfmScore" sortConfig={sortConfig} onSort={handleSort} />
-                                        <SortableHeader label="Campanhas" sortKey="campaignsCount" sortConfig={sortConfig} onSort={handleSort} />
-                                        <SortableHeader label="Compras" sortKey="totalTransactions" sortConfig={sortConfig} onSort={handleSort} />
-                                        <SortableHeader label="Última Compra" sortKey="lastPurchase" sortConfig={sortConfig} onSort={handleSort} />
-                                        {hasPermission('app:financials') && (
-                                            <SortableHeader label="Receita Total" sortKey="ltv" sortConfig={sortConfig} onSort={handleSort} />
-                                        )}
-                                        <SortableHeader label="Cadastro" sortKey="createdAt" sortConfig={sortConfig} onSort={handleSort} />
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                    {clients.map((client: any) => (
-                                        <tr
-                                            key={client.id}
-                                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
-                                            onClick={() => router.push(`/clients/${client.id}`)}
-                                        >
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-violet-600 dark:text-violet-400 font-bold border border-slate-200 dark:border-slate-700 shadow-sm uppercase shrink-0">
-                                                        {client.rfmLabel === 'VIP' ? <Target size={18} /> : client.name.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]">
-                                                            {client.name}
-                                                        </p>
-                                                        <StatusBadge
-                                                            status={client.rfmLabel}
-                                                            colorMap={RFM_COLORS}
-                                                            fallback={RFM_COLORS['Lead']}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.rfmScore || '-'}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.campaignsCount || 0}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="font-bold text-slate-700 dark:text-slate-300">{client.totalTransactions}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-slate-600 dark:text-slate-400 font-medium text-xs">
-                                                    {client.lastPurchase ? new Date(client.lastPurchase).toLocaleDateString('pt-BR') : '-'}
-                                                </span>
-                                            </td>
-                                            {hasPermission('app:financials') && (
-                                                <td className="px-6 py-4 font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
-                                                    {client.ltv > 0 ? client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                                                </td>
-                                            )}
-                                            <td className="px-6 py-4">
-                                                <span className="text-slate-500 dark:text-slate-400 text-xs">
-                                                    {client.createdAt
-                                                        ? formatDistanceToNow(new Date(client.createdAt), { addSuffix: false, locale: ptBR }).replace('cerca de', '')
-                                                        : '-'}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <>
+                            {/* ── CARD VIEW (mobile < md) ── */}
+                            <div className="md:hidden space-y-3">
+                                {clients.map((client: any) => (
+                                    <div
+                                        key={`card-${client.id}`}
+                                        className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 cursor-pointer active:scale-[0.99] transition-all hover:border-violet-200 dark:hover:border-violet-800"
+                                        onClick={() => router.push(`/clients/${client.id}`)}
+                                    >
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-violet-600 dark:text-violet-400 font-bold border border-slate-200 dark:border-slate-700 shadow-sm uppercase shrink-0">
+                                                {client.rfmLabel === 'VIP' ? <Target size={18} /> : client.name.charAt(0)}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">
+                                                    {client.name}
+                                                </p>
+                                                <StatusBadge
+                                                    status={client.rfmLabel}
+                                                    colorMap={RFM_COLORS}
+                                                    fallback={RFM_COLORS['Lead']}
+                                                />
+                                            </div>
+                                            <ChevronRight size={16} className="text-slate-400 shrink-0" />
+                                        </div>
 
-                            <PaginationControl
-                                page={page}
-                                totalPages={totalPages}
-                                totalItems={totalClients}
-                                itemsPerPage={itemsPerPage}
-                                onPageChange={setPage}
-                            />
-                        </div>
+                                        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                            <div className="text-center">
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">Compras</p>
+                                                <p className="font-bold text-slate-700 dark:text-slate-300 text-sm mt-0.5">{client.totalTransactions}</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">Score RFM</p>
+                                                <p className="font-bold text-slate-700 dark:text-slate-300 text-sm mt-0.5">{client.rfmScore || '-'}</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">Última Compra</p>
+                                                <p className="font-bold text-slate-700 dark:text-slate-300 text-xs mt-0.5">
+                                                    {client.lastPurchase ? new Date(client.lastPurchase).toLocaleDateString('pt-BR') : '-'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {hasPermission('app:financials') && client.ltv > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide">Receita Total (LTV)</p>
+                                                <p className="font-bold text-emerald-600 dark:text-emerald-400 text-sm font-mono">
+                                                    {client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <PaginationControl
+                                    page={page}
+                                    totalPages={totalPages}
+                                    totalItems={totalClients}
+                                    itemsPerPage={itemsPerPage}
+                                    onPageChange={setPage}
+                                />
+                            </div>
+
+                            {/* ── TABLE VIEW (desktop ≥ md) ── */}
+                            <div className="hidden md:block bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                                        <tr>
+                                            <SortableHeader label="Nome" sortKey="name" sortConfig={sortConfig} onSort={handleSort} />
+                                            <SortableHeader label="Comportamento" sortKey="rfmScore" sortConfig={sortConfig} onSort={handleSort} />
+                                            <SortableHeader label="Campanhas" sortKey="campaignsCount" sortConfig={sortConfig} onSort={handleSort} />
+                                            <SortableHeader label="Compras" sortKey="totalTransactions" sortConfig={sortConfig} onSort={handleSort} />
+                                            <SortableHeader label="Última Compra" sortKey="lastPurchase" sortConfig={sortConfig} onSort={handleSort} />
+                                            {hasPermission('app:financials') && (
+                                                <SortableHeader label="Receita Total" sortKey="ltv" sortConfig={sortConfig} onSort={handleSort} />
+                                            )}
+                                            <SortableHeader label="Cadastro" sortKey="createdAt" sortConfig={sortConfig} onSort={handleSort} />
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {clients.map((client: any) => (
+                                            <tr
+                                                key={client.id}
+                                                className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
+                                                onClick={() => router.push(`/clients/${client.id}`)}
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-violet-600 dark:text-violet-400 font-bold border border-slate-200 dark:border-slate-700 shadow-sm uppercase shrink-0">
+                                                            {client.rfmLabel === 'VIP' ? <Target size={18} /> : client.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-800 dark:text-slate-100 text-sm overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]">
+                                                                {client.name}
+                                                            </p>
+                                                            <StatusBadge
+                                                                status={client.rfmLabel}
+                                                                colorMap={RFM_COLORS}
+                                                                fallback={RFM_COLORS['Lead']}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="font-bold text-slate-700 dark:text-slate-300">{client.rfmScore || '-'}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="font-bold text-slate-700 dark:text-slate-300">{client.campaignsCount || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="font-bold text-slate-700 dark:text-slate-300">{client.totalTransactions}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-slate-600 dark:text-slate-400 font-medium text-xs">
+                                                        {client.lastPurchase ? new Date(client.lastPurchase).toLocaleDateString('pt-BR') : '-'}
+                                                    </span>
+                                                </td>
+                                                {hasPermission('app:financials') && (
+                                                    <td className="px-6 py-4 font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
+                                                        {client.ltv > 0 ? client.ltv.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                                    </td>
+                                                )}
+                                                <td className="px-6 py-4">
+                                                    <span className="text-slate-500 dark:text-slate-400 text-xs">
+                                                        {client.createdAt
+                                                            ? formatDistanceToNow(new Date(client.createdAt), { addSuffix: false, locale: ptBR }).replace('cerca de', '')
+                                                            : '-'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+
+                                <PaginationControl
+                                    page={page}
+                                    totalPages={totalPages}
+                                    totalItems={totalClients}
+                                    itemsPerPage={itemsPerPage}
+                                    onPageChange={setPage}
+                                />
+                            </div>
+                        </>
                     )}
                 </div>
             </main>

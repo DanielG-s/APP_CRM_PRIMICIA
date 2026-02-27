@@ -1,0 +1,48 @@
+name: Deploy to Hetzner VPS
+
+on:
+  push:
+    branches:
+      - main # Ou a sua branch de produção
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies & Build
+        run: |
+          npm install
+          npm run build --if-present
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /path/to/your/project
+            git pull origin main
+            
+            # Cria um .env temporário com os segredos injetados pelo GitHub
+            echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" > .env
+            echo "MASTER_ENCRYPTION_KEY=${{ secrets.MASTER_ENCRYPTION_KEY }}" >> .env
+            echo "CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}" >> .env
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" >> .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            # Adicione outros conforme necessário...
+            
+            # Restart dos containers com as novas variáveis
+            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Limpeza opcional do .env depois que o docker subiu se não for usado volumes
+            # rm .env

@@ -26,6 +26,7 @@ import { SettingsModule } from './modules/config/settings/settings.module';
 import { UsersModule } from './modules/config/users/users.module';
 import { RolesModule } from './modules/config/roles/roles.module';
 import { ErpModule } from './modules/erp/erp.module';
+import { EncryptionModule } from './common/services/encryption.module';
 import { HealthController } from './health.controller';
 
 @Global()
@@ -77,6 +78,7 @@ import { HealthController } from './health.controller';
     UsersModule,
     RolesModule,
     ErpModule,
+    EncryptionModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

@@ -8,3 +8,4 @@ export { SortableHeader } from './SortableHeader';
 export { PaginationControl } from './PaginationControl';
 export { EmptyState } from './EmptyState';
 export { StatCard } from './StatCard';
+export { ResponsiveModal } from './ResponsiveModal';

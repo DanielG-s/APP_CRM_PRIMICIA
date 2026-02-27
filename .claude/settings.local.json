@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout -b feature/frontend-shared-components-refactor)",
+      "Bash(git add frontend/components/shared/ frontend/components/dashboard/KPICard.tsx frontend/app/campaigns/page.tsx frontend/app/clients/page.tsx frontend/app/page.tsx frontend/app/results/retail/page.tsx frontend/app/segments/list/page.tsx frontend/app/segments/new/page.tsx)"
+    ]
+  }
+}
