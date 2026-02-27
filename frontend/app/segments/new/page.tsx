@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Plus, Bell, Fingerprint, Sparkles, ArrowDown, BarChart3, Mail,
   Smartphone, Wallet, RefreshCw, TrendingUp, AlertCircle, Save,
-  RefreshCcw, Lock, BookOpen, Lightbulb, ArrowLeft, X, CheckCircle2,
-  Check, Layers, Target, Calculator // Adicionados para o tutorial
+  RefreshCcw, Lock, BookOpen, ArrowLeft, CheckCircle2,
+  Layers, Target, Calculator
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -16,164 +16,80 @@ import {
 } from '../shared/components';
 import { API_BASE_URL } from "@/lib/config";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { TutorialModal, TutorialStep } from '@/components/shared';
 
-// --- NOVO TUTORIAL MASTERCLASS ---
-const CreateTutorialModal = ({ isOpen, onClose }: any) => {
-  const [step, setStep] = useState(0);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
-
-  if (!isOpen) return null;
-
-  const tutorials = [
-    {
-      badge: "Estratégia",
-      title: "Construa sua Audiência",
-      content: (
-        <div className="space-y-4">
-          <p className="text-slate-600 dark:text-slate-300 text-lg">
-            Aqui você usa blocos de lógica para filtrar sua base. Não é apenas selecionar filtros, é <strong>desenhar o perfil ideal</strong>.
-          </p>
-          <div className="grid grid-cols-2 gap-3 mt-2">
-            <div className="bg-indigo-50 dark:bg-indigo-900/40 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
-              <div className="font-bold text-indigo-700 dark:text-indigo-400 text-sm">🧩 Blocos</div>
-              <div className="text-xs text-indigo-600 dark:text-indigo-300">Combine RFM, Comportamento e Dados.</div>
-            </div>
-            <div className="bg-emerald-50 dark:bg-emerald-900/40 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800">
-              <div className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">⚡ Automação</div>
-              <div className="text-xs text-emerald-600 dark:text-emerald-300">Segmentos dinâmicos alimentam seus fluxos.</div>
-            </div>
+const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    badge: "Estratégia",
+    title: "Construa sua Audiência",
+    content: (
+      <div className="space-y-4">
+        <p className="text-slate-600 dark:text-slate-300 text-lg">
+          Aqui você usa blocos de lógica para filtrar sua base. Não é apenas selecionar filtros, é <strong>desenhar o perfil ideal</strong>.
+        </p>
+        <div className="grid grid-cols-2 gap-3 mt-2">
+          <div className="bg-indigo-50 dark:bg-indigo-900/40 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
+            <div className="font-bold text-indigo-700 dark:text-indigo-400 text-sm">🧩 Blocos</div>
+            <div className="text-xs text-indigo-600 dark:text-indigo-300">Combine RFM, Comportamento e Dados.</div>
           </div>
-        </div>
-      ),
-      icon: <Target size={56} className="text-white" />,
-      color: "bg-indigo-600",
-      bgElement: "bg-indigo-400"
-    },
-    {
-      badge: "Lógica",
-      title: "Como Empilhar Regras?",
-      content: (
-        <div className="space-y-4">
-          <p className="text-slate-600 dark:text-slate-300">
-            Você pode adicionar quantos blocos quiser. O segredo está nos conectores:
-          </p>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
-              <div className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold px-2 py-1 rounded text-xs">E (AND)</div>
-              <span className="text-sm text-slate-600 dark:text-slate-300">O cliente precisa atender a <strong>TODOS</strong> os critérios. (Ex: VIP <strong>E</strong> mora em SP).</span>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
-              <div className="bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 font-bold px-2 py-1 rounded text-xs">OU (OR)</div>
-              <span className="text-sm text-slate-600 dark:text-slate-300">O cliente pode atender a <strong>QUALQUER</strong> critério. (Ex: Comprou ontem <strong>OU</strong> visitou o site).</span>
-            </div>
-          </div>
-        </div>
-      ),
-      icon: <Layers size={56} className="text-white" />,
-      color: "bg-emerald-600",
-      bgElement: "bg-emerald-400"
-    },
-    {
-      badge: "Previsibilidade",
-      title: "Calculadora em Tempo Real",
-      content: (
-        <div className="space-y-4">
-          <p className="text-slate-600 dark:text-slate-300">
-            Olhe para a direita 👉. Enquanto você adiciona regras, nós calculamos o impacto:
-          </p>
-          <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
-            <li className="flex gap-2 items-center"><CheckCircle2 size={16} className="text-green-500" /> Quantos clientes serão atingidos.</li>
-            <li className="flex gap-2 items-center"><CheckCircle2 size={16} className="text-green-500" /> Qual a receita estimada desse grupo.</li>
-            <li className="flex gap-2 items-center"><CheckCircle2 size={16} className="text-green-500" /> Quantos têm E-mail ou WhatsApp válido.</li>
-          </ul>
-          <p className="text-xs text-slate-400 mt-2">
-            Isso evita criar segmentos vazios ou muito pequenos.
-          </p>
-        </div>
-      ),
-      icon: <Calculator size={56} className="text-white" />,
-      color: "bg-amber-500",
-      bgElement: "bg-amber-300"
-    }
-  ];
-
-  const currentStep = tutorials[step];
-
-  const handleNext = () => {
-    if (step < tutorials.length - 1) setStep(step + 1);
-    else handleFinish();
-  };
-
-  const handleFinish = () => {
-    if (dontShowAgain) localStorage.setItem('crm_segment_creation_tutorial_hide', 'true');
-    else localStorage.removeItem('crm_segment_creation_tutorial_hide');
-    onClose();
-    setTimeout(() => setStep(0), 300);
-  };
-
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row min-h-[500px] animate-in slide-in-from-bottom-4 duration-500">
-
-        {/* LADO ESQUERDO (VISUAL) */}
-        <div className={`${currentStep.color} md:w-5/12 relative overflow-hidden transition-colors duration-500 flex flex-col items-center justify-center p-10 text-center`}>
-          <div className={`absolute top-0 right-0 w-64 h-64 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2`}></div>
-          <div className={`absolute bottom-0 left-0 w-48 h-48 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2`}></div>
-
-          <div className="relative z-10 mb-6 transform transition-all duration-500 hover:scale-110">
-            <div className="w-24 h-24 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner border border-white/20">
-              {currentStep.icon}
-            </div>
-          </div>
-          <h3 className="text-white font-bold text-2xl relative z-10">{currentStep.badge}</h3>
-          <div className="mt-2 text-white/60 text-sm font-medium tracking-widest uppercase">Passo {step + 1} de {tutorials.length}</div>
-        </div>
-
-        {/* LADO DIREITO (CONTEÚDO) */}
-        <div className="flex-1 p-10 flex flex-col justify-between relative bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-            <X size={20} />
-          </button>
-
-          <div className="mt-4 animate-in fade-in slide-in-from-right-4 duration-300" key={step}>
-            <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-6">{currentStep.title}</h2>
-            {currentStep.content}
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
-                {tutorials.map((_, i) => (
-                  <div key={i} className={`h-2 rounded-full transition-all duration-300 ${i === step ? 'w-8 ' + currentStep.color.replace('bg-', 'bg-') : 'w-2 bg-slate-200 dark:bg-slate-700'}`}></div>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-4">
-                {step > 0 ? (
-                  <button onClick={() => setStep(step - 1)} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-semibold text-sm transition-colors">Voltar</button>
-                ) : (
-                  <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setDontShowAgain(!dontShowAgain)}>
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${dontShowAgain ? 'bg-slate-800 border-slate-800' : 'border-slate-300 dark:border-slate-600'}`}>
-                      {dontShowAgain && <Check size={10} className="text-white" />}
-                    </div>
-                    <span className="text-xs text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 select-none">Não mostrar mais</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleNext}
-                  className={`px-8 py-3 rounded-xl text-white font-bold shadow-lg shadow-indigo-100 dark:shadow-none hover:shadow-indigo-200 transform hover:-translate-y-0.5 transition-all ${step === tutorials.length - 1 ? 'bg-slate-900 hover:bg-slate-800' : currentStep.color + ' hover:opacity-90'}`}
-                >
-                  {step === tutorials.length - 1 ? 'Criar Segmento' : 'Próximo'}
-                </button>
-              </div>
-            </div>
+          <div className="bg-emerald-50 dark:bg-emerald-900/40 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800">
+            <div className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">⚡ Automação</div>
+            <div className="text-xs text-emerald-600 dark:text-emerald-300">Segmentos dinâmicos alimentam seus fluxos.</div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
+    ),
+    icon: <Target size={56} className="text-white" />,
+    color: "bg-indigo-600",
+    bgElement: "bg-indigo-400"
+  },
+  {
+    badge: "Lógica",
+    title: "Como Empilhar Regras?",
+    content: (
+      <div className="space-y-4">
+        <p className="text-slate-600 dark:text-slate-300">
+          Você pode adicionar quantos blocos quiser. O segredo está nos conectores:
+        </p>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+            <div className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold px-2 py-1 rounded text-xs">E (AND)</div>
+            <span className="text-sm text-slate-600 dark:text-slate-300">O cliente precisa atender a <strong>TODOS</strong> os critérios.</span>
+          </div>
+          <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+            <div className="bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 font-bold px-2 py-1 rounded text-xs">OU (OR)</div>
+            <span className="text-sm text-slate-600 dark:text-slate-300">O cliente pode atender a <strong>QUALQUER</strong> critério.</span>
+          </div>
+        </div>
+      </div>
+    ),
+    icon: <Layers size={56} className="text-white" />,
+    color: "bg-emerald-600",
+    bgElement: "bg-emerald-400"
+  },
+  {
+    badge: "Previsibilidade",
+    title: "Calculadora em Tempo Real",
+    content: (
+      <div className="space-y-4">
+        <p className="text-slate-600 dark:text-slate-300">
+          Olhe para a direita 👉. Enquanto você adiciona regras, nós calculamos o impacto:
+        </p>
+        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+          <li className="flex gap-2 items-center"><CheckCircle2 size={16} className="text-green-500" /> Quantos clientes serão atingidos.</li>
+          <li className="flex gap-2 items-center"><CheckCircle2 size={16} className="text-green-500" /> Qual a receita estimada desse grupo.</li>
+          <li className="flex gap-2 items-center"><CheckCircle2 size={16} className="text-green-500" /> Quantos têm E-mail ou WhatsApp válido.</li>
+        </ul>
+        <p className="text-xs text-slate-400 mt-2">
+          Isso evita criar segmentos vazios ou muito pequenos.
+        </p>
+      </div>
+    ),
+    icon: <Calculator size={56} className="text-white" />,
+    color: "bg-amber-500",
+    bgElement: "bg-amber-300"
+  }
+];
 
 
 // --- PÁGINA PRINCIPAL ---
@@ -285,7 +201,13 @@ export default function SegmentsPage() {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100">
       <main className="flex-1 flex flex-col h-screen overflow-hidden ml-20 md:ml-64 transition-all duration-300 border-l border-slate-200 dark:border-slate-800">
-        <CreateTutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+        <TutorialModal
+          isOpen={isTutorialOpen}
+          onClose={() => setIsTutorialOpen(false)}
+          storageKey="crm_segment_creation_tutorial_hide"
+          steps={TUTORIAL_STEPS}
+          finishLabel="Criar Segmento"
+        />
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 shadow-sm shrink-0">
           <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
             <Link href="/segments/list" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><ArrowLeft size={18} /></Link>

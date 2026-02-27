@@ -2,19 +2,20 @@
 
 import React, { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
 import {
-    Home, Users, BarChart2, MessageCircle, Target, Calendar, Bell,
-    ShoppingBag, TrendingUp, DollarSign, ArrowUp, ArrowDown, RefreshCw, Activity, Wallet,
-    Download, Search, ChevronDown, Smartphone, Mail, CalendarDays, Zap, Layers, Check,
-    ChevronLeft, ChevronRight, Filter, Store, X, FileText, PieChart as PieIcon, Info,
-    BookOpen, MousePointerClick
+    BarChart2, MessageCircle, Target, Calendar,
+    TrendingUp, DollarSign, ArrowUp, ArrowDown, RefreshCw, Activity, Wallet, ShoppingBag, Search,
+    Download, ChevronDown, Smartphone, Mail, CalendarDays, Zap, Layers,
+    ChevronLeft, ChevronRight, Filter, Store, FileText, PieChart as PieIcon, Info,
+    MousePointerClick
 } from 'lucide-react';
 import Link from 'next/link';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Area, AreaChart
 } from 'recharts';
 import { API_BASE_URL } from "@/lib/config";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { useRBAC } from "../../contexts/RBACContext";
+import { PageHeader, TutorialModal, TutorialStep } from '@/components/shared';
 
 // --- CONSTANTES GLOBAIS ---
 const COLORS = {
@@ -37,194 +38,103 @@ const CHANNEL_ICONS: any = {
     'Outros': <Target size={24} />
 };
 
-// --- COMPONENTE: MODAL DE TUTORIAL (RETAIL) ---
-const RetailTutorialModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
-    const [step, setStep] = useState(0);
-    const [dontShowAgain, setDontShowAgain] = useState(false);
-
-    if (!isOpen) return null;
-
-    const tutorials = [
-        {
-            badge: "Dashboard",
-            title: "Visão Executiva",
-            content: (
-                <div className="space-y-4">
-                    <p className="text-slate-600 text-lg leading-relaxed">
-                        Bem-vindo à sua central de <strong>Performance Executiva</strong>.
-                        Aqui você tem a visão 360° da saúde financeira da sua rede.
-                    </p>
-                    <div className="grid grid-cols-2 gap-3 mt-4">
-                        <div className="bg-violet-50 p-3 rounded-lg border border-violet-100">
-                            <div className="font-bold text-violet-700 text-sm">💰 Faturamento</div>
-                            <div className="text-xs text-violet-600">Acompanhe a receita e o volume de vendas.</div>
-                        </div>
-                        <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-                            <div className="font-bold text-emerald-700 text-sm">🔄 Retenção</div>
-                            <div className="text-xs text-emerald-600">Monitorando ticket médio e taxa de recompra.</div>
-                        </div>
+const TUTORIAL_STEPS: TutorialStep[] = [
+    {
+        badge: "Dashboard",
+        title: "Visão Executiva",
+        content: (
+            <div className="space-y-4">
+                <p className="text-slate-600 text-lg leading-relaxed">
+                    Bem-vindo à sua central de <strong>Performance Executiva</strong>.
+                    Aqui você tem a visão 360° da saúde financeira da sua rede.
+                </p>
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                    <div className="bg-violet-50 p-3 rounded-lg border border-violet-100">
+                        <div className="font-bold text-violet-700 text-sm">💰 Faturamento</div>
+                        <div className="text-xs text-violet-600">Acompanhe a receita e o volume de vendas.</div>
                     </div>
-                </div>
-            ),
-            icon: <BarChart2 size={56} className="text-white" />,
-            color: "bg-slate-900",
-            bgElement: "bg-violet-500"
-        },
-        {
-            badge: "ROI",
-            title: "Atribuição de Receita",
-            content: (
-                <div className="space-y-4">
-                    <p className="text-slate-600">
-                        Descubra exatamente qual o impacto do seu CRM na receita total.
-                    </p>
-                    <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 mb-2">
-                        <PieIcon size={24} className="text-emerald-600" />
-                        <div className="text-sm text-slate-700">
-                            O painel de <strong>Atribuição de Receita</strong> mostra o percentual do faturamento que foi influenciado por nossas campanhas, diretamente na sua linha do tempo.
-                        </div>
-                    </div>
-                </div>
-            ),
-            icon: <PieIcon size={56} className="text-white" />,
-            color: "bg-emerald-600",
-            bgElement: "bg-emerald-400"
-        },
-        {
-            badge: "Inteligência",
-            title: "Comportamento do Cliente",
-            content: (
-                <div className="space-y-4">
-                    <p className="text-slate-600">
-                        Entenda o ritmo de compra da sua base.
-                    </p>
-                    <ul className="space-y-3 mt-2">
-                        <li className="flex gap-3 items-start">
-                            <div className="p-1.5 bg-blue-100 rounded text-blue-600 mt-0.5"><Activity size={14} /></div>
-                            <div>
-                                <strong className="block text-slate-800 text-sm">LTV & Frequência</strong>
-                                <span className="text-slate-500 text-xs">Mensure quanto cada cliente gasta no ano e quantas vezes ele retorna.</span>
-                            </div>
-                        </li>
-                        <li className="flex gap-3 items-start">
-                            <div className="p-1.5 bg-amber-100 rounded text-amber-600 mt-0.5"><Calendar size={14} /></div>
-                            <div>
-                                <strong className="block text-slate-800 text-sm">Ciclo de Compra</strong>
-                                <span className="text-slate-500 text-xs">A média de dias que um cliente leva entre duas compras.</span>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-            ),
-            icon: <TrendingUp size={56} className="text-white" />,
-            color: "bg-blue-600",
-            bgElement: "bg-blue-400"
-        },
-        {
-            badge: "Lojas",
-            title: "Ranking e Filtros",
-            content: (
-                <div className="space-y-4">
-                    <p className="text-slate-600">
-                        Compare o desempenho de cada unidade.
-                    </p>
-                    <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-xl border border-amber-100 mb-2">
-                        <Store size={24} className="text-amber-600" />
-                        <div className="text-sm text-slate-700">
-                            Use o <strong>Ranking de Lojas</strong> no final da página para comparar métricas chave por PDV. Se quiser, use o filtro do topo para analisar apenas as lojas selecionadas!
-                        </div>
-                    </div>
-                </div>
-            ),
-            icon: <Store size={56} className="text-white" />,
-            color: "bg-amber-500",
-            bgElement: "bg-amber-300"
-        }
-    ];
-
-    const currentStep = tutorials[step];
-
-    const handleNext = () => {
-        if (step < tutorials.length - 1) setStep(step + 1);
-        else handleFinish();
-    };
-
-    const handleFinish = () => {
-        if (dontShowAgain) {
-            localStorage.setItem('crm_retail_tutorial_hide', 'true');
-        } else {
-            localStorage.removeItem('crm_retail_tutorial_hide');
-        }
-        onClose();
-        setTimeout(() => setStep(0), 300);
-    };
-
-    return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row min-h-[500px] animate-in slide-in-from-bottom-4 duration-500">
-
-                {/* ESQUERDA */}
-                <div className={`${currentStep.color} md:w-5/12 relative overflow-hidden transition-colors duration-500 flex flex-col items-center justify-center p-10 text-center`}>
-                    <div className={`absolute top-0 right-0 w-64 h-64 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2`}></div>
-                    <div className={`absolute bottom-0 left-0 w-48 h-48 ${currentStep.bgElement} rounded-full blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2`}></div>
-
-                    <div className="relative z-10 mb-6 transform transition-all duration-500 hover:scale-110">
-                        <div className="w-24 h-24 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner border border-white/20">
-                            {currentStep.icon}
-                        </div>
-                    </div>
-
-                    <h3 className="text-white font-bold text-2xl relative z-10">{currentStep.badge}</h3>
-                    <div className="mt-2 text-white/60 text-sm font-medium tracking-widest uppercase">Passo {step + 1} de {tutorials.length}</div>
-                </div>
-
-                {/* DIREITA */}
-                <div className="flex-1 p-10 flex flex-col justify-between relative bg-white">
-                    <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-                        <X size={20} />
-                    </button>
-
-                    <div className="mt-4 animate-in fade-in slide-in-from-right-4 duration-300" key={step}>
-                        <h2 className="text-3xl font-bold text-slate-800 mb-6">{currentStep.title}</h2>
-                        {currentStep.content}
-                    </div>
-
-                    <div className="mt-8 pt-6 border-t border-slate-100">
-                        <div className="flex items-center justify-between">
-                            <div className="flex gap-2">
-                                {tutorials.map((_, i) => (
-                                    <div key={i} className={`h-2 rounded-full transition-all duration-300 ${i === step ? 'w-8 ' + currentStep.color.replace('bg-', 'bg-') : 'w-2 bg-slate-200'}`}></div>
-                                ))}
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                {step > 0 ? (
-                                    <button onClick={() => setStep(step - 1)} className="text-slate-500 hover:text-slate-800 font-semibold text-sm transition-colors">
-                                        Voltar
-                                    </button>
-                                ) : (
-                                    <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setDontShowAgain(!dontShowAgain)}>
-                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${dontShowAgain ? 'bg-slate-800 border-slate-800' : 'border-slate-300'}`}>
-                                            {dontShowAgain && <Check size={10} className="text-white" />}
-                                        </div>
-                                        <span className="text-xs text-slate-400 group-hover:text-slate-600 select-none">Não mostrar mais</span>
-                                    </div>
-                                )}
-
-                                <button
-                                    onClick={handleNext}
-                                    className={`px-8 py-3 rounded-xl text-white font-bold shadow-lg transform hover:-translate-y-0.5 transition-all ${step === tutorials.length - 1 ? 'bg-slate-900 hover:bg-slate-800' : currentStep.color + ' hover:opacity-90'}`}
-                                >
-                                    {step === tutorials.length - 1 ? 'Começar a Usar' : 'Próximo'}
-                                </button>
-                            </div>
-                        </div>
+                    <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                        <div className="font-bold text-emerald-700 text-sm">🔄 Retenção</div>
+                        <div className="text-xs text-emerald-600">Monitorando ticket médio e taxa de recompra.</div>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-};
+        ),
+        icon: <BarChart2 size={56} className="text-white" />,
+        color: "bg-slate-900",
+        bgElement: "bg-violet-500"
+    },
+    {
+        badge: "ROI",
+        title: "Atribuição de Receita",
+        content: (
+            <div className="space-y-4">
+                <p className="text-slate-600">
+                    Descubra exatamente qual o impacto do seu CRM na receita total.
+                </p>
+                <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 mb-2">
+                    <PieIcon size={24} className="text-emerald-600" />
+                    <div className="text-sm text-slate-700">
+                        O painel de <strong>Atribuição de Receita</strong> mostra o percentual do faturamento que foi influenciado por nossas campanhas, diretamente na sua linha do tempo.
+                    </div>
+                </div>
+            </div>
+        ),
+        icon: <PieIcon size={56} className="text-white" />,
+        color: "bg-emerald-600",
+        bgElement: "bg-emerald-400"
+    },
+    {
+        badge: "Inteligência",
+        title: "Comportamento do Cliente",
+        content: (
+            <div className="space-y-4">
+                <p className="text-slate-600">
+                    Entenda o ritmo de compra da sua base.
+                </p>
+                <ul className="space-y-3 mt-2">
+                    <li className="flex gap-3 items-start">
+                        <div className="p-1.5 bg-blue-100 rounded text-blue-600 mt-0.5"><Activity size={14} /></div>
+                        <div>
+                            <strong className="block text-slate-800 text-sm">LTV & Frequência</strong>
+                            <span className="text-slate-500 text-xs">Mensure quanto cada cliente gasta no ano e quantas vezes ele retorna.</span>
+                        </div>
+                    </li>
+                    <li className="flex gap-3 items-start">
+                        <div className="p-1.5 bg-amber-100 rounded text-amber-600 mt-0.5"><Calendar size={14} /></div>
+                        <div>
+                            <strong className="block text-slate-800 text-sm">Ciclo de Compra</strong>
+                            <span className="text-slate-500 text-xs">A média de dias que um cliente leva entre duas compras.</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        ),
+        icon: <TrendingUp size={56} className="text-white" />,
+        color: "bg-blue-600",
+        bgElement: "bg-blue-400"
+    },
+    {
+        badge: "Lojas",
+        title: "Ranking e Filtros",
+        content: (
+            <div className="space-y-4">
+                <p className="text-slate-600">
+                    Compare o desempenho de cada unidade.
+                </p>
+                <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-xl border border-amber-100 mb-2">
+                    <Store size={24} className="text-amber-600" />
+                    <div className="text-sm text-slate-700">
+                        Use o <strong>Ranking de Lojas</strong> no final da página para comparar métricas chave por PDV. Se quiser, use o filtro do topo para analisar apenas as lojas selecionadas!
+                    </div>
+                </div>
+            </div>
+        ),
+        icon: <Store size={56} className="text-white" />,
+        color: "bg-amber-500",
+        bgElement: "bg-amber-300"
+    }
+];
 
 /**
  * Retail Results Page.
@@ -238,7 +148,6 @@ const RetailTutorialModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: ()
  */
 export default function RetailResultsPage() {
     const { getToken } = useAuth();
-    const { user } = useUser();
     const { hasPermission } = useRBAC();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -508,28 +417,18 @@ export default function RetailResultsPage() {
         <div className="flex h-screen bg-[#f1f5f9] dark:bg-[#020817] font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-                <RetailTutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
-
-                {/* HEADER */}
-                <header className="h-20 bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                            <span className="bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-400 p-1.5 rounded-md"><BarChart2 size={18} /></span>
-                            Performance Executiva
-                        </h1>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setIsTutorialOpen(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-bold cursor-pointer">
-                            <BookOpen size={16} className="text-violet-500" /> Como usar?
-                        </button>
-                        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                        <div className="text-right hidden sm:block">
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{user?.fullName || 'Usuário'}</p>
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500">Merxios Auth</p>
-                        </div>
-                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-xs">{user?.firstName?.charAt(0) || 'U'}{user?.lastName?.charAt(0) || ''}</div>
-                    </div>
-                </header>
+                <TutorialModal
+                    isOpen={isTutorialOpen}
+                    onClose={() => setIsTutorialOpen(false)}
+                    storageKey="crm_retail_tutorial_hide"
+                    steps={TUTORIAL_STEPS}
+                />
+                <PageHeader
+                    title="Performance Executiva"
+                    subtitle="Visão 360° da saúde financeira da sua rede"
+                    icon={<BarChart2 size={18} />}
+                    onTutorialClick={() => setIsTutorialOpen(true)}
+                />
 
                 <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-10 scroll-smooth">
 
