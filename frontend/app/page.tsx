@@ -10,35 +10,7 @@ import { KPICard } from '@/components/dashboard/KPICard';
 import { ShortcutCard } from '@/components/dashboard/ShortcutCard';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
 import { RecentSalesList } from '@/components/dashboard/RecentSalesList';
-
-// --- SHARED COMPONENTS (Podem ser extraídos também se necessário) ---
-function NavItem({ icon, label, active }: any) {
-    return (
-        <div className={`flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg cursor-pointer transition-all ${active ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white dark:hover:bg-slate-800'}`}>
-            {icon} <span className="text-sm font-medium hidden lg:block">{label}</span>
-        </div>
-    )
-}
-
-function Header({ title, subtitle, icon }: any) {
-    return (
-        <header className="h-20 bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20 transition-colors">
-            <div>
-                <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <span className="bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 p-1.5 rounded-md">{icon}</span> {title}
-                </h1>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 ml-9">{subtitle}</p>
-            </div>
-            <div className="flex items-center gap-3">
-                <div className="text-right hidden sm:block">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Admin User</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500">Diretor Comercial</p>
-                </div>
-                <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs transition-colors">AD</div>
-            </div>
-        </header>
-    )
-}
+import { PageHeader } from '@/components/shared';
 
 export default function HomePage() {
     const { dailyTotal, history, recentSales, loading } = useDashboard();
@@ -50,7 +22,11 @@ export default function HomePage() {
     return (
         <div className="flex h-screen bg-[#f1f5f9] dark:bg-[#020817] font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300">
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-                <Header title="Visão Geral" subtitle="Resumo operacional e atalhos rápidos" icon={<Home size={18} />} />
+                <PageHeader
+                    title="Visão Geral"
+                    subtitle="Resumo operacional e atalhos rápidos"
+                    icon={<Home size={18} />}
+                />
 
                 <div className="flex-1 p-6 lg:p-10 overflow-auto space-y-8">
 
